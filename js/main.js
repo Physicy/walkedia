@@ -43,13 +43,32 @@ $('btn-locate').addEventListener('click', () => {
   }
   navigator.geolocation.getCurrentPosition(
     (pos) => init(pos.coords.latitude, pos.coords.longitude),
-    (err) => setStartStatus('Position refusée ou indisponible (' + err.message + ').'),
+    (err) => setStartStatus(geoErrorMessage(err)),
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
   );
 });
 
 function setStartStatus(msg) {
   $('start-status').textContent = msg;
+}
+
+function geoErrorMessage(err) {
+  if (err.code === 1) {
+    // PERMISSION_DENIED : le navigateur mémorise le refus, il faut
+    // ré-autoriser dans les réglages du site puis recharger.
+    return "Accès à la position refusé. Autorise la position pour ce site " +
+      "(icône cadenas/réglages dans la barre d'adresse → Position → Autoriser, " +
+      "ou Réglages du site sur iPhone), puis recharge la page.";
+  }
+  if (err.code === 2) {
+    return 'Position indisponible. Vérifie que la localisation du téléphone ' +
+      'est activée et réessaie, de préférence en extérieur.';
+  }
+  if (err.code === 3) {
+    return "Délai dépassé pour obtenir la position. Réessaie (le premier " +
+      'fix GPS peut être lent en intérieur).';
+  }
+  return 'Erreur de géolocalisation : ' + err.message;
 }
 
 async function init(lat, lon) {
