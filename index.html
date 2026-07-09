@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walkedia</title>
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<div id="hud">
+  <div id="score-box">
+    <span id="score">0</span><small>pts</small>
+  </div>
+  <div id="stats">
+    <div><span id="stat-edges">–</span> tronçons</div>
+    <div><span id="stat-inter">–</span> intersections</div>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="btn-center" title="Recentrer" hidden>⌖</button>
+  <button id="btn-session" class="primary" hidden>Démarrer une session</button>
+</div>
+
+<div id="start-screen">
+  <div class="card">
+    <h1>Walkedia</h1>
+    <p>Explore le réseau piéton autour de toi.<br>
+       Parcours des chemins pour les découvrir et complète des intersections pour marquer des points.</p>
+    <button id="btn-locate" class="primary">Charger la carte autour de moi</button>
+    <p id="start-status"></p>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
