@@ -1,6 +1,6 @@
 // Service worker minimal : met en cache le shell de l'application.
 // Les tuiles OSM et Overpass nécessitent le réseau de toute façon.
-const CACHE = 'walkedia-shell-v2';
+const CACHE = 'walkedia-shell-v3';
 const SHELL = ['.', 'index.html', 'css/style.css', 'js/main.js', 'js/geo.js', 'js/graph.js', 'js/matching.js', 'js/overpass.js', 'js/storage.js', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

@@ -92,15 +92,15 @@ async function init(lat, lon) {
   }).addTo(state.map);
 
   renderGraph();
-  // Une session précédente a pu compléter des intersections d'une autre zone ;
-  // et des arêtes déjà découvertes peuvent compléter des intersections ici.
+  // Les complétions se recalculent depuis l'historique d'arêtes : des arêtes
+  // déjà découvertes peuvent compléter des carrefours de cette zone.
   sweepCompletions(false);
   refreshHud();
 
   $('start-screen').classList.add('hidden');
   $('btn-session').hidden = false;
   $('btn-center').hidden = false;
-  toast(`${state.graph.edges.size} tronçons · ${state.graph.intersections.length} intersections dans la zone`);
+  toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
 }
 
 // ---------------------------------------------------------------- rendu
@@ -110,13 +110,14 @@ function renderGraph() {
     const line = L.polyline(e.coords, styleForEdge(e.id)).addTo(state.map);
     state.edgeLayers.set(e.id, line);
   }
-  for (const n of state.graph.intersections) {
-    const marker = L.circleMarker([n.lat, n.lon], styleForIntersection(n.key)).addTo(state.map);
+  for (const j of state.graph.junctions.values()) {
+    const marker = L.circleMarker([j.lat, j.lon], styleForJunction(j.id)).addTo(state.map);
     marker.bindTooltip(() => {
-      const done = n.edgeIds.filter((id) => state.progress.edges.has(id)).length;
-      return `${done}/${n.edgeIds.length} branches parcourues`;
+      let done = 0;
+      for (const id of j.requiredEdgeIds) if (state.progress.edges.has(id)) done++;
+      return `${done}/${j.requiredEdgeIds.size} branches parcourues`;
     });
-    state.interLayers.set(n.key, marker);
+    state.interLayers.set(j.id, marker);
   }
 }
 
@@ -129,8 +130,8 @@ function styleForEdge(id) {
   };
 }
 
-function styleForIntersection(key) {
-  const done = state.progress.intersections.has(key);
+function styleForJunction(id) {
+  const done = state.progress.junctions.has(id);
   return {
     radius: done ? 7 : 5.5,
     color: '#0f172a',
@@ -145,22 +146,22 @@ function repaintEdge(id) {
   if (layer) layer.setStyle(styleForEdge(id));
 }
 
-function repaintIntersection(key) {
-  const layer = state.interLayers.get(key);
-  if (layer) layer.setStyle(styleForIntersection(key));
+function repaintJunction(id) {
+  const layer = state.interLayers.get(id);
+  if (layer) layer.setStyle(styleForJunction(id));
 }
 
 function refreshHud() {
-  $('score').textContent = state.progress.intersections.size;
+  $('score').textContent = state.progress.junctions.size;
   const total = state.graph.edges.size;
   let found = 0;
   for (const id of state.graph.edges.keys()) if (state.progress.edges.has(id)) found++;
-  let interDone = 0;
-  for (const n of state.graph.intersections) {
-    if (state.progress.intersections.has(n.key)) interDone++;
+  let done = 0;
+  for (const id of state.graph.junctions.keys()) {
+    if (state.progress.junctions.has(id)) done++;
   }
   $('stat-edges').textContent = `${found}/${total}`;
-  $('stat-inter').textContent = `${interDone}/${state.graph.intersections.length}`;
+  $('stat-inter').textContent = `${done}/${state.graph.junctions.size}`;
 }
 
 let toastTimer = null;
@@ -174,30 +175,32 @@ function toast(msg, ms = 3500) {
 
 // ---------------------------------------------------------------- complétion
 
-function nearBoundary(node) {
-  return haversine([node.lat, node.lon], state.center) > RADIUS - BOUNDARY_MARGIN;
+function nearBoundary(j) {
+  return haversine([j.lat, j.lon], state.center) > RADIUS - BOUNDARY_MARGIN;
 }
 
-// Vérifie une intersection : toutes ses arêtes incidentes sont-elles dans
-// l'historique ? Retourne true si elle vient d'être complétée.
-function checkIntersection(node) {
-  if (state.progress.intersections.has(node.key)) return false;
-  if (nearBoundary(node)) return false;
-  if (!node.edgeIds.every((id) => state.progress.edges.has(id))) return false;
-  state.progress.intersections.add(node.key);
-  repaintIntersection(node.key);
+// Vérifie un carrefour : toutes ses branches externes significatives
+// sont-elles dans l'historique ? Retourne true s'il vient d'être complété.
+function checkJunction(j) {
+  if (state.progress.junctions.has(j.id)) return false;
+  if (nearBoundary(j)) return false;
+  for (const id of j.requiredEdgeIds) {
+    if (!state.progress.edges.has(id)) return false;
+  }
+  state.progress.junctions.add(j.id);
+  repaintJunction(j.id);
   return true;
 }
 
 // Passe globale (au chargement) : attribue les complétions déjà acquises.
 function sweepCompletions(announce) {
   let gained = 0;
-  for (const n of state.graph.intersections) {
-    if (checkIntersection(n)) gained++;
+  for (const j of state.graph.junctions.values()) {
+    if (checkJunction(j)) gained++;
   }
   if (gained > 0) {
     storage.save(state.progress);
-    if (announce) toast(`+${gained} intersection(s) complétée(s) !`);
+    if (announce) toast(`+${gained} carrefour(s) complété(s) !`);
   }
   return gained;
 }
@@ -244,13 +247,12 @@ function onFix(lat, lon, accuracy) {
     state.session.newEdges.add(edgeId);
     repaintEdge(edgeId);
 
-    // Intersections touchées par cette nouvelle arête.
-    const e = state.graph.edges.get(edgeId);
-    for (const key of [e.a, e.b]) {
-      const node = state.graph.nodes.get(key);
-      if (node && node.edgeIds.length >= 3 && checkIntersection(node)) {
-        state.session.newInter.add(key);
-        toast('Intersection complétée ! +1 point 🎉');
+    // Carrefours dont cette nouvelle arête est une branche requise.
+    for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
+      const j = state.graph.junctions.get(jid);
+      if (j && checkJunction(j)) {
+        state.session.newInter.add(jid);
+        toast('Carrefour complété ! +1 point 🎉');
       }
     }
     storage.save(state.progress); // sauvegarde continue : rien n'est perdu si l'app est tuée
@@ -288,7 +290,7 @@ function endSession() {
   const mins = Math.round((Date.now() - startedAt) / 60000);
   toast(
     `Session terminée (${mins} min) : ${newEdges.size} nouveau(x) tronçon(s), ` +
-    `${newInter.size} intersection(s) complétée(s).`,
+    `${newInter.size} carrefour(s) complété(s).`,
     6000
   );
 

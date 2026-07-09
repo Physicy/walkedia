@@ -35,7 +35,16 @@ native/Flutter lèvera cette contrainte).
 
 - **Graphe** : ways piétons OSM chargés via Overpass dans un rayon de 800 m,
   découpés aux jonctions puis simplifiés (fusion des nœuds de degré 2) pour que
-  chaque arête relie deux vrais nœuds. Intersection ⇔ degré ≥ 3.
+  chaque arête relie deux vrais nœuds.
+- **Carrefours** : le degré est calculé sur les branches *significatives* (les
+  impasses de moins de 30 m — entrées de bâtiments, allées — ne comptent pas),
+  puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
+  consolidés en un seul carrefour (plafond de 60 m de diagonale par groupe).
+  OSM fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages piétons,
+  chaussées séparées) : sur une zone urbaine test, la consolidation ramène
+  1131 nœuds bruts à ~330 carrefours réels. Un carrefour est complété quand
+  toutes ses branches externes significatives ont été parcourues ; les
+  micro-arêtes internes (traversées) sont des bonus non exigés.
 - **IDs d'arêtes** : dérivés de la géométrie (extrémités + milieu + longueur),
   stables entre sessions et indépendants des IDs OSM.
 - **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur

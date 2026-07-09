@@ -4,9 +4,18 @@
 //  3. fusion des chaînes de degré 2 pour que chaque arête relie deux
 //     "vrais" nœuds du graphe (intersections ou impasses),
 //  4. attribution d'identifiants d'arêtes stables, dérivés de la géométrie
-//     (indépendants des IDs OSM, qui peuvent changer).
+//     (indépendants des IDs OSM, qui peuvent changer),
+//  5. détection des carrefours : degré calculé sur les branches
+//     significatives (les impasses courtes ne comptent pas), puis
+//     consolidation des nœuds trop proches en un seul carrefour — OSM
+//     fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages
+//     piétons, chaussées séparées).
 
-import { lineLength, pointAtFraction } from './geo.js';
+import { lineLength, pointAtFraction, haversine } from './geo.js';
+
+const STUB_MAX = 30;    // impasse plus courte que ça -> branche non significative (m)
+const LINK_MAX = 25;    // arête plus courte entre deux carrefours -> fusion (m)
+const CLUSTER_MAX = 60; // diagonale maximale d'un carrefour consolidé (m)
 
 export function nodeKey(c) {
   return c[0].toFixed(6) + ',' + c[1].toFixed(6);
@@ -83,7 +92,7 @@ export function buildGraph(osm) {
     }
   }
 
-  // 4. Structures finales.
+  // 4. Structures finales : arêtes et nœuds.
   const edges = new Map(); // id -> { id, coords, length, a, b }
   const nodes = new Map(); // key -> { key, lat, lon, edgeIds }
   for (const s of all) {
@@ -109,8 +118,105 @@ export function buildGraph(osm) {
     }
   }
 
-  // Intersection <=> degré >= 3 (une boucle sur un nœud compte pour 2).
-  const intersections = [...nodes.values()].filter((n) => n.edgeIds.length >= 3);
+  // 5a. Branches significatives : une impasse courte (entrée de bâtiment,
+  //     allée de garage) ne compte ni dans le degré, ni dans la complétion.
+  const isStubFor = (e, key) => {
+    const other = e.a === key ? e.b : e.a;
+    if (other === key) return e.length < STUB_MAX; // boucle courte sur le nœud
+    return e.length < STUB_MAX && nodes.get(other).edgeIds.length === 1;
+  };
 
-  return { nodes, edges, intersections };
+  const candidates = new Set(); // nœuds avec >= 3 branches significatives
+  for (const n of nodes.values()) {
+    const sig = n.edgeIds.filter((id) => !isStubFor(edges.get(id), n.key));
+    if (sig.length >= 3) candidates.add(n.key);
+  }
+
+  // 5b. Consolidation : union-find des candidats reliés par une arête courte,
+  //     avec plafond de taille pour ne pas avaler un maillage de place entière.
+  const parent = new Map();
+  const bbox = new Map();
+  for (const key of candidates) {
+    parent.set(key, key);
+    const n = nodes.get(key);
+    bbox.set(key, { minLat: n.lat, maxLat: n.lat, minLon: n.lon, maxLon: n.lon });
+  }
+  const find = (k) => {
+    while (parent.get(k) !== k) {
+      parent.set(k, parent.get(parent.get(k)));
+      k = parent.get(k);
+    }
+    return k;
+  };
+
+  for (const e of edges.values()) {
+    if (e.length >= LINK_MAX) continue;
+    if (!candidates.has(e.a) || !candidates.has(e.b) || e.a === e.b) continue;
+    const ra = find(e.a);
+    const rb = find(e.b);
+    if (ra === rb) continue;
+    const A = bbox.get(ra);
+    const B = bbox.get(rb);
+    const m = {
+      minLat: Math.min(A.minLat, B.minLat),
+      maxLat: Math.max(A.maxLat, B.maxLat),
+      minLon: Math.min(A.minLon, B.minLon),
+      maxLon: Math.max(A.maxLon, B.maxLon),
+    };
+    if (haversine([m.minLat, m.minLon], [m.maxLat, m.maxLon]) > CLUSTER_MAX) continue;
+    parent.set(ra, rb);
+    bbox.set(rb, m);
+  }
+
+  const clusters = new Map(); // racine -> [keys]
+  for (const key of candidates) {
+    const r = find(key);
+    let list = clusters.get(r);
+    if (!list) clusters.set(r, (list = []));
+    list.push(key);
+  }
+
+  // 5c. Carrefours consolidés : complétés quand toutes les branches EXTERNES
+  //     significatives ont été parcourues. Les micro-arêtes internes au
+  //     carrefour (passages piétons, traversées) ne sont pas exigées.
+  const junctions = new Map();     // id -> { id, lat, lon, members, requiredEdgeIds }
+  const edgeJunctions = new Map(); // edgeId -> [junctionId]
+  for (const members of clusters.values()) {
+    const memberSet = new Set(members);
+    const required = new Set();
+    for (const key of members) {
+      for (const id of nodes.get(key).edgeIds) {
+        const e = edges.get(id);
+        if (memberSet.has(e.a) && memberSet.has(e.b)) continue; // interne
+        if (isStubFor(e, key)) continue;
+        required.add(id);
+      }
+    }
+    if (required.size < 3) continue; // pas un vrai carrefour
+
+    members.sort();
+    const id = members[0]; // clé stable : plus petit nœud membre
+    let lat = 0;
+    let lon = 0;
+    for (const key of members) {
+      const n = nodes.get(key);
+      lat += n.lat;
+      lon += n.lon;
+    }
+    const j = {
+      id,
+      lat: lat / members.length,
+      lon: lon / members.length,
+      members,
+      requiredEdgeIds: required,
+    };
+    junctions.set(id, j);
+    for (const eid of required) {
+      let list = edgeJunctions.get(eid);
+      if (!list) edgeJunctions.set(eid, (list = []));
+      list.push(id);
+    }
+  }
+
+  return { nodes, edges, junctions, edgeJunctions };
 }
