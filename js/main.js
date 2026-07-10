@@ -192,15 +192,28 @@ function checkJunction(j) {
   return true;
 }
 
-// Passe globale (au chargement) : attribue les complétions déjà acquises.
+// Passe globale (au chargement) : attribue les complétions déjà acquises et
+// retire les complétions orphelines de la zone (un ID de carrefour est un
+// "lat,lon" : si le point est dans la zone chargée mais que le carrefour
+// n'existe plus, la définition a changé — il sera re-complété depuis
+// l'historique d'arêtes s'il a un successeur).
 function sweepCompletions(announce) {
+  let pruned = 0;
+  for (const id of [...state.progress.junctions]) {
+    if (state.graph.junctions.has(id)) continue;
+    const [lat, lon] = id.split(',').map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (haversine([lat, lon], state.center) > RADIUS - BOUNDARY_MARGIN) continue;
+    state.progress.junctions.delete(id);
+    pruned++;
+  }
   let gained = 0;
   for (const j of state.graph.junctions.values()) {
     if (checkJunction(j)) gained++;
   }
-  if (gained > 0) {
+  if (gained > 0 || pruned > 0) {
     storage.save(state.progress);
-    if (announce) toast(`+${gained} carrefour(s) complété(s) !`);
+    if (announce && gained > 0) toast(`+${gained} carrefour(s) complété(s) !`);
   }
   return gained;
 }

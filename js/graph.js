@@ -10,12 +10,26 @@
 //     consolidation des nœuds trop proches en un seul carrefour — OSM
 //     fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages
 //     piétons, chaussées séparées).
+//
+// En environnement urbain (densité locale de voirie carrossable élevée),
+// seuls les carrefours du réseau routier accessible en voiture comptent :
+// les maillages de parcs, places et trottoirs ne génèrent plus de points.
+// En environnement rural, les sentiers et chemins SONT le réseau principal,
+// donc toutes les voies piétonnes comptent (règle d'origine).
 
 import { lineLength, pointAtFraction, haversine } from './geo.js';
 
 const STUB_MAX = 30;    // impasse plus courte que ça -> branche non significative (m)
 const LINK_MAX = 25;    // arête plus courte entre deux carrefours -> fusion (m)
 const CLUSTER_MAX = 60; // diagonale maximale d'un carrefour consolidé (m)
+
+// Voies "principales" accessibles en voiture (service, track, chemins exclus).
+const CAR_HIGHWAYS = new Set([
+  'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street',
+]);
+const DENSITY_CELL = 250;    // taille des cellules de la grille de densité (m)
+const URBAN_MIN_ROAD = 2200; // urbain si >= ce total de voirie carrossable (m)
+                             // dans la fenêtre 3x3 autour du nœud (750 m de côté)
 
 export function nodeKey(c) {
   return c[0].toFixed(6) + ',' + c[1].toFixed(6);
@@ -36,6 +50,16 @@ function edgeId(coords, length) {
 }
 
 export function buildGraph(osm) {
+  // 0. Paires de nœuds consécutifs appartenant à une voie carrossable :
+  //    permet de retrouver, après découpage/fusion, la part carrossable
+  //    de chaque arête finale.
+  const pairKey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
+  const carPairs = new Set();
+  for (const w of osm.ways) {
+    if (!CAR_HIGHWAYS.has(w.tags.highway)) continue;
+    for (let i = 1; i < w.nodes.length; i++) carPairs.add(pairKey(w.nodes[i - 1], w.nodes[i]));
+  }
+
   // 1. Un nœud est une jonction s'il apparaît au moins 2 fois (dans plusieurs
   //    ways, ou deux fois dans un way fermé).
   const usage = new Map();
@@ -103,10 +127,18 @@ export function buildGraph(osm) {
     if (length < 1) continue;
     const id = edgeId(coords, length);
     if (edges.has(id)) continue;
+    let carLen = 0;
+    for (let i = 1; i < s.nodes.length; i++) {
+      if (!carPairs.has(pairKey(s.nodes[i - 1], s.nodes[i]))) continue;
+      const ca = osm.nodes.get(s.nodes[i - 1]);
+      const cb = osm.nodes.get(s.nodes[i]);
+      if (ca && cb) carLen += haversine(ca, cb);
+    }
     const e = {
       id,
       coords,
       length,
+      car: carLen / length >= 0.5,
       a: nodeKey(coords[0]),
       b: nodeKey(coords[coords.length - 1]),
     };
@@ -118,8 +150,41 @@ export function buildGraph(osm) {
     }
   }
 
-  // 5a. Branches significatives : une impasse courte (entrée de bâtiment,
+  // 5a. Classification urbain/rural : densité locale de voirie carrossable,
+  //     accumulée dans une grille de cellules de 250 m (fenêtre 3x3 lissée).
+  let lat0 = 0;
+  let count = 0;
+  for (const n of nodes.values()) {
+    lat0 += n.lat;
+    if (++count >= 50) break;
+  }
+  lat0 = count ? lat0 / count : 0;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
+  const ky = 110540;
+  const cellKey = (lat, lon) =>
+    Math.floor((lon * kx) / DENSITY_CELL) + ':' + Math.floor((lat * ky) / DENSITY_CELL);
+  const density = new Map();
+  for (const e of edges.values()) {
+    if (!e.car) continue;
+    for (let i = 1; i < e.coords.length; i++) {
+      const mid = [(e.coords[i - 1][0] + e.coords[i][0]) / 2, (e.coords[i - 1][1] + e.coords[i][1]) / 2];
+      const k = cellKey(mid[0], mid[1]);
+      density.set(k, (density.get(k) || 0) + haversine(e.coords[i - 1], e.coords[i]));
+    }
+  }
+  const isUrban = (lat, lon) => {
+    const cx = Math.floor((lon * kx) / DENSITY_CELL);
+    const cy = Math.floor((lat * ky) / DENSITY_CELL);
+    let sum = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) sum += density.get(cx + dx + ':' + (cy + dy)) || 0;
+    }
+    return sum >= URBAN_MIN_ROAD;
+  };
+
+  // 5b. Branches significatives : une impasse courte (entrée de bâtiment,
   //     allée de garage) ne compte ni dans le degré, ni dans la complétion.
+  //     En zone urbaine, seules les branches carrossables comptent.
   const isStubFor = (e, key) => {
     const other = e.a === key ? e.b : e.a;
     if (other === key) return e.length < STUB_MAX; // boucle courte sur le nœud
@@ -127,12 +192,18 @@ export function buildGraph(osm) {
   };
 
   const candidates = new Set(); // nœuds avec >= 3 branches significatives
+  const urbanNode = new Map();  // key -> bool (mode retenu pour ce nœud)
   for (const n of nodes.values()) {
-    const sig = n.edgeIds.filter((id) => !isStubFor(edges.get(id), n.key));
-    if (sig.length >= 3) candidates.add(n.key);
+    const urban = isUrban(n.lat, n.lon);
+    const pool = urban ? n.edgeIds.filter((id) => edges.get(id).car) : n.edgeIds;
+    const sig = pool.filter((id) => !isStubFor(edges.get(id), n.key));
+    if (sig.length >= 3) {
+      candidates.add(n.key);
+      urbanNode.set(n.key, urban);
+    }
   }
 
-  // 5b. Consolidation : union-find des candidats reliés par une arête courte,
+  // 5c. Consolidation : union-find des candidats reliés par une arête courte,
   //     avec plafond de taille pour ne pas avaler un maillage de place entière.
   const parent = new Map();
   const bbox = new Map();
@@ -176,17 +247,21 @@ export function buildGraph(osm) {
     list.push(key);
   }
 
-  // 5c. Carrefours consolidés : complétés quand toutes les branches EXTERNES
+  // 5d. Carrefours consolidés : complétés quand toutes les branches EXTERNES
   //     significatives ont été parcourues. Les micro-arêtes internes au
   //     carrefour (passages piétons, traversées) ne sont pas exigées.
+  //     Un groupe est urbain dès qu'un de ses membres l'est : seules ses
+  //     branches carrossables sont alors exigées.
   const junctions = new Map();     // id -> { id, lat, lon, members, requiredEdgeIds }
   const edgeJunctions = new Map(); // edgeId -> [junctionId]
   for (const members of clusters.values()) {
     const memberSet = new Set(members);
+    const urban = members.some((key) => urbanNode.get(key));
     const required = new Set();
     for (const key of members) {
       for (const id of nodes.get(key).edgeIds) {
         const e = edges.get(id);
+        if (urban && !e.car) continue;
         if (memberSet.has(e.a) && memberSet.has(e.b)) continue; // interne
         if (isStubFor(e, key)) continue;
         required.add(id);

@@ -45,7 +45,7 @@ function parseOsm(json) {
   for (const el of json.elements || []) {
     if (el.type === 'node') nodes.set(el.id, [el.lat, el.lon]);
     else if (el.type === 'way' && el.nodes && el.nodes.length >= 2) {
-      ways.push({ id: el.id, nodes: el.nodes });
+      ways.push({ id: el.id, nodes: el.nodes, tags: el.tags || {} });
     }
   }
   return { nodes, ways };

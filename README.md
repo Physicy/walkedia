@@ -41,10 +41,17 @@ native/Flutter lèvera cette contrainte).
   puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
   consolidés en un seul carrefour (plafond de 60 m de diagonale par groupe).
   OSM fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages piétons,
-  chaussées séparées) : sur une zone urbaine test, la consolidation ramène
-  1131 nœuds bruts à ~330 carrefours réels. Un carrefour est complété quand
-  toutes ses branches externes significatives ont été parcourues ; les
-  micro-arêtes internes (traversées) sont des bonus non exigés.
+  chaussées séparées). Un carrefour est complété quand toutes ses branches
+  externes significatives ont été parcourues ; les micro-arêtes internes
+  (traversées) sont des bonus non exigés.
+- **Urbain / rural** : chaque zone est classée par densité locale de voirie
+  carrossable (grille de 250 m, fenêtre 3×3, seuil `URBAN_MIN_ROAD`). En
+  urbain, seuls les carrefours du réseau accessible en voiture (`residential`
+  et au-dessus + `living_street`) comptent : les maillages de parcs, places et
+  trottoirs ne génèrent plus de points. En rural, les sentiers et chemins sont
+  le réseau principal, donc toutes les voies comptent (règle d'origine). Sur
+  la zone urbaine test : 1131 nœuds bruts → 331 après consolidation → 185
+  carrefours carrossables.
 - **IDs d'arêtes** : dérivés de la géométrie (extrémités + milieu + longueur),
   stables entre sessions et indépendants des IDs OSM.
 - **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur
