@@ -41,9 +41,14 @@ native/Flutter lèvera cette contrainte).
   puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
   consolidés en un seul carrefour (plafond de 60 m de diagonale par groupe).
   OSM fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages piétons,
-  chaussées séparées). Un carrefour est complété quand toutes ses branches
-  externes significatives ont été parcourues ; les micro-arêtes internes
-  (traversées) sont des bonus non exigés.
+  chaussées séparées). La fusion n'a lieu que si le lien est un artefact d'un
+  seul carrefour réel : arc de rond-point, segment à sens unique, traversée
+  piétonne (`footway=crossing`) ou nœud posé sur des chaussées séparées. Deux
+  intersections décalées le long d'un même axe, reliées par un tronçon de rue
+  à double sens, restent deux carrefours distincts à 3 branches chacun. Un
+  carrefour est complété quand toutes ses branches externes significatives
+  ont été parcourues ; les micro-arêtes internes (traversées) sont des bonus
+  non exigés.
 - **Urbain / rural** : chaque zone est classée par densité locale de voirie
   carrossable (grille de 250 m, fenêtre 3×3, seuil `URBAN_MIN_ROAD`). En
   urbain, seuls les carrefours du réseau accessible en voiture (`residential`

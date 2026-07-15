@@ -50,14 +50,28 @@ function edgeId(coords, length) {
 }
 
 export function buildGraph(osm) {
-  // 0. Paires de nœuds consécutifs appartenant à une voie carrossable :
-  //    permet de retrouver, après découpage/fusion, la part carrossable
-  //    de chaque arête finale.
+  // 0. Attributs par paire de nœuds consécutifs (carrossable, sens unique,
+  //    rond-point, passage piéton) : permet de retrouver, après
+  //    découpage/fusion, les attributs de chaque arête finale.
   const pairKey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
   const carPairs = new Set();
+  const onewayPairs = new Set();
+  const roundaboutPairs = new Set();
+  const crossingPairs = new Set();
   for (const w of osm.ways) {
-    if (!CAR_HIGHWAYS.has(w.tags.highway)) continue;
-    for (let i = 1; i < w.nodes.length; i++) carPairs.add(pairKey(w.nodes[i - 1], w.nodes[i]));
+    const t = w.tags;
+    const car = CAR_HIGHWAYS.has(t.highway);
+    const oneway = t.oneway === 'yes' || t.oneway === '1' || t.oneway === '-1';
+    const roundabout = t.junction === 'roundabout' || t.junction === 'circular';
+    const crossing = t.footway === 'crossing' || t.path === 'crossing';
+    if (!car && !oneway && !roundabout && !crossing) continue;
+    for (let i = 1; i < w.nodes.length; i++) {
+      const k = pairKey(w.nodes[i - 1], w.nodes[i]);
+      if (car) carPairs.add(k);
+      if (oneway) onewayPairs.add(k);
+      if (roundabout) roundaboutPairs.add(k);
+      if (crossing) crossingPairs.add(k);
+    }
   }
 
   // 1. Un nœud est une jonction s'il apparaît au moins 2 fois (dans plusieurs
@@ -128,17 +142,28 @@ export function buildGraph(osm) {
     const id = edgeId(coords, length);
     if (edges.has(id)) continue;
     let carLen = 0;
+    let onewayLen = 0;
+    let roundLen = 0;
+    let crossLen = 0;
     for (let i = 1; i < s.nodes.length; i++) {
-      if (!carPairs.has(pairKey(s.nodes[i - 1], s.nodes[i]))) continue;
+      const k = pairKey(s.nodes[i - 1], s.nodes[i]);
       const ca = osm.nodes.get(s.nodes[i - 1]);
       const cb = osm.nodes.get(s.nodes[i]);
-      if (ca && cb) carLen += haversine(ca, cb);
+      if (!ca || !cb) continue;
+      const d = haversine(ca, cb);
+      if (carPairs.has(k)) carLen += d;
+      if (onewayPairs.has(k)) onewayLen += d;
+      if (roundaboutPairs.has(k)) roundLen += d;
+      if (crossingPairs.has(k)) crossLen += d;
     }
     const e = {
       id,
       coords,
       length,
       car: carLen / length >= 0.5,
+      oneway: onewayLen / length >= 0.5,
+      roundabout: roundLen / length >= 0.5,
+      crossing: crossLen / length >= 0.5,
       a: nodeKey(coords[0]),
       b: nodeKey(coords[coords.length - 1]),
     };
@@ -205,6 +230,28 @@ export function buildGraph(osm) {
 
   // 5c. Consolidation : union-find des candidats reliés par une arête courte,
   //     avec plafond de taille pour ne pas avaler un maillage de place entière.
+  //     On ne fusionne que si le lien est un artefact de cartographie d'UN
+  //     SEUL carrefour réel : arc de rond-point, segment à sens unique
+  //     (chaussées séparées, bretelles), traversée piétonne (îlot, terre-plein)
+  //     ou nœud posé sur des chaussées séparées (>= 2 branches à sens unique).
+  //     Un tronçon de rue normale à double sens ne fusionne jamais : deux
+  //     intersections décalées le long d'un même axe restent deux carrefours
+  //     distincts, chacun avec ses propres branches à parcourir.
+  const onewayHub = new Set();
+  for (const n of nodes.values()) {
+    let ow = 0;
+    for (const id of n.edgeIds) {
+      const e = edges.get(id);
+      if (e.car && e.oneway) ow++;
+    }
+    if (ow >= 2) onewayHub.add(n.key);
+  }
+  const isArtifactLink = (e) =>
+    e.roundabout ||
+    (e.car && e.oneway) ||
+    (!e.car && e.crossing) ||
+    onewayHub.has(e.a) ||
+    onewayHub.has(e.b);
   const parent = new Map();
   const bbox = new Map();
   for (const key of candidates) {
@@ -223,6 +270,7 @@ export function buildGraph(osm) {
   for (const e of edges.values()) {
     if (e.length >= LINK_MAX) continue;
     if (!candidates.has(e.a) || !candidates.has(e.b) || e.a === e.b) continue;
+    if (!isArtifactLink(e)) continue;
     const ra = find(e.a);
     const rb = find(e.b);
     if (ra === rb) continue;
