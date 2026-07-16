@@ -66,6 +66,11 @@ native/Flutter lèvera cette contrainte).
   `localStorage` (clé `walkedia-v1`), sauvegarde continue pendant la session.
 - **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone
   chargée ne sont pas évaluées (des branches pourraient manquer).
+- **Profil** : bouton 👤 en bas de l'écran. Points au total / aujourd'hui /
+  cette semaine (depuis lundi) / ce mois-ci, graphique des 7 derniers jours,
+  tronçons découverts, distance découverte cumulée et historique des dernières
+  sessions. Chaque complétion est horodatée (`completedAt`) ; les points
+  acquis avant l'ajout du suivi temporel restent comptés dans le total.
 
 ## Structure
 

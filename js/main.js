@@ -71,13 +71,18 @@ function geoErrorMessage(err) {
   return 'Erreur de géolocalisation : ' + err.message;
 }
 
+let initializing = false;
+
 async function init(lat, lon) {
+  if (initializing || state.map) return; // double clic / double appel
+  initializing = true;
   setStartStatus('Chargement du réseau piéton…');
   let osm;
   try {
     osm = await fetchNetwork(lat, lon, RADIUS);
   } catch (err) {
     setStartStatus('Impossible de charger les données OSM : ' + err.message);
+    initializing = false;
     return;
   }
 
@@ -100,6 +105,7 @@ async function init(lat, lon) {
   $('start-screen').classList.add('hidden');
   $('btn-session').hidden = false;
   $('btn-center').hidden = false;
+  $('btn-profile').hidden = false;
   toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
 }
 
@@ -188,6 +194,7 @@ function checkJunction(j) {
     if (!state.progress.edges.has(id)) return false;
   }
   state.progress.junctions.add(j.id);
+  state.progress.completedAt[j.id] = Date.now();
   repaintJunction(j.id);
   return true;
 }
@@ -205,6 +212,7 @@ function sweepCompletions(announce) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
     if (haversine([lat, lon], state.center) > RADIUS - BOUNDARY_MARGIN) continue;
     state.progress.junctions.delete(id);
+    delete state.progress.completedAt[id];
     pruned++;
   }
   let gained = 0;
@@ -257,6 +265,7 @@ function onFix(lat, lon, accuracy) {
   for (const edgeId of state.matcher.feed(lat, lon, accuracy)) {
     if (state.progress.edges.has(edgeId)) continue; // déjà dans l'historique
     state.progress.edges.add(edgeId);
+    state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
     state.session.newEdges.add(edgeId);
     repaintEdge(edgeId);
 
@@ -297,6 +306,12 @@ function endSession() {
   state.matcher = null;
   trackLine.remove();
 
+  state.progress.sessions.push({
+    start: startedAt,
+    end: Date.now(),
+    edges: newEdges.size,
+    junctions: newInter.size,
+  });
   storage.save(state.progress);
   refreshHud();
 
@@ -311,6 +326,92 @@ function endSession() {
   btn.textContent = 'Démarrer une session';
   btn.classList.remove('recording');
 }
+
+// ---------------------------------------------------------------- profil
+
+const DAY = 86400000;
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function pointsSince(t) {
+  let n = 0;
+  for (const at of Object.values(state.progress.completedAt)) if (at >= t) n++;
+  return n;
+}
+
+function pointsBetween(a, b) {
+  let n = 0;
+  for (const at of Object.values(state.progress.completedAt)) if (at >= a && at < b) n++;
+  return n;
+}
+
+function openProfile() {
+  const p = state.progress;
+  const today = startOfToday();
+  const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  $('p-total').textContent = p.junctions.size;
+  $('p-today').textContent = pointsSince(today);
+  $('p-week').textContent = pointsSince(monday);
+  $('p-month').textContent = pointsSince(firstOfMonth);
+  $('p-edges').textContent = p.edges.size;
+  $('p-km').textContent = (p.edgeMeters / 1000).toFixed(1);
+  $('p-sessions').textContent = p.sessions.length;
+
+  // Graphique : points par jour sur les 7 derniers jours.
+  const days = [];
+  let max = 0;
+  const dayName = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
+  for (let i = 6; i >= 0; i--) {
+    const start = today - i * DAY;
+    const pts = pointsBetween(start, start + DAY);
+    max = Math.max(max, pts);
+    days.push({ label: dayName.format(new Date(start)).replace('.', ''), pts });
+  }
+  $('p-chart').innerHTML = days
+    .map((d) => {
+      const h = max > 0 ? Math.max(6, Math.round((d.pts / max) * 52)) : 6;
+      return `<div class="bar${d.pts === 0 ? ' zero' : ''}">` +
+        `<b>${d.pts || ''}</b><i style="height:${h}px"></i><label>${d.label}</label></div>`;
+    })
+    .join('');
+
+  // Dernières sessions.
+  const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' });
+  const recent = p.sessions.slice(-5).reverse();
+  $('p-session-list').innerHTML = recent.length
+    ? recent
+        .map((s) => {
+          const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
+          return `<li><span>${dateFmt.format(new Date(s.start))}</span>` +
+            `<span>${mins} min</span><span>${s.edges} tronçon(s)</span>` +
+            `<span class="pts">+${s.junctions} pt(s)</span></li>`;
+        })
+        .join('')
+    : '<li class="empty">Aucune session pour l’instant</li>';
+
+  // Points acquis avant l'ajout du suivi temporel (sans date).
+  const untracked = p.junctions.size - Object.keys(p.completedAt).length;
+  $('p-untracked').hidden = untracked <= 0;
+  if (untracked > 0) {
+    $('p-untracked').textContent =
+      `${untracked} point(s) acquis avant le suivi temporel : comptés dans le total uniquement.`;
+  }
+
+  $('profile-panel').hidden = false;
+}
+
+$('btn-profile').addEventListener('click', openProfile);
+$('btn-profile-close').addEventListener('click', () => ($('profile-panel').hidden = true));
+$('profile-panel').addEventListener('click', (ev) => {
+  if (ev.target === $('profile-panel')) $('profile-panel').hidden = true;
+});
 
 // ---------------------------------------------------------------- PWA & debug
 

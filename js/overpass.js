@@ -23,17 +23,24 @@ out skel qt;`;
 
   let lastErr = null;
   for (const url of MIRRORS) {
+    // Timeout client : un miroir surchargé peut laisser la requête en file
+    // d'attente sans jamais répondre — on passe alors au miroir suivant.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 45000);
     try {
       const res = await fetch(url, {
         method: 'POST',
         body: 'data=' + encodeURIComponent(query),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        signal: ctrl.signal,
       });
       if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
       const json = await res.json();
       return parseOsm(json);
     } catch (err) {
       lastErr = err;
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw lastErr || new Error('Overpass injoignable');
