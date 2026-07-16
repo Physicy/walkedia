@@ -38,7 +38,9 @@ out skel qt;`;
       const json = await res.json();
       return parseOsm(json);
     } catch (err) {
-      lastErr = err;
+      lastErr = err && err.name === 'AbortError'
+        ? new Error('serveurs OSM saturés, réessaie dans un instant')
+        : err;
     } finally {
       clearTimeout(timer);
     }

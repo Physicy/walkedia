@@ -23,35 +23,40 @@
 </div>
 
 <div id="controls">
-  <button id="btn-profile" title="Profil" hidden>👤</button>
   <button id="btn-session" class="primary" hidden>Démarrer une session</button>
   <button id="btn-center" title="Recentrer" hidden>⌖</button>
 </div>
 
-<div id="profile-panel" hidden>
-  <div class="panel-card">
-    <div class="panel-head">
-      <h2>Profil</h2>
-      <button id="btn-profile-close" title="Fermer">✕</button>
-    </div>
-    <div class="big-score"><span id="p-total">0</span><small>points au total</small></div>
-    <div class="stat-grid">
-      <div><span id="p-today">0</span><label>aujourd'hui</label></div>
-      <div><span id="p-week">0</span><label>cette semaine</label></div>
-      <div><span id="p-month">0</span><label>ce mois-ci</label></div>
-    </div>
-    <h3>Points sur 7 jours</h3>
-    <div id="p-chart"></div>
-    <div class="stat-grid">
-      <div><span id="p-edges">0</span><label>tronçons découverts</label></div>
-      <div><span id="p-km">0</span><label>km découverts</label></div>
-      <div><span id="p-sessions">0</span><label>sessions</label></div>
-    </div>
-    <h3>Dernières sessions</h3>
-    <ul id="p-session-list"></ul>
-    <p id="p-untracked" class="muted" hidden></p>
-  </div>
+<div id="view-search" class="view" hidden>
+  <h2>Recherche</h2>
+  <p class="placeholder">Bientôt disponible…</p>
 </div>
+
+<div id="view-profile" class="view" hidden>
+  <h2>Profil</h2>
+  <div class="big-score"><span id="p-total">0</span><small>points au total</small></div>
+  <div class="stat-grid">
+    <div><span id="p-today">0</span><label>aujourd'hui</label></div>
+    <div><span id="p-week">0</span><label>cette semaine</label></div>
+    <div><span id="p-month">0</span><label>ce mois-ci</label></div>
+  </div>
+  <h3>Points sur 7 jours</h3>
+  <div id="p-chart"></div>
+  <div class="stat-grid">
+    <div><span id="p-edges">0</span><label>tronçons découverts</label></div>
+    <div><span id="p-km">0</span><label>km découverts</label></div>
+    <div><span id="p-sessions">0</span><label>sessions</label></div>
+  </div>
+  <h3>Dernières sessions</h3>
+  <ul id="p-session-list"></ul>
+  <p id="p-untracked" class="muted" hidden></p>
+</div>
+
+<nav id="tabbar" hidden>
+  <button data-tab="adventure" class="active"><span>🗺️</span>Aventure</button>
+  <button data-tab="search"><span>🔍</span>Recherche</button>
+  <button data-tab="profile"><span>👤</span>Profil</button>
+</nav>
 
 <div id="start-screen">
   <div class="card">

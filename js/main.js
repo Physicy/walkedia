@@ -105,7 +105,7 @@ async function init(lat, lon) {
   $('start-screen').classList.add('hidden');
   $('btn-session').hidden = false;
   $('btn-center').hidden = false;
-  $('btn-profile').hidden = false;
+  $('tabbar').hidden = false;
   toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
 }
 
@@ -349,7 +349,7 @@ function pointsBetween(a, b) {
   return n;
 }
 
-function openProfile() {
+function renderProfile() {
   const p = state.progress;
   const today = startOfToday();
   const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
@@ -403,15 +403,22 @@ function openProfile() {
     $('p-untracked').textContent =
       `${untracked} point(s) acquis avant le suivi temporel : comptés dans le total uniquement.`;
   }
-
-  $('profile-panel').hidden = false;
 }
 
-$('btn-profile').addEventListener('click', openProfile);
-$('btn-profile-close').addEventListener('click', () => ($('profile-panel').hidden = true));
-$('profile-panel').addEventListener('click', (ev) => {
-  if (ev.target === $('profile-panel')) $('profile-panel').hidden = true;
-});
+// ---------------------------------------------------------------- onglets
+
+function switchTab(name) {
+  $('view-search').hidden = name !== 'search';
+  $('view-profile').hidden = name !== 'profile';
+  if (name === 'profile') renderProfile();
+  for (const btn of document.querySelectorAll('#tabbar button')) {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  }
+}
+
+for (const btn of document.querySelectorAll('#tabbar button')) {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+}
 
 // ---------------------------------------------------------------- PWA & debug
 
