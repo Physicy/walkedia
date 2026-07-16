@@ -36,6 +36,11 @@ native/Flutter lèvera cette contrainte).
 - **Graphe** : ways piétons OSM chargés via Overpass dans un rayon de 800 m,
   découpés aux jonctions puis simplifiés (fusion des nœuds de degré 2) pour que
   chaque arête relie deux vrais nœuds.
+- **Extension dynamique** : pendant une session, dès qu'on s'approche à moins
+  de 300 m du bord de la zone connue, une nouvelle zone de 800 m est
+  téléchargée autour de la position et fusionnée au graphe (données OSM brutes
+  cumulées, graphe reconstruit, couverture de session préservée). En cas
+  d'échec (serveurs saturés), nouvelle tentative au plus tôt 30 s plus tard.
 - **Carrefours** : le degré est calculé sur les branches *significatives* (les
   impasses de moins de 30 m — entrées de bâtiments, allées — ne comptent pas),
   puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
@@ -94,7 +99,6 @@ marche sans sortir).
 ## Limites connues (prototype)
 
 - Pas de GPS en arrière-plan (limitation web).
-- La zone est figée au chargement (800 m autour de la position initiale).
 - Map matching géométrique simple, pas de modèle HMM : de rares faux positifs
   restent possibles sur des chemins parallèles très proches (< 30 m).
 - Si OSM modifie la géométrie d'un chemin, son ID change et il redevient « à

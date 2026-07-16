@@ -4,9 +4,12 @@ import { Matcher } from './matching.js';
 import { makeProj, haversine } from './geo.js';
 import * as storage from './storage.js';
 
-const RADIUS = 800;          // rayon de chargement du graphe (m)
-const BOUNDARY_MARGIN = 100; // marge : ne pas évaluer les intersections trop
-                             // proches du bord (arêtes incidentes non chargées)
+const RADIUS = 800;           // rayon de chargement du graphe (m)
+const BOUNDARY_MARGIN = 100;  // marge : ne pas évaluer les carrefours trop
+                              // proches du bord (arêtes incidentes non chargées)
+const EXPAND_MARGIN = 300;    // à moins de 300 m du bord de la zone connue,
+                              // on télécharge une nouvelle zone autour de soi
+const EXPAND_COOLDOWN = 30000; // délai minimal entre deux tentatives (ms)
 
 const COLORS = {
   undiscovered: '#94a3b8',
@@ -20,7 +23,11 @@ const state = {
   map: null,
   graph: null,
   proj: null,
-  center: null, // [lat, lon] du chargement
+  center: null,  // [lat, lon] du premier chargement
+  centers: [],   // centres de toutes les zones chargées
+  osmRaw: { nodes: new Map(), ways: new Map() }, // données OSM brutes cumulées
+  expanding: false,
+  lastExpandTry: 0,
   progress: storage.load(),
   matcher: null,
   watchId: null,
@@ -88,7 +95,8 @@ async function init(lat, lon) {
 
   state.center = [lat, lon];
   state.proj = makeProj(lat);
-  state.graph = buildGraph(osm);
+  mergeOsm(osm);
+  state.centers.push([lat, lon]);
 
   state.map = L.map('map', { preferCanvas: true, zoomControl: false }).setView([lat, lon], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -96,7 +104,7 @@ async function init(lat, lon) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(state.map);
 
-  renderGraph();
+  rebuildGraph();
   // Les complétions se recalculent depuis l'historique d'arêtes : des arêtes
   // déjà découvertes peuvent compléter des carrefours de cette zone.
   sweepCompletions(false);
@@ -107,6 +115,57 @@ async function init(lat, lon) {
   $('btn-center').hidden = false;
   $('tabbar').hidden = false;
   toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
+}
+
+// ------------------------------------------------- zones & reconstruction
+
+function mergeOsm(osm) {
+  for (const [id, c] of osm.nodes) state.osmRaw.nodes.set(id, c);
+  for (const w of osm.ways) state.osmRaw.ways.set(w.id, w);
+}
+
+// Reconstruit le graphe complet depuis les données OSM cumulées et redessine.
+function rebuildGraph() {
+  state.graph = buildGraph({
+    nodes: state.osmRaw.nodes,
+    ways: [...state.osmRaw.ways.values()],
+  });
+  for (const l of state.edgeLayers.values()) l.remove();
+  for (const l of state.interLayers.values()) l.remove();
+  state.edgeLayers.clear();
+  state.interLayers.clear();
+  renderGraph();
+}
+
+function distToNearestCenter(lat, lon) {
+  let best = Infinity;
+  for (const c of state.centers) best = Math.min(best, haversine([lat, lon], c));
+  return best;
+}
+
+// Étend la zone connue quand le joueur s'approche du bord (appelé à chaque
+// position GPS pendant une session).
+async function maybeExpand(lat, lon) {
+  const now = Date.now();
+  if (state.expanding || now - state.lastExpandTry < EXPAND_COOLDOWN) return;
+  if (distToNearestCenter(lat, lon) <= RADIUS - EXPAND_MARGIN) return;
+  state.expanding = true;
+  state.lastExpandTry = now;
+  try {
+    const osm = await fetchNetwork(lat, lon, RADIUS);
+    mergeOsm(osm);
+    state.centers.push([lat, lon]);
+    rebuildGraph();
+    if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
+    sweepCompletions(false);
+    refreshHud();
+    toast('Nouvelle zone chargée 🗺️');
+  } catch (err) {
+    // Réessaiera au prochain fix après le délai de refroidissement.
+    toast('Extension de zone impossible : ' + err.message);
+  } finally {
+    state.expanding = false;
+  }
 }
 
 // ---------------------------------------------------------------- rendu
@@ -182,7 +241,7 @@ function toast(msg, ms = 3500) {
 // ---------------------------------------------------------------- complétion
 
 function nearBoundary(j) {
-  return haversine([j.lat, j.lon], state.center) > RADIUS - BOUNDARY_MARGIN;
+  return distToNearestCenter(j.lat, j.lon) > RADIUS - BOUNDARY_MARGIN;
 }
 
 // Vérifie un carrefour : toutes ses branches externes significatives
@@ -210,7 +269,7 @@ function sweepCompletions(announce) {
     if (state.graph.junctions.has(id)) continue;
     const [lat, lon] = id.split(',').map(Number);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    if (haversine([lat, lon], state.center) > RADIUS - BOUNDARY_MARGIN) continue;
+    if (distToNearestCenter(lat, lon) > RADIUS - BOUNDARY_MARGIN) continue;
     state.progress.junctions.delete(id);
     delete state.progress.completedAt[id];
     pruned++;
@@ -261,6 +320,7 @@ function onFix(lat, lon, accuracy) {
   updatePosition(lat, lon, accuracy);
   if (!state.session) return;
   state.session.trackLine.addLatLng([lat, lon]);
+  maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi
 
   for (const edgeId of state.matcher.feed(lat, lon, accuracy)) {
     if (state.progress.edges.has(edgeId)) continue; // déjà dans l'historique

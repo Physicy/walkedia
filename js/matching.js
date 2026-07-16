@@ -10,10 +10,13 @@ const MAX_DIST = 30;     // distance max GPS -> arête (m)
 const MAX_ACCURACY = 40; // précision GPS minimale acceptée (m)
 
 export class Matcher {
-  constructor(graph, proj) {
+  // `prev` : matcher de la même session avant extension de zone — la
+  // couverture accumulée et les arêtes validées sont conservées (les IDs
+  // d'arêtes sont stables).
+  constructor(graph, proj, prev = null) {
     this.proj = proj;
-    this.cover = new Map();     // edgeId -> { min, max } (fraction 0..1)
-    this.traversed = new Set(); // arêtes validées pendant cette session
+    this.cover = prev ? prev.cover : new Map();     // edgeId -> { min, max }
+    this.traversed = prev ? prev.traversed : new Set();
     this.edges = graph.edges;
     this.xy = new Map();        // edgeId -> polyligne projetée en mètres
     this.grid = new Map();      // "cx:cy" -> [edge, ...]
