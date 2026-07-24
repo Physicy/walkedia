@@ -7,7 +7,7 @@ import { projectOnPolyline } from './geo.js';
 
 const CELL = 120;        // taille de cellule de la grille (m)
 const MAX_DIST = 30;     // distance max GPS -> arête (m)
-const MAX_ACCURACY = 40; // précision GPS minimale acceptée (m)
+export const MAX_ACCURACY = 40; // précision GPS minimale acceptée (m)
 
 export class Matcher {
   // `prev` : matcher de la même session avant extension de zone — la
