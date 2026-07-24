@@ -18,7 +18,7 @@ const EXPAND_COOLDOWN = 30000; // délai minimal entre deux tentatives (ms)
 
 const COLORS = {
   undiscovered: '#94a3b8',
-  discovered: '#06b6d4',
+  discovered: '#22c55e',
   incomplete: '#f59e0b',
   complete: '#22c55e',
   track: '#4f46e5',
@@ -193,7 +193,11 @@ function renderGraph() {
 }
 
 function styleForEdge(id) {
-  const found = state.progress.edges.has(id);
+  // Un tronçon tout juste validé pendant la session en cours ne doit pas
+  // apparaître en vert avant la fin de session (ex : reconstruction du
+  // graphe lors d'une extension de zone en cours de marche).
+  const pendingReveal = state.session && state.session.newEdges.has(id);
+  const found = state.progress.edges.has(id) && !pendingReveal;
   return {
     color: found ? COLORS.discovered : COLORS.undiscovered,
     weight: found ? 4.5 : 2.5,
@@ -370,7 +374,9 @@ function onFix(lat, lon, accuracy, t) {
       state.progress.edges.add(edgeId);
       state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
       state.session.newEdges.add(edgeId);
-      repaintEdge(edgeId);
+      // Le tronçon ne passe en vert sur la carte qu'à la fin de la session
+      // (voir endSession) : pendant la marche, seul le tracé GPS (trackLine)
+      // indique la progression en direct.
 
       // Carrefours dont cette nouvelle arête est une branche requise.
       for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
@@ -410,6 +416,10 @@ function endSession() {
   state.matcher = null;
   state.lastFix = null;
   trackLine.remove();
+
+  // La session est validée : les tronçons parcourus passent en vert et le
+  // restent en permanence (repeints depuis l'historique à chaque rendu).
+  for (const edgeId of newEdges) repaintEdge(edgeId);
 
   state.progress.sessions.push({
     start: startedAt,
