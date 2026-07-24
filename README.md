@@ -67,6 +67,11 @@ native/Flutter lèvera cette contrainte).
 - **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur
   l'arête la plus proche (≤ 30 m) ; l'arête est validée quand les projections
   couvrent une part suffisante de sa longueur (50 % si courte, ~75 % sinon).
+  Entre deux fix GPS successifs, la position est rééchantillonnée en ligne
+  droite tous les 5 m (sauf saut > 150 m ou écart > 20 s, considérés comme
+  une coupure) : sans cela, un tronçon court traversé entre deux fix peu
+  fréquents (fréquence GPS variable, canyons urbains) n'obtenait jamais assez
+  de projections pour être validé.
 - **Progression** : historique d'arêtes et intersections complétées en
   `localStorage` (clé `walkedia-v1`), sauvegarde continue pendant la session.
 - **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone

@@ -1,8 +1,13 @@
 import { fetchNetwork } from './overpass.js';
 import { buildGraph } from './graph.js';
-import { Matcher } from './matching.js';
+import { Matcher, MAX_ACCURACY } from './matching.js';
 import { makeProj, haversine } from './geo.js';
 import * as storage from './storage.js';
+
+const INTERP_STEP = 5;   // m : ré-échantillonnage entre deux fix GPS successifs
+                          // (assez fin pour ne pas rater les arêtes courtes)
+const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS et on n'interpole pas
+const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vieux (pause, arrière-plan)
 
 const RADIUS = 800;           // rayon de chargement du graphe (m)
 const BOUNDARY_MARGIN = 100;  // marge : ne pas évaluer les carrefours trop
@@ -36,6 +41,7 @@ const state = {
   interLayers: new Map(),
   posMarker: null,
   accCircle: null,
+  lastFix: null, // { lat, lon, accuracy, t } - pour interpoler entre deux fix GPS
 };
 
 const $ = (id) => document.getElementById(id);
@@ -298,6 +304,7 @@ $('btn-center').addEventListener('click', () => {
 
 function startSession() {
   state.matcher = new Matcher(state.graph, state.proj);
+  state.lastFix = null;
   state.session = {
     newEdges: new Set(),
     newInter: new Set(),
@@ -310,35 +317,72 @@ function startSession() {
   toast('Session démarrée — bonne exploration !');
 
   state.watchId = navigator.geolocation.watchPosition(
-    (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp),
     (err) => toast('GPS : ' + err.message),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
   );
 }
 
-function onFix(lat, lon, accuracy) {
+// Deux fix GPS successifs peuvent être espacés de plusieurs dizaines de
+// mètres (fréquence de mise à jour variable, canyons urbains) : sans
+// interpolation, un tronçon court traversé entre les deux fix n'obtient
+// jamais aucune projection et n'est donc jamais validé. On rééchantillonne
+// le segment [prev, cur] tous les INTERP_STEP mètres, sauf si l'écart est
+// trop grand (saut GPS) ou trop ancien (pause / arrière-plan) pour que
+// l'hypothèse d'un déplacement en ligne droite soit raisonnable.
+function interpolatedFixes(prev, cur) {
+  if (!prev) return [cur];
+  const dist = haversine([prev.lat, prev.lon], [cur.lat, cur.lon]);
+  if (dist <= INTERP_STEP || dist > MAX_INTERP_GAP) return [cur];
+  if (prev.t != null && cur.t != null && cur.t - prev.t > MAX_INTERP_TIME) return [cur];
+
+  const steps = Math.round(dist / INTERP_STEP);
+  const fixes = [];
+  for (let i = 1; i < steps; i++) {
+    const f = i / steps;
+    fixes.push({
+      lat: prev.lat + (cur.lat - prev.lat) * f,
+      lon: prev.lon + (cur.lon - prev.lon) * f,
+      accuracy: Math.max(prev.accuracy || 0, cur.accuracy || 0),
+    });
+  }
+  fixes.push(cur);
+  return fixes;
+}
+
+function onFix(lat, lon, accuracy, t) {
   updatePosition(lat, lon, accuracy);
   if (!state.session) return;
   state.session.trackLine.addLatLng([lat, lon]);
   maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi
 
-  for (const edgeId of state.matcher.feed(lat, lon, accuracy)) {
-    if (state.progress.edges.has(edgeId)) continue; // déjà dans l'historique
-    state.progress.edges.add(edgeId);
-    state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
-    state.session.newEdges.add(edgeId);
-    repaintEdge(edgeId);
+  const cur = { lat, lon, accuracy, t };
+  // Un fix imprécis ne doit pas servir de point de départ à une
+  // interpolation (position peu fiable) : on garde la mémoire du dernier
+  // fix exploitable, pas forcément du tout dernier fix reçu.
+  const prev = accuracy != null && accuracy > MAX_ACCURACY ? null : state.lastFix;
+  const fixes = interpolatedFixes(prev, cur);
+  if (accuracy == null || accuracy <= MAX_ACCURACY) state.lastFix = cur;
 
-    // Carrefours dont cette nouvelle arête est une branche requise.
-    for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-      const j = state.graph.junctions.get(jid);
-      if (j && checkJunction(j)) {
-        state.session.newInter.add(jid);
-        toast('Carrefour complété ! +1 point 🎉');
+  for (const fix of fixes) {
+    for (const edgeId of state.matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+      if (state.progress.edges.has(edgeId)) continue; // déjà dans l'historique
+      state.progress.edges.add(edgeId);
+      state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+      state.session.newEdges.add(edgeId);
+      repaintEdge(edgeId);
+
+      // Carrefours dont cette nouvelle arête est une branche requise.
+      for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
+        const j = state.graph.junctions.get(jid);
+        if (j && checkJunction(j)) {
+          state.session.newInter.add(jid);
+          toast('Carrefour complété ! +1 point 🎉');
+        }
       }
+      storage.save(state.progress); // sauvegarde continue : rien n'est perdu si l'app est tuée
+      refreshHud();
     }
-    storage.save(state.progress); // sauvegarde continue : rien n'est perdu si l'app est tuée
-    refreshHud();
   }
 }
 
@@ -364,6 +408,7 @@ function endSession() {
   const { newEdges, newInter, trackLine, startedAt } = state.session;
   state.session = null;
   state.matcher = null;
+  state.lastFix = null;
   trackLine.remove();
 
   state.progress.sessions.push({
