@@ -36,11 +36,13 @@ native/Flutter lèvera cette contrainte).
 - **Graphe** : ways piétons OSM chargés via Overpass dans un rayon de 800 m,
   découpés aux jonctions puis simplifiés (fusion des nœuds de degré 2) pour que
   chaque arête relie deux vrais nœuds.
-- **Extension dynamique** : pendant une session, dès qu'on s'approche à moins
-  de 300 m du bord de la zone connue, une nouvelle zone de 800 m est
-  téléchargée autour de la position et fusionnée au graphe (données OSM brutes
-  cumulées, graphe reconstruit, couverture de session préservée). En cas
-  d'échec (serveurs saturés), nouvelle tentative au plus tôt 30 s plus tard.
+- **Extension dynamique** : le suivi de position GPS tourne en continu dès
+  l'ouverture de la carte (indépendamment du démarrage d'une session) ; dès
+  qu'on s'approche à moins de 300 m du bord de la zone connue, une nouvelle
+  zone de 800 m est téléchargée autour de la position et fusionnée au graphe
+  (données OSM brutes cumulées, graphe reconstruit, couverture de session
+  préservée). En cas d'échec (serveurs saturés), nouvelle tentative au plus
+  tôt 30 s plus tard.
 - **Carrefours** : le degré est calculé sur les branches *significatives* (les
   impasses de moins de 30 m — entrées de bâtiments, allées — ne comptent pas),
   puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
