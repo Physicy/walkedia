@@ -79,6 +79,13 @@ native/Flutter lèvera cette contrainte).
   GPS consécutifs, la session est arrêtée automatiquement (vélo, voiture…) —
   un seul fix au-dessus du seuil ne suffit pas, pour absorber le bruit GPS
   ponctuel.
+- **Import d'une marche oubliée** : le suivi de position tournant en continu
+  même hors session, les fix reçus sans session active sont gardés dans un
+  tampon glissant (1 h max, purgé au fil de l'eau). Au démarrage d'une
+  nouvelle session, si ce tampon représente une marche significative (≥ 80 m),
+  l'app propose de l'importer : elle est rejouée à travers un matcher
+  temporaire et enregistrée comme une session terminée (tronçons révélés
+  immédiatement, marquée « importée » dans l'historique du profil).
 - **Progression** : historique d'arêtes et intersections complétées en
   `localStorage` (clé `walkedia-v1`), sauvegarde continue pendant la session.
 - **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone
@@ -104,13 +111,17 @@ native/Flutter lèvera cette contrainte).
 
 ## Debug
 
-Dans la console du navigateur, `window.__walkedia.feedFix(lat, lon, accuracy)`
-injecte une position GPS dans la session en cours (utile pour simuler une
-marche sans sortir).
+Dans la console du navigateur,
+`window.__walkedia.feedFix(lat, lon, accuracy, speedKmh)` injecte une
+position GPS (utile pour simuler une marche sans sortir) — alimente la
+session en cours si elle existe, sinon le tampon de marche oubliée.
 
 ## Limites connues (prototype)
 
-- Pas de GPS en arrière-plan (limitation web).
+- Pas de GPS en arrière-plan (limitation web) : le tampon de marche oubliée
+  ne peut récupérer que ce qui a été suivi pendant que l'onglet était ouvert
+  (même sans session démarrée), jamais une marche faite sans avoir ouvert
+  l'app.
 - Map matching géométrique simple, pas de modèle HMM : de rares faux positifs
   restent possibles sur des chemins parallèles très proches (< 30 m).
 - Si OSM modifie la géométrie d'un chemin, son ID change et il redevient « à
