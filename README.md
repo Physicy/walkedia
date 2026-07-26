@@ -74,6 +74,11 @@ native/Flutter lèvera cette contrainte).
   une coupure) : sans cela, un tronçon court traversé entre deux fix peu
   fréquents (fréquence GPS variable, canyons urbains) n'obtenait jamais assez
   de projections pour être validé.
+- **Arrêt automatique** : si la vitesse dépasse 20 km/h (mesure GPS Doppler
+  quand disponible, sinon distance/temps entre deux fix) sur au moins deux fix
+  GPS consécutifs, la session est arrêtée automatiquement (vélo, voiture…) —
+  un seul fix au-dessus du seuil ne suffit pas, pour absorber le bruit GPS
+  ponctuel.
 - **Progression** : historique d'arêtes et intersections complétées en
   `localStorage` (clé `walkedia-v1`), sauvegarde continue pendant la session.
 - **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone
