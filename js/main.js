@@ -121,6 +121,15 @@ async function init(lat, lon) {
   $('btn-center').hidden = false;
   $('tabbar').hidden = false;
   toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
+
+  // Suivi de position continu, indépendant d'une session : la position
+  // affichée et l'extension de zone doivent rester à jour même quand on ne
+  // enregistre pas explicitement une marche.
+  state.watchId = navigator.geolocation.watchPosition(
+    (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp),
+    (err) => toast('GPS : ' + err.message),
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+  );
 }
 
 // ------------------------------------------------- zones & reconstruction
@@ -150,7 +159,8 @@ function distToNearestCenter(lat, lon) {
 }
 
 // Étend la zone connue quand le joueur s'approche du bord (appelé à chaque
-// position GPS pendant une session).
+// position GPS, session ou non — le suivi tourne en continu dès l'ouverture
+// de la carte).
 async function maybeExpand(lat, lon) {
   const now = Date.now();
   if (state.expanding || now - state.lastExpandTry < EXPAND_COOLDOWN) return;
@@ -319,12 +329,8 @@ function startSession() {
   btn.textContent = 'Terminer la session';
   btn.classList.add('recording');
   toast('Session démarrée — bonne exploration !');
-
-  state.watchId = navigator.geolocation.watchPosition(
-    (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp),
-    (err) => toast('GPS : ' + err.message),
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-  );
+  // Le suivi GPS (position + extension de zone) tourne déjà en continu
+  // depuis l'initialisation de la carte, indépendamment de la session.
 }
 
 // Deux fix GPS successifs peuvent être espacés de plusieurs dizaines de
@@ -356,9 +362,9 @@ function interpolatedFixes(prev, cur) {
 
 function onFix(lat, lon, accuracy, t) {
   updatePosition(lat, lon, accuracy);
+  maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi ; indépendant d'une session
   if (!state.session) return;
   state.session.trackLine.addLatLng([lat, lon]);
-  maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi
 
   const cur = { lat, lon, accuracy, t };
   // Un fix imprécis ne doit pas servir de point de départ à une
@@ -408,9 +414,8 @@ function updatePosition(lat, lon, accuracy) {
 }
 
 function endSession() {
-  if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
-  state.watchId = null;
-
+  // Le suivi GPS (state.watchId) continue de tourner après la session : il
+  // alimente la position affichée et l'extension de zone en permanence.
   const { newEdges, newInter, trackLine, startedAt } = state.session;
   state.session = null;
   state.matcher = null;
