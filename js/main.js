@@ -9,6 +9,9 @@ const INTERP_STEP = 5;   // m : ré-échantillonnage entre deux fix GPS successi
 const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS et on n'interpole pas
 const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vieux (pause, arrière-plan)
 
+const SPEED_LIMIT_KMH = 20;   // au-delà, on n'est probablement plus à pied (vélo, voiture…)
+const SPEED_STREAK_LIMIT = 2; // nombre de fix consécutifs au-dessus du seuil avant arrêt auto
+
 const RADIUS = 800;           // rayon de chargement du graphe (m)
 const BOUNDARY_MARGIN = 100;  // marge : ne pas évaluer les carrefours trop
                               // proches du bord (arêtes incidentes non chargées)
@@ -42,6 +45,7 @@ const state = {
   posMarker: null,
   accCircle: null,
   lastFix: null, // { lat, lon, accuracy, t } - pour interpoler entre deux fix GPS
+  speedStreak: 0, // nombre de fix consécutifs au-dessus de SPEED_LIMIT_KMH
 };
 
 const $ = (id) => document.getElementById(id);
@@ -126,7 +130,10 @@ async function init(lat, lon) {
   // affichée et l'extension de zone doivent rester à jour même quand on ne
   // enregistre pas explicitement une marche.
   state.watchId = navigator.geolocation.watchPosition(
-    (pos) => onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.timestamp),
+    (pos) => onFix(
+      pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy,
+      pos.timestamp, pos.coords.speed
+    ),
     (err) => toast('GPS : ' + err.message),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
   );
@@ -319,6 +326,7 @@ $('btn-center').addEventListener('click', () => {
 function startSession() {
   state.matcher = new Matcher(state.graph, state.proj);
   state.lastFix = null;
+  state.speedStreak = 0;
   state.session = {
     newEdges: new Set(),
     newInter: new Set(),
@@ -360,7 +368,23 @@ function interpolatedFixes(prev, cur) {
   return fixes;
 }
 
-function onFix(lat, lon, accuracy, t) {
+// Vitesse estimée en km/h entre deux fix, ou null si non calculable / fix
+// trop imprécis. Priorité au `speed` fourni par le GPS (mesure Doppler,
+// plus fiable qu'une distance/temps sur deux points bruités) ; à défaut,
+// on retombe sur la distance parcourue divisée par le temps écoulé.
+function estimateSpeedKmh(prev, cur, nativeSpeed) {
+  if (cur.accuracy != null && cur.accuracy > MAX_ACCURACY) return null;
+  if (nativeSpeed != null && Number.isFinite(nativeSpeed) && nativeSpeed >= 0) {
+    return nativeSpeed * 3.6;
+  }
+  if (!prev || prev.t == null || cur.t == null) return null;
+  const dt = (cur.t - prev.t) / 1000;
+  if (dt < 1 || dt > MAX_INTERP_TIME / 1000) return null;
+  const dist = haversine([prev.lat, prev.lon], [cur.lat, cur.lon]);
+  return (dist / dt) * 3.6;
+}
+
+function onFix(lat, lon, accuracy, t, speed) {
   updatePosition(lat, lon, accuracy);
   maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi ; indépendant d'une session
   if (!state.session) return;
@@ -371,6 +395,27 @@ function onFix(lat, lon, accuracy, t) {
   // interpolation (position peu fiable) : on garde la mémoire du dernier
   // fix exploitable, pas forcément du tout dernier fix reçu.
   const prev = accuracy != null && accuracy > MAX_ACCURACY ? null : state.lastFix;
+
+  // Vitesse trop élevée pour de la marche (vélo, voiture…) : on arrête la
+  // session automatiquement après quelques fix consécutifs au-dessus du
+  // seuil, pour ne pas exiger une tolérance qui accepterait n'importe quel
+  // moyen de transport. Un seul fix ne suffit pas (jitter GPS ponctuel).
+  const speedKmh = estimateSpeedKmh(prev, cur, speed);
+  if (speedKmh != null && speedKmh > SPEED_LIMIT_KMH) {
+    state.speedStreak++;
+    if (state.speedStreak >= SPEED_STREAK_LIMIT) {
+      state.speedStreak = 0;
+      toast(
+        `Session arrêtée : vitesse trop élevée (${Math.round(speedKmh)} km/h) pour de la marche.`,
+        6000
+      );
+      endSession();
+      return;
+    }
+  } else {
+    state.speedStreak = 0;
+  }
+
   const fixes = interpolatedFixes(prev, cur);
   if (accuracy == null || accuracy <= MAX_ACCURACY) state.lastFix = cur;
 
@@ -546,9 +591,11 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// Hooks de debug (console / tests) : window.__walkedia.feedFix(lat, lon, acc)
+// Hooks de debug (console / tests) :
+// window.__walkedia.feedFix(lat, lon, accuracy, speedKmh)
 window.__walkedia = {
   state,
   init,
-  feedFix: (lat, lon, acc = 5) => onFix(lat, lon, acc),
+  feedFix: (lat, lon, acc = 5, speedKmh = null) =>
+    onFix(lat, lon, acc, Date.now(), speedKmh != null ? speedKmh / 3.6 : null),
 };
