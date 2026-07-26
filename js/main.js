@@ -12,6 +12,11 @@ const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vie
 const SPEED_LIMIT_KMH = 20;   // au-delà, on n'est probablement plus à pied (vélo, voiture…)
 const SPEED_STREAK_LIMIT = 2; // nombre de fix consécutifs au-dessus du seuil avant arrêt auto
 
+const SHADOW_MAX_AGE = 3600000;  // ms : au-delà, un fix hors session est trop vieux pour être
+                                  // proposé à l'import (probablement une autre sortie)
+const SHADOW_MAX_POINTS = 4000;  // garde-fou sur la taille du tampon
+const SHADOW_MIN_DISTANCE = 80;  // m : en dessous, pas assez significatif pour proposer un import
+
 const RADIUS = 800;           // rayon de chargement du graphe (m)
 const BOUNDARY_MARGIN = 100;  // marge : ne pas évaluer les carrefours trop
                               // proches du bord (arêtes incidentes non chargées)
@@ -46,6 +51,7 @@ const state = {
   accCircle: null,
   lastFix: null, // { lat, lon, accuracy, t } - pour interpoler entre deux fix GPS
   speedStreak: 0, // nombre de fix consécutifs au-dessus de SPEED_LIMIT_KMH
+  shadow: { fixes: [], startedAt: null }, // marche suivie hors session, à proposer à l'import
 };
 
 const $ = (id) => document.getElementById(id);
@@ -324,6 +330,10 @@ $('btn-center').addEventListener('click', () => {
 });
 
 function startSession() {
+  // Une marche faite avant de démarrer (suivi continu hors session) peut
+  // être récupérée maintenant, avant d'entamer la nouvelle session.
+  maybeImportShadowWalk();
+
   state.matcher = new Matcher(state.graph, state.proj);
   state.lastFix = null;
   state.speedStreak = 0;
@@ -384,10 +394,96 @@ function estimateSpeedKmh(prev, cur, nativeSpeed) {
   return (dist / dt) * 3.6;
 }
 
+// Le suivi GPS tourne en continu même hors session (voir init()) : on garde
+// une trace glissante de ces fix pour pouvoir proposer, au démarrage de la
+// prochaine session, de récupérer une marche faite avant d'avoir pensé à
+// appuyer sur "Démarrer une session".
+function bufferShadowFix(lat, lon, accuracy, t) {
+  if (accuracy != null && accuracy > MAX_ACCURACY) return; // fix inutilisable pour un import
+  const ts = t != null ? t : Date.now();
+  const fixes = state.shadow.fixes;
+  fixes.push({ lat, lon, accuracy, t: ts });
+  const cutoff = ts - SHADOW_MAX_AGE;
+  while (fixes.length && fixes[0].t < cutoff) fixes.shift();
+  while (fixes.length > SHADOW_MAX_POINTS) fixes.shift();
+  state.shadow.startedAt = fixes.length ? fixes[0].t : null;
+}
+
+function clearShadow() {
+  state.shadow.fixes = [];
+  state.shadow.startedAt = null;
+}
+
+function shadowDistance(fixes) {
+  let d = 0;
+  for (let i = 1; i < fixes.length; i++) {
+    d += haversine([fixes[i - 1].lat, fixes[i - 1].lon], [fixes[i].lat, fixes[i].lon]);
+  }
+  return d;
+}
+
+// Rejoue le tampon de marche hors session à travers un matcher temporaire,
+// comme le ferait une session normale, puis l'enregistre comme une session
+// terminée (tronçons révélés immédiatement, il n'y a pas de session en cours
+// à protéger).
+function maybeImportShadowWalk() {
+  const { fixes, startedAt } = state.shadow;
+  if (fixes.length < 2 || startedAt == null) return;
+  const dist = shadowDistance(fixes);
+  if (dist < SHADOW_MIN_DISTANCE) { clearShadow(); return; }
+
+  const mins = Math.max(1, Math.round((fixes[fixes.length - 1].t - startedAt) / 60000));
+  const ok = window.confirm(
+    `Marche détectée avant le démarrage de la session (~${mins} min, ${Math.round(dist)} m).\n` +
+    `Importer ce trajet dans ton historique ?`
+  );
+  if (!ok) { clearShadow(); return; }
+
+  const matcher = new Matcher(state.graph, state.proj);
+  const newEdges = new Set();
+  const newInter = new Set();
+  let prevFix = null;
+  for (const cur of fixes) {
+    const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
+    for (const fix of interpolatedFixes(prev, cur)) {
+      for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+        if (state.progress.edges.has(edgeId)) continue;
+        state.progress.edges.add(edgeId);
+        state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+        newEdges.add(edgeId);
+        repaintEdge(edgeId);
+        for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
+          const j = state.graph.junctions.get(jid);
+          if (j && checkJunction(j)) newInter.add(jid);
+        }
+      }
+    }
+    if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
+  }
+
+  state.progress.sessions.push({
+    start: startedAt,
+    end: fixes[fixes.length - 1].t,
+    edges: newEdges.size,
+    junctions: newInter.size,
+    imported: true,
+  });
+  storage.save(state.progress);
+  refreshHud();
+  toast(
+    `Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`,
+    6000
+  );
+  clearShadow();
+}
+
 function onFix(lat, lon, accuracy, t, speed) {
   updatePosition(lat, lon, accuracy);
   maybeExpand(lat, lon); // asynchrone, sans bloquer le suivi ; indépendant d'une session
-  if (!state.session) return;
+  if (!state.session) {
+    bufferShadowFix(lat, lon, accuracy, t);
+    return;
+  }
   state.session.trackLine.addLatLng([lat, lon]);
 
   const cur = { lat, lon, accuracy, t };
@@ -554,7 +650,8 @@ function renderProfile() {
     ? recent
         .map((s) => {
           const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
-          return `<li><span>${dateFmt.format(new Date(s.start))}</span>` +
+          const label = s.imported ? `${dateFmt.format(new Date(s.start))} (importée)` : dateFmt.format(new Date(s.start));
+          return `<li><span>${label}</span>` +
             `<span>${mins} min</span><span>${s.edges} tronçon(s)</span>` +
             `<span class="pts">+${s.junctions} pt(s)</span></li>`;
         })
