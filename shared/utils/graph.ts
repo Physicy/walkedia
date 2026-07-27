@@ -170,10 +170,11 @@ export function buildGraph(osm: OSMData): Graph {
       b: nodeKey(coords[coords.length - 1]),
     };
     edges.set(id, e);
-    for (const [key, c] of [
+    const nodeEnds: Array<[string, Coord]> = [
       [e.a, coords[0]],
       [e.b, coords[coords.length - 1]],
-    ]) {
+    ];
+    for (const [key, c] of nodeEnds) {
       let n = nodes.get(key);
       if (!n)
         nodes.set(key, (n = { key, lat: c[0], lon: c[1], edgeIds: [] }));

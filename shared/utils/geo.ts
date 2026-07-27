@@ -1,5 +1,7 @@
 import type { Coord } from '../types/index.js';
 
+export type { Coord };
+
 const EARTH_R = 6371000;
 
 export function haversine(a: Coord, b: Coord): number {

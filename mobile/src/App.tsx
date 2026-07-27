@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import * as Location from 'expo-location';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { requestPermissions, startLocationTracking } from './services/locationService.js';
 import { loadProgress } from './services/storageService.js';
 import MapScreen from './screens/MapScreen.js';
@@ -60,6 +59,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
-
-// Fixe l'import manquant
-import { Text } from 'react-native';

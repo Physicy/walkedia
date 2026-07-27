@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { startLocationTracking, stopLocationTracking } from '../services/locationService.js';
 import { loadProgress, saveProgress, saveSession } from '../services/storageService.js';
 import { makeProj } from '../../../shared/utils/geo.js';
@@ -38,7 +38,10 @@ export default function MapScreen() {
 
         // Load initial graph
         const osmData = await fetchNetwork(INITIAL_LAT, INITIAL_LON, RADIUS);
-        const builtGraph = buildGraph(osmData as any);
+        const builtGraph = buildGraph({
+          nodes: osmData.nodes,
+          ways: osmData.ways,
+        } as any);
         setGraph(builtGraph);
       } catch (error) {
         Alert.alert('Error', 'Failed to initialize graph: ' + String(error));
@@ -63,7 +66,10 @@ export default function MapScreen() {
           try {
             lastZoneExtendRef.current = now;
             const osmData = await fetchNetwork(fix.lat, fix.lon, RADIUS);
-            const newGraph = buildGraph(osmData as any);
+            const newGraph = buildGraph({
+              nodes: osmData.nodes,
+              ways: osmData.ways,
+            } as any);
             setGraph(newGraph);
           } catch (error) {
             console.error('Zone extension failed:', error);
@@ -145,7 +151,6 @@ export default function MapScreen() {
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
         initialRegion={{
           latitude: INITIAL_LAT,
           longitude: INITIAL_LON,
