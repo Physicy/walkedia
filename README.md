@@ -4,32 +4,27 @@ Jeu d'exploration du réseau piéton : marche ou cours pour découvrir des chemi
 (map matching GPS → réseau OpenStreetMap) et complète des intersections pour
 marquer des points.
 
+App native **Expo / React Native** (voir [`mobile/`](mobile)) — portage de
+l'ancien prototype PWA, avec la même logique métier.
+
 ## Lancer en local
 
-Aucune dépendance à installer — c'est une application web statique :
-
 ```
-python -m http.server 8123
+cd mobile
+npm install
+npx expo start
 ```
 
-puis ouvrir <http://localhost:8123>.
+Scanner le QR code affiché avec l'app **Expo Go** (Android/iOS), sur le même
+réseau Wi-Fi que l'ordinateur. Autoriser l'accès à la position au premier
+lancement.
 
-## Tester sur téléphone
-
-La géolocalisation du navigateur exige un **contexte sécurisé** (HTTPS ou
-`localhost`). Une simple adresse IP locale (`http://192.168.x.x`) ne suffit pas.
-Options :
-
-- **Hébergement statique** : pousser le dossier tel quel sur GitHub Pages,
-  Netlify ou Cloudflare Pages (aucun build nécessaire).
-- **Tunnel HTTPS depuis le PC** : `npx localtunnel --port 8123` ou
-  `cloudflared tunnel --url http://localhost:8123`.
-- **Android + USB** : `chrome://inspect` → port forwarding de 8123, puis
-  ouvrir `localhost:8123` sur le téléphone.
-
-Sur mobile, garder l'écran allumé pendant une session : une page web n'a pas
-accès au GPS en arrière-plan (limite connue du prototype ; une vraie app
-native/Flutter lèvera cette contrainte).
+Un test GPS réel nécessite un téléphone physique (les simulateurs n'ont pas de
+vrai déplacement). En développement (`__DEV__`), un bouton « 🐞 Simuler un
+déplacement » sur la carte injecte des positions GPS synthétiques le long du
+réseau chargé, pour tester tout le pipeline (matching, progression, HUD, sessions,
+profil) sans sortir — équivalent du hook `window.__walkedia.feedFix` de
+l'ancien prototype web.
 
 ## Fonctionnement
 
@@ -61,9 +56,7 @@ native/Flutter lèvera cette contrainte).
   urbain, seuls les carrefours du réseau accessible en voiture (`residential`
   et au-dessus + `living_street`) comptent : les maillages de parcs, places et
   trottoirs ne génèrent plus de points. En rural, les sentiers et chemins sont
-  le réseau principal, donc toutes les voies comptent (règle d'origine). Sur
-  la zone urbaine test : 1131 nœuds bruts → 331 après consolidation → 185
-  carrefours carrossables.
+  le réseau principal, donc toutes les voies comptent (règle d'origine).
 - **IDs d'arêtes** : dérivés de la géométrie (extrémités + milieu + longueur),
   stables entre sessions et indépendants des IDs OSM.
 - **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur
@@ -71,59 +64,45 @@ native/Flutter lèvera cette contrainte).
   couvrent une part suffisante de sa longueur (50 % si courte, ~75 % sinon).
   Entre deux fix GPS successifs, la position est rééchantillonnée en ligne
   droite tous les 5 m (sauf saut > 150 m ou écart > 20 s, considérés comme
-  une coupure) : sans cela, un tronçon court traversé entre deux fix peu
-  fréquents (fréquence GPS variable, canyons urbains) n'obtenait jamais assez
-  de projections pour être validé.
+  une coupure).
 - **Arrêt automatique** : si la vitesse dépasse 20 km/h (mesure GPS Doppler
   quand disponible, sinon distance/temps entre deux fix) sur au moins deux fix
-  GPS consécutifs, la session est arrêtée automatiquement (vélo, voiture…) —
-  un seul fix au-dessus du seuil ne suffit pas, pour absorber le bruit GPS
-  ponctuel.
+  GPS consécutifs, la session est arrêtée automatiquement (vélo, voiture…).
 - **Import d'une marche oubliée** : le suivi de position tournant en continu
   même hors session, les fix reçus sans session active sont gardés dans un
   tampon glissant (1 h max, purgé au fil de l'eau). Au démarrage d'une
   nouvelle session, si ce tampon représente une marche significative (≥ 80 m),
-  l'app propose de l'importer : elle est rejouée à travers un matcher
-  temporaire et enregistrée comme une session terminée (tronçons révélés
-  immédiatement, marquée « importée » dans l'historique du profil).
+  l'app propose de l'importer.
 - **Progression** : historique d'arêtes et intersections complétées en
-  `localStorage` (clé `walkedia-v1`), sauvegarde continue pendant la session.
+  stockage local (`AsyncStorage`), sauvegarde continue pendant la session.
 - **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone
   chargée ne sont pas évaluées (des branches pourraient manquer).
 - **Navigation** : menu footer à trois onglets — *Aventure* (la carte, le
   lancement et l'arrêt des sessions), *Recherche* (réservé, vide pour
-  l'instant) et *Profil*. Une session en cours continue d'enregistrer pendant
-  qu'on consulte les autres onglets.
+  l'instant) et *Profil*.
 - **Profil** : points au total / aujourd'hui / cette semaine (depuis lundi) /
   ce mois-ci, graphique des 7 derniers jours, tronçons découverts, distance
-  découverte cumulée et historique des dernières sessions. Chaque complétion
-  est horodatée (`completedAt`) ; les points acquis avant l'ajout du suivi
-  temporel restent comptés dans le total.
+  découverte cumulée et historique des dernières sessions.
 
 ## Structure
 
-- `js/overpass.js` — requête Overpass (types de voies piétonnes, filtres d'accès)
-- `js/graph.js` — construction et simplification du graphe, IDs stables
-- `js/matching.js` — index spatial en grille + critère de couverture
-- `js/storage.js` — persistance locale
-- `js/main.js` — carte Leaflet, session GPS, complétion, HUD
-- `sw.js`, `manifest.webmanifest` — PWA (installable, shell en cache)
-
-## Debug
-
-Dans la console du navigateur,
-`window.__walkedia.feedFix(lat, lon, accuracy, speedKmh)` injecte une
-position GPS (utile pour simuler une marche sans sortir) — alimente la
-session en cours si elle existe, sinon le tampon de marche oubliée.
+- `mobile/src/logic/geo.js` — utilitaires géométriques (projection, distances)
+- `mobile/src/logic/overpass.js` — requête Overpass (types de voies piétonnes, filtres d'accès)
+- `mobile/src/logic/graph.js` — construction et simplification du graphe, IDs stables
+- `mobile/src/logic/matching.js` — index spatial en grille + critère de couverture
+- `mobile/src/logic/storage.ts` — persistance locale (`AsyncStorage`)
+- `mobile/src/hooks/useWalkedia.ts` — état global, GPS, sessions, complétion
+- `mobile/src/screens/` — écrans (démarrage, carte, recherche, profil)
+- `mobile/src/components/` — HUD, barre d'onglets, toast, panneau de debug
 
 ## Limites connues (prototype)
 
-- Pas de GPS en arrière-plan (limitation web) : le tampon de marche oubliée
-  ne peut récupérer que ce qui a été suivi pendant que l'onglet était ouvert
-  (même sans session démarrée), jamais une marche faite sans avoir ouvert
-  l'app.
+- Pas de GPS en arrière-plan (l'app doit rester ouverte/au premier plan
+  pendant une marche) : ajouter le suivi en arrière-plan est possible via
+  `expo-location` + `expo-task-manager`, mais demande un build natif (dev
+  client) et des permissions supplémentaires — non fait ici.
 - Map matching géométrique simple, pas de modèle HMM : de rares faux positifs
   restent possibles sur des chemins parallèles très proches (< 30 m).
 - Si OSM modifie la géométrie d'un chemin, son ID change et il redevient « à
   découvrir » (les intersections déjà complétées restent acquises).
-- Pas encore de synchronisation compte utilisateur (localStorage uniquement).
+- Pas encore de synchronisation compte utilisateur (stockage local uniquement).
