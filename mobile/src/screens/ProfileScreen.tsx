@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../theme';
 import type { Progress } from '../logic/storage';
+import type { useAuth } from '../hooks/useAuth';
+import { AccountSection } from '../components/AccountSection';
 
 const DAY = 86400000;
 
@@ -21,7 +23,15 @@ function pointsSince(progress: Progress, t: number) {
   return pointsBetween(progress, t, Infinity);
 }
 
-export function ProfileScreen({ progress }: { progress: Progress }) {
+export function ProfileScreen({
+  progress,
+  auth,
+  syncing,
+}: {
+  progress: Progress;
+  auth: ReturnType<typeof useAuth>;
+  syncing: boolean;
+}) {
   const stats = useMemo(() => {
     const today = startOfToday();
     const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
@@ -62,6 +72,8 @@ export function ProfileScreen({ progress }: { progress: Progress }) {
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       <Text style={styles.h2}>Profil</Text>
+
+      <AccountSection auth={auth} syncing={syncing} />
 
       <View style={styles.bigScore}>
         <Text style={styles.bigScoreValue}>{stats.total}</Text>
@@ -131,7 +143,7 @@ function StatCell({ value, label }: { value: number | string; label: string }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { ...StyleSheet.absoluteFill, zIndex: 1600, backgroundColor: COLORS.bg },
+  wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.bg },
   content: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 100 },
   h2: { fontSize: 21, fontWeight: '700', color: COLORS.text, marginBottom: 10 },
   h3: {

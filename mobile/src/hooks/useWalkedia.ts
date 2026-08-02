@@ -9,12 +9,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
-import { fetchNetwork } from '../logic/overpass';
+import { fetchZone } from '../logic/overpass';
 import { buildGraph } from '../logic/graph';
 import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
+import { supabase } from '../lib/supabase';
 
 const INTERP_STEP = 5; // m : ré-échantillonnage entre deux fix GPS successifs
 const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS
@@ -30,7 +31,8 @@ const SHADOW_MIN_DISTANCE = 80;
 const RADIUS = 800;
 const BOUNDARY_MARGIN = 100;
 const EXPAND_MARGIN = 300;
-const EXPAND_COOLDOWN = 30000;
+const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
+                              // suffisant contre le spam GPS (~14 m parcourus en 8 s à pied)
 
 export interface Fix {
   lat: number;
@@ -52,6 +54,7 @@ interface WalkediaState {
   center: [number, number] | null;
   centers: [number, number][];
   osmRaw: { nodes: Map<number, [number, number]>; ways: Map<number, any> };
+  greenAreas: Map<number, { id: number; ring: [number, number][] }>;
   expanding: boolean;
   lastExpandTry: number;
   progress: Progress;
@@ -60,11 +63,13 @@ interface WalkediaState {
   position: { lat: number; lon: number; accuracy: number | null } | null;
   lastFix: Fix | null;
   speedStreak: number;
-  shadow: { fixes: Fix[]; startedAt: number | null };
+  shadow: { fixes: Fix[]; startedAt: number | null; prompted: boolean };
   toast: { msg: string; key: number } | null;
   ready: boolean; // progrès chargé depuis AsyncStorage
   mapReady: boolean; // graphe initial chargé
   startStatus: string;
+  userId: string | null; // compte Supabase connecté, null si hors-ligne/déconnecté
+  syncing: boolean;
 }
 
 function freshState(): WalkediaState {
@@ -74,6 +79,7 @@ function freshState(): WalkediaState {
     center: null,
     centers: [],
     osmRaw: { nodes: new Map(), ways: new Map() },
+    greenAreas: new Map(),
     expanding: false,
     lastExpandTry: 0,
     progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, sessions: [] },
@@ -82,11 +88,13 @@ function freshState(): WalkediaState {
     position: null,
     lastFix: null,
     speedStreak: 0,
-    shadow: { fixes: [], startedAt: null },
+    shadow: { fixes: [], startedAt: null, prompted: false },
     toast: null,
     ready: false,
     mapReady: false,
     startStatus: '',
+    userId: null,
+    syncing: false,
   };
 }
 
@@ -96,6 +104,21 @@ function distToNearestCenter(state: WalkediaState, lat: number, lon: number) {
   let best = Infinity;
   for (const c of state.centers) best = Math.min(best, haversine([lat, lon], c));
   return best;
+}
+
+// Aligne un point de déclenchement (pan/GPS) sur une grille de la taille
+// d'une zone (RADIUS) : sans ça, explorer une même petite zone à fort zoom
+// (beaucoup de petits pans, chacun de plusieurs dizaines/centaines de m à
+// l'écran) fait dériver le point exact à chaque fois et redéclenche un
+// nouveau cercle de 800 m dès qu'on dépasse le seuil de distance — au lieu
+// de réutiliser la zone déjà chargée juste à côté. La grille fait retomber
+// les points proches sur le même centre, donc sur la même zone.
+function snapToGrid(lat: number, lon: number, cellMeters: number): [number, number] {
+  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+  const ky = 110540;
+  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
+  const gy = (Math.round((lat * ky) / cellMeters) * cellMeters) / ky;
+  return [gy, gx];
 }
 
 function nearBoundary(state: WalkediaState, j: any) {
@@ -120,6 +143,7 @@ export function useWalkedia() {
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((t) => t + 1), []);
   const watchSub = useRef<Location.LocationSubscription | null>(null);
+  const requestingLocation = useRef(false);
 
   const state = stateRef.current;
 
@@ -152,7 +176,108 @@ export function useWalkedia() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const persist = useCallback(() => storage.save(state.progress), [state]);
+  // Pousse la progression complète (édition sur place, pas de diff) vers
+  // Supabase : la table `progress` a une seule ligne par utilisateur (upsert
+  // sur user_id, voir supabase/migrations/0001_init.sql). Fire-and-forget
+  // depuis `persist()` — un échec (hors-ligne, pas connecté) ne doit jamais
+  // bloquer la sauvegarde locale, qui reste la source de vérité immédiate.
+  const pushProgress = useCallback(async () => {
+    if (!state.userId) return;
+    try {
+      await supabase.from('progress').upsert({
+        user_id: state.userId,
+        edges: [...state.progress.edges],
+        junctions: [...state.progress.junctions],
+        completed_at: state.progress.completedAt,
+        edge_meters: state.progress.edgeMeters,
+        updated_at: new Date().toISOString(),
+      });
+      if (state.progress.sessions.length) {
+        await supabase.from('sessions').upsert(
+          state.progress.sessions.map((s) => ({
+            user_id: state.userId,
+            started_at: new Date(s.start).toISOString(),
+            ended_at: new Date(s.end).toISOString(),
+            edges_count: s.edges,
+            junctions_count: s.junctions,
+            imported: !!s.imported,
+          })),
+          { onConflict: 'user_id,started_at,ended_at', ignoreDuplicates: true }
+        );
+      }
+    } catch {
+      // silencieux : la prochaine sauvegarde locale retentera la sync.
+    }
+  }, [state]);
+
+  const persist = useCallback(() => {
+    const p = storage.save(state.progress);
+    pushProgress();
+    return p;
+  }, [state, pushProgress]);
+
+  // À la connexion : fusionne la progression distante existante (autre
+  // appareil) avec la locale par UNION plutôt que par écrasement, pour ne
+  // jamais perdre de progression d'un côté ou de l'autre (voir plan —
+  // §Fusion locale ↔ distant). `edgeMeters` n'a pas d'équivalent exact pour
+  // l'union de deux ensembles d'arêtes dont on n'a pas forcément toute la
+  // géométrie localement (zones différentes) : on garde le maximum des deux
+  // comme approximation raisonnable (statistique d'affichage uniquement,
+  // n'affecte pas les arêtes/carrefours acquis).
+  const syncOnSignIn = useCallback(
+    async (userId: string) => {
+      state.userId = userId;
+      state.syncing = true;
+      rerender();
+      try {
+        const { data, error } = await supabase.from('progress').select('*').eq('user_id', userId).maybeSingle();
+        if (error) throw error;
+        if (data) {
+          for (const id of data.edges || []) state.progress.edges.add(id);
+          for (const id of data.junctions || []) state.progress.junctions.add(id);
+          for (const [jid, at] of Object.entries<number>(data.completed_at || {})) {
+            const local = state.progress.completedAt[jid];
+            state.progress.completedAt[jid] = local ? Math.min(local, at) : at;
+          }
+          state.progress.edgeMeters = Math.max(state.progress.edgeMeters, data.edge_meters || 0);
+        }
+        const { data: remoteSessions } = await supabase.from('sessions').select('*').eq('user_id', userId);
+        if (remoteSessions?.length) {
+          const known = new Set(state.progress.sessions.map((s) => `${s.start}|${s.end}`));
+          for (const rs of remoteSessions) {
+            const start = new Date(rs.started_at).getTime();
+            const end = new Date(rs.ended_at).getTime();
+            const key = `${start}|${end}`;
+            if (!known.has(key)) {
+              known.add(key);
+              state.progress.sessions.push({
+                start,
+                end,
+                edges: rs.edges_count,
+                junctions: rs.junctions_count,
+                imported: rs.imported,
+              });
+            }
+          }
+          state.progress.sessions.sort((a, b) => a.start - b.start);
+        }
+        await storage.save(state.progress);
+        await pushProgress();
+        toast('Progression synchronisée ✅');
+      } catch (err: any) {
+        toast('Synchronisation impossible : ' + err.message);
+      } finally {
+        state.syncing = false;
+        rerender();
+      }
+    },
+    [state, pushProgress, rerender, toast]
+  );
+
+  const signOutLocally = useCallback(() => {
+    state.userId = null;
+    rerender();
+  }, [state, rerender]);
 
   // -------------------------------------------------------- zones & graphe
 
@@ -164,8 +289,21 @@ export function useWalkedia() {
     [state]
   );
 
-  const rebuildGraph = useCallback(() => {
-    state.graph = buildGraph({ nodes: state.osmRaw.nodes, ways: [...state.osmRaw.ways.values()] });
+  const mergeGreenAreas = useCallback(
+    (areas: { id: number; ring: [number, number][] }[]) => {
+      for (const a of areas) state.greenAreas.set(a.id, a);
+    },
+    [state]
+  );
+
+  // buildGraph rend la main à la boucle d'événements entre ses étapes
+  // coûteuses (voir graph.js) pour ne pas geler la carte pendant une
+  // reconstruction ; on l'attend donc ici plutôt que de bloquer en synchrone.
+  const rebuildGraph = useCallback(async () => {
+    state.graph = await buildGraph(
+      { nodes: state.osmRaw.nodes, ways: [...state.osmRaw.ways.values()] },
+      [...state.greenAreas.values()].map((a) => a.ring)
+    );
   }, [state]);
 
   // Complétion : vérifie un carrefour, retourne true s'il vient d'être complété.
@@ -208,18 +346,37 @@ export function useWalkedia() {
     [state, checkJunction, persist, toast]
   );
 
+  // `announceSkip` : quand l'appel vient d'une action explicite de
+  // l'utilisateur (pan sur la carte), on explique pourquoi rien ne se
+  // charge le cas échéant (cooldown, zone déjà couverte) au lieu de rester
+  // muet — sinon indiscernable d'un bug. Le suivi GPS continu (onFix, un
+  // appel par seconde) reste silencieux dans ces cas pour ne pas spammer.
   const maybeExpand = useCallback(
-    async (lat: number, lon: number) => {
+    async (rawLat: number, rawLon: number, opts: { announceSkip?: boolean } = {}) => {
+      const [lat, lon] = snapToGrid(rawLat, rawLon, RADIUS);
       const now = Date.now();
-      if (state.expanding || now - state.lastExpandTry < EXPAND_COOLDOWN) return;
-      if (distToNearestCenter(state, lat, lon) <= RADIUS - EXPAND_MARGIN) return;
+      if (state.expanding) {
+        if (opts.announceSkip) toast('Chargement déjà en cours…');
+        return;
+      }
+      const wait = EXPAND_COOLDOWN - (now - state.lastExpandTry);
+      if (wait > 0) {
+        if (opts.announceSkip) toast(`Nouvelle zone : réessaie dans ${Math.ceil(wait / 1000)}s…`);
+        return;
+      }
+      const dist = distToNearestCenter(state, lat, lon);
+      if (dist <= RADIUS - EXPAND_MARGIN) {
+        if (opts.announceSkip) toast('Cette zone est déjà couverte.');
+        return;
+      }
       state.expanding = true;
       state.lastExpandTry = now;
       try {
-        const osm = await fetchNetwork(lat, lon, RADIUS);
+        const { osm, greenAreas } = await fetchZone(lat, lon, RADIUS);
         mergeOsm(osm);
+        mergeGreenAreas(greenAreas);
         state.centers.push([lat, lon]);
-        rebuildGraph();
+        await rebuildGraph();
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
@@ -230,7 +387,7 @@ export function useWalkedia() {
         state.expanding = false;
       }
     },
-    [state, mergeOsm, rebuildGraph, sweepCompletions, rerender, toast]
+    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -285,6 +442,7 @@ export function useWalkedia() {
   const clearShadow = useCallback(() => {
     state.shadow.fixes = [];
     state.shadow.startedAt = null;
+    state.shadow.prompted = false;
   }, [state]);
 
   function shadowDistance(fixes: Fix[]) {
@@ -330,28 +488,27 @@ export function useWalkedia() {
     clearShadow();
   }, [state, checkJunction, persist, rerender, toast, clearShadow]);
 
-  // Propose l'import si une marche significative a été suivie hors session ;
-  // résout une fois la décision de l'utilisateur prise (ou immédiatement s'il
-  // n'y a rien à proposer).
-  const maybeImportShadowWalk = useCallback((): Promise<void> => {
-    const { fixes, startedAt } = state.shadow;
-    if (fixes.length < 2 || startedAt == null) return Promise.resolve();
+  // Propose l'import dès qu'une marche hors session devient significative
+  // (≥ SHADOW_MIN_DISTANCE), sans attendre que l'utilisateur démarre une
+  // nouvelle session : c'est la détection qui déclenche la proposition, pas
+  // une action explicite sur un bouton. `prompted` évite de redemander pour
+  // la même marche tant qu'elle n'a pas été traitée (importée ou annulée).
+  const maybeImportShadowWalk = useCallback(() => {
+    const { fixes, startedAt, prompted } = state.shadow;
+    if (prompted || fixes.length < 2 || startedAt == null) return;
     const dist = shadowDistance(fixes);
-    if (dist < SHADOW_MIN_DISTANCE) {
-      clearShadow();
-      return Promise.resolve();
-    }
+    if (dist < SHADOW_MIN_DISTANCE) return; // pas encore assez significatif, on continue à accumuler
+
+    state.shadow.prompted = true;
     const mins = Math.max(1, Math.round(((fixes[fixes.length - 1].t as number) - startedAt) / 60000));
-    return new Promise((resolve) => {
-      Alert.alert(
-        'Marche détectée',
-        `Marche détectée avant le démarrage de la session (~${mins} min, ${Math.round(dist)} m).\nImporter ce trajet dans ton historique ?`,
-        [
-          { text: 'Annuler', style: 'cancel', onPress: () => { clearShadow(); resolve(); } },
-          { text: 'Importer', onPress: () => { importShadowWalk().then(resolve); } },
-        ]
-      );
-    });
+    Alert.alert(
+      'Marche détectée',
+      `Marche détectée (~${mins} min, ${Math.round(dist)} m).\nImporter ce trajet dans ton historique ?`,
+      [
+        { text: 'Annuler', style: 'cancel', onPress: () => clearShadow() },
+        { text: 'Importer', onPress: () => importShadowWalk() },
+      ]
+    );
   }, [state, clearShadow, importShadowWalk]);
 
   const onFix = useCallback(
@@ -362,6 +519,7 @@ export function useWalkedia() {
 
       if (!state.session) {
         bufferShadowFix(lat, lon, accuracy, t);
+        maybeImportShadowWalk();
         rerender();
         return;
       }
@@ -410,21 +568,23 @@ export function useWalkedia() {
         // le déplacement seul (trackLine, position) doit quand même se voir
       }
     },
-    [state, maybeExpand, bufferShadowFix, rerender, checkJunction, persist, toast]
+    [state, maybeExpand, bufferShadowFix, maybeImportShadowWalk, rerender, checkJunction, persist, toast]
   );
   onFixRef.current = onFix;
 
   // ---------------------------------------------------------------- session
 
-  const startSession = useCallback(async () => {
-    await maybeImportShadowWalk();
+  const startSession = useCallback(() => {
+    // La proposition d'import d'une marche oubliée est gérée indépendamment,
+    // dès qu'elle est détectée (voir maybeImportShadowWalk) : démarrer une
+    // session ne doit pas attendre ni redéclencher cette décision.
     state.matcher = new Matcher(state.graph, state.proj);
     state.lastFix = null;
     state.speedStreak = 0;
     state.session = { newEdges: new Set(), newInter: new Set(), track: [], startedAt: Date.now() };
     rerender();
     toast('Session démarrée — bonne exploration !');
-  }, [state, maybeImportShadowWalk, rerender, toast]);
+  }, [state, rerender, toast]);
 
   const endSession = useCallback(() => {
     if (!state.session) return;
@@ -461,9 +621,9 @@ export function useWalkedia() {
       if (state.mapReady) return;
       state.startStatus = 'Chargement du réseau piéton…';
       rerender();
-      let osm;
+      let osm, greenAreas;
       try {
-        osm = await fetchNetwork(lat, lon, RADIUS);
+        ({ osm, greenAreas } = await fetchZone(lat, lon, RADIUS));
       } catch (err: any) {
         state.startStatus = 'Impossible de charger les données OSM : ' + err.message;
         rerender();
@@ -473,8 +633,9 @@ export function useWalkedia() {
       state.center = [lat, lon];
       state.proj = makeProj(lat);
       mergeOsm(osm);
+      mergeGreenAreas(greenAreas);
       state.centers.push([lat, lon]);
-      rebuildGraph();
+      await rebuildGraph();
       sweepCompletions(false);
       state.mapReady = true;
       rerender();
@@ -482,20 +643,25 @@ export function useWalkedia() {
 
       await startWatch();
     },
-    [state, mergeOsm, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
+    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
   );
 
   const requestLocationAndInit = useCallback(async () => {
+    // Garde-fou : le bouton de l'écran de démarrage reste actif pendant le
+    // déclenchement automatique à l'ouverture, un double appel (tap pendant
+    // que la géoloc tourne déjà) ne doit pas relancer toute la séquence.
+    if (requestingLocation.current || state.mapReady) return;
+    requestingLocation.current = true;
     state.startStatus = 'Recherche de ta position…';
     rerender();
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      state.startStatus =
-        "Accès à la position refusé. Autorise la position pour Walkedia dans les réglages du téléphone, puis relance l'app.";
-      rerender();
-      return;
-    }
     try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        state.startStatus =
+          "Accès à la position refusé. Autorise la position pour Walkedia dans les réglages du téléphone, puis relance l'app.";
+        rerender();
+        return;
+      }
       const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
       const pos = await Promise.race([
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
@@ -508,6 +674,8 @@ export function useWalkedia() {
           ? 'Délai dépassé pour obtenir la position. Réessaie (le premier fix GPS peut être lent en intérieur).'
           : 'Position indisponible. Vérifie que la localisation du téléphone est activée et réessaie, de préférence en extérieur.';
       rerender();
+    } finally {
+      requestingLocation.current = false;
     }
   }, [state, rerender, init]);
 
@@ -593,6 +761,15 @@ export function useWalkedia() {
 
   return {
     state,
-    actions: { requestLocationAndInit, startSession, endSession, simulateWalk, recenter },
+    actions: {
+      requestLocationAndInit,
+      startSession,
+      endSession,
+      simulateWalk,
+      recenter,
+      maybeExpand,
+      syncOnSignIn,
+      signOutLocally,
+    },
   };
 }

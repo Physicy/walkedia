@@ -13,11 +13,24 @@
 //
 // En environnement urbain (densité locale de voirie carrossable élevée),
 // seuls les carrefours du réseau routier accessible en voiture comptent :
-// les maillages de parcs, places et trottoirs ne génèrent plus de points.
-// En environnement rural, les sentiers et chemins SONT le réseau principal,
-// donc toutes les voies piétonnes comptent (règle d'origine).
+// les maillages de places et trottoirs ne génèrent plus de points. Exception
+// géométrique : un nœud situé à l'intérieur d'un contour d'espace vert
+// (parc, jardin, forêt, terrain de sport — voir overpass.js/fetchGreenAreas)
+// est toujours traité en mode "rural" (toutes ses branches comptent), même
+// si la zone environnante est par ailleurs classée urbaine. En environnement
+// rural, les sentiers et chemins SONT le réseau principal, donc toutes les
+// voies piétonnes comptent (règle d'origine).
 
-import { lineLength, pointAtFraction, haversine } from './geo.js';
+import { lineLength, pointAtFraction, haversine, pointInPolygon, ringBBox } from './geo.js';
+
+// Rend la main à la boucle d'événements JS entre deux étapes coûteuses de
+// buildGraph : sans ça, reconstruire un graphe qui a accumulé plusieurs
+// zones (exploration prolongée de la carte) bloque le thread JS d'un seul
+// bloc, ce qui fige aussi bien le rendu que les gestes de pan/zoom de la
+// carte (gérés nativement, mais dont les callbacks passent par ce même
+// thread). Découper en étapes qui se redonnent la main garde l'app réactive
+// même si le calcul total prend plus de temps.
+const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const STUB_MAX = 30;    // impasse plus courte que ça -> branche non significative (m)
 const LINK_MAX = 25;    // arête plus courte entre deux carrefours -> fusion (m)
@@ -49,7 +62,19 @@ function edgeId(coords, length) {
   return ends + '|' + mid + '|' + Math.round(length);
 }
 
-export function buildGraph(osm) {
+export async function buildGraph(osm, greenAreas = []) {
+  // Filtre rapide par bbox avant le test point-dans-polygone, plus coûteux.
+  const greenPolys = greenAreas.map((ring) => ({ ring, bbox: ringBBox(ring) }));
+  const inGreenArea = (lat, lon) =>
+    greenPolys.some(
+      ({ ring, bbox }) =>
+        lat >= bbox.minLat &&
+        lat <= bbox.maxLat &&
+        lon >= bbox.minLon &&
+        lon <= bbox.maxLon &&
+        pointInPolygon([lat, lon], ring)
+    );
+
   // 0. Attributs par paire de nœuds consécutifs (carrossable, sens unique,
   //    rond-point, passage piéton) : permet de retrouver, après
   //    découpage/fusion, les attributs de chaque arête finale.
@@ -74,6 +99,8 @@ export function buildGraph(osm) {
     }
   }
 
+  await yieldToEventLoop();
+
   // 1. Un nœud est une jonction s'il apparaît au moins 2 fois (dans plusieurs
   //    ways, ou deux fois dans un way fermé).
   const usage = new Map();
@@ -94,6 +121,8 @@ export function buildGraph(osm) {
     }
   }
 
+  await yieldToEventLoop();
+
   // 3. Fusion des nœuds de degré 2 (artefacts de découpage OSM).
   const adj = new Map();
   const addAdj = (nid, seg) => {
@@ -109,6 +138,7 @@ export function buildGraph(osm) {
   let changed = true;
   while (changed) {
     changed = false;
+    await yieldToEventLoop(); // chaînes longues (routes rurales) -> plusieurs passes possibles
     for (const [nid, list] of adj) {
       const live = list.filter((s) => !s.dead);
       adj.set(nid, live);
@@ -129,6 +159,8 @@ export function buildGraph(osm) {
       changed = true;
     }
   }
+
+  await yieldToEventLoop();
 
   // 4. Structures finales : arêtes et nœuds.
   const edges = new Map(); // id -> { id, coords, length, a, b }
@@ -175,6 +207,8 @@ export function buildGraph(osm) {
     }
   }
 
+  await yieldToEventLoop();
+
   // 5a. Classification urbain/rural : densité locale de voirie carrossable,
   //     accumulée dans une grille de cellules de 250 m (fenêtre 3x3 lissée).
   let lat0 = 0;
@@ -207,6 +241,8 @@ export function buildGraph(osm) {
     return sum >= URBAN_MIN_ROAD;
   };
 
+  await yieldToEventLoop();
+
   // 5b. Branches significatives : une impasse courte (entrée de bâtiment,
   //     allée de garage) ne compte ni dans le degré, ni dans la complétion.
   //     En zone urbaine, seules les branches carrossables comptent.
@@ -219,7 +255,7 @@ export function buildGraph(osm) {
   const candidates = new Set(); // nœuds avec >= 3 branches significatives
   const urbanNode = new Map();  // key -> bool (mode retenu pour ce nœud)
   for (const n of nodes.values()) {
-    const urban = isUrban(n.lat, n.lon);
+    const urban = isUrban(n.lat, n.lon) && !inGreenArea(n.lat, n.lon);
     const pool = urban ? n.edgeIds.filter((id) => edges.get(id).car) : n.edgeIds;
     const sig = pool.filter((id) => !isStubFor(edges.get(id), n.key));
     if (sig.length >= 3) {
@@ -227,6 +263,8 @@ export function buildGraph(osm) {
       urbanNode.set(n.key, urban);
     }
   }
+
+  await yieldToEventLoop();
 
   // 5c. Consolidation : union-find des candidats reliés par une arête courte,
   //     avec plafond de taille pour ne pas avaler un maillage de place entière.
@@ -294,6 +332,8 @@ export function buildGraph(osm) {
     if (!list) clusters.set(r, (list = []));
     list.push(key);
   }
+
+  await yieldToEventLoop();
 
   // 5d. Carrefours consolidés : complétés quand toutes les branches EXTERNES
   //     significatives ont été parcourues. Les micro-arêtes internes au

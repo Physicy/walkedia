@@ -37,6 +37,35 @@ export function pointAtFraction(coords, f) {
   return coords[coords.length - 1];
 }
 
+// Rectangle englobant d'un anneau [[lat,lon], ...] (filtre rapide avant
+// pointInPolygon, qui est plus coûteux).
+export function ringBBox(ring) {
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  for (const [lat, lon] of ring) {
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+  }
+  return { minLat, maxLat, minLon, maxLon };
+}
+
+// Point-dans-polygone par ray casting, directement en lat/lon (suffisant à
+// l'échelle d'un quartier). `ring` : [[lat,lon], ...], implicitement fermé
+// (l'arête entre le dernier et le premier point est prise en compte).
+export function pointInPolygon([lat, lon], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [latI, lonI] = ring[i];
+    const [latJ, lonJ] = ring[j];
+    const crosses = lonI > lon !== lonJ > lon;
+    if (crosses && lat < ((latJ - latI) * (lon - lonI)) / (lonJ - lonI) + latI) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 // Projection locale lat/lon -> [x, y] en mètres.
 export function makeProj(lat0) {
   const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);

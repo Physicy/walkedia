@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useWalkedia } from './src/hooks/useWalkedia';
+import { useAuth } from './src/hooks/useAuth';
 import { StartScreen } from './src/screens/StartScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
@@ -10,10 +12,37 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { TabBar, TabName } from './src/components/TabBar';
 import { COLORS } from './src/theme';
 
-export default function App() {
+function AppContent() {
   const walkedia = useWalkedia();
   const { state, actions } = walkedia;
+  const auth = useAuth();
   const [tab, setTab] = useState<TabName>('adventure');
+
+  // Connecte l'état d'auth (Supabase, indépendant du reste de l'app — voir
+  // useAuth.ts) au hook de jeu : à la connexion, fusionne/synchronise la
+  // progression distante ; à la déconnexion, repasse en local uniquement
+  // (la progression locale reste intacte, juste plus poussée vers le compte).
+  const lastUserId = useRef<string | null>(null);
+  useEffect(() => {
+    const uid = auth.user?.id ?? null;
+    if (uid === lastUserId.current) return;
+    lastUserId.current = uid;
+    if (uid) actions.syncOnSignIn(uid);
+    else actions.signOutLocally();
+  }, [auth.user, actions]);
+
+  // Va directement à la carte à l'ouverture : dès que la progression est
+  // chargée, on déclenche la géolocalisation sans attendre un appui sur un
+  // bouton. Le bouton de l'écran de démarrage reste affiché pendant le
+  // chargement et sert de nouvelle tentative manuelle en cas d'échec (refus
+  // de permission, position indisponible…).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (state.ready && !state.mapReady && !autoStarted.current) {
+      autoStarted.current = true;
+      actions.requestLocationAndInit();
+    }
+  }, [state.ready, state.mapReady, actions]);
 
   if (!state.ready) {
     return (
@@ -36,11 +65,19 @@ export default function App() {
   return (
     <View style={styles.fill}>
       <MapScreen walkedia={walkedia} />
-      {tab === 'search' && <SearchScreen />}
-      {tab === 'profile' && <ProfileScreen progress={state.progress} />}
+      {tab === 'search' && <SearchScreen userId={auth.user?.id ?? null} />}
+      {tab === 'profile' && <ProfileScreen progress={state.progress} auth={auth} syncing={state.syncing} />}
       <TabBar active={tab} onChange={setTab} />
       <StatusBar style="light" />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
   );
 }
 

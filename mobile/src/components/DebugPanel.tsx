@@ -4,29 +4,40 @@
 // sans avoir à marcher.
 
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../theme';
 
+// Petit bouton rond discret (icône seule) pour ne pas surcharger la carte ;
+// un appui long affiche le libellé complet le temps du toast déclenché par
+// simulateWalk() lui-même (pas besoin de le dupliquer ici).
 export function DebugPanel({ onSimulate }: { onSimulate: () => void }) {
+  const insets = useSafeAreaInsets();
   if (!__DEV__) return null;
   return (
-    <View style={styles.wrap}>
-      <TouchableOpacity style={styles.btn} onPress={onSimulate}>
-        <Text style={styles.text}>🐞 Simuler un déplacement</Text>
-      </TouchableOpacity>
-    </View>
+    <TouchableOpacity
+      style={[styles.btn, { top: insets.top + 78 }]}
+      onPress={onSimulate}
+      accessibilityLabel="Simuler un déplacement (debug)"
+    >
+      <Text style={styles.icon}>🐞</Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', top: 70, right: 12, zIndex: 1000 },
   btn: {
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderColor: COLORS.border,
+    position: 'absolute',
+    right: 12,
+    zIndex: 1000,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  text: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600' },
+  icon: { fontSize: 16 },
 });
