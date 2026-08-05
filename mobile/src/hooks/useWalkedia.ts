@@ -9,8 +9,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
-import { fetchZone } from '../logic/overpass';
+import { fetchZone, fetchNeighborhoods } from '../logic/overpass';
 import { buildGraph } from '../logic/graph';
+import { assignNeighborhoods } from '../logic/neighborhoods';
 import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
@@ -55,6 +56,8 @@ interface WalkediaState {
   centers: [number, number][];
   osmRaw: { nodes: Map<number, [number, number]>; ways: Map<number, any> };
   greenAreas: Map<number, { id: number; ring: [number, number][] }>;
+  neighborhoods: Map<number, { id: number; name: string | null; ring: [number, number][] }>;
+  junctionNeighborhood: Map<string, number | null>;
   expanding: boolean;
   lastExpandTry: number;
   progress: Progress;
@@ -80,9 +83,11 @@ function freshState(): WalkediaState {
     centers: [],
     osmRaw: { nodes: new Map(), ways: new Map() },
     greenAreas: new Map(),
+    neighborhoods: new Map(),
+    junctionNeighborhood: new Map(),
     expanding: false,
     lastExpandTry: 0,
-    progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, sessions: [] },
+    progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] },
     matcher: null,
     session: null,
     position: null,
@@ -134,6 +139,39 @@ export function edgeIsFound(state: WalkediaState, id: string) {
 
 export function junctionIsDone(state: WalkediaState, id: string) {
   return state.progress.junctions.has(id);
+}
+
+export interface NeighborhoodStat {
+  id: number;
+  name: string | null;
+  total: number;
+  done: number;
+  pct: number;
+  unlocked: boolean;
+}
+
+// Stats de complétion par quartier OSM, dérivées de junctionNeighborhood
+// (voir rebuildGraph). Les carrefours sans quartier assigné (fréquent, voir
+// logic/neighborhoods.js) ne contribuent à aucune ligne.
+export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
+  if (!state.graph) return [];
+  const totals = new Map<number, { total: number; done: number }>();
+  for (const j of state.graph.junctions.values()) {
+    const nid = state.junctionNeighborhood.get(j.id);
+    if (nid == null) continue;
+    let t = totals.get(nid);
+    if (!t) totals.set(nid, (t = { total: 0, done: 0 }));
+    t.total++;
+    if (junctionIsDone(state, j.id)) t.done++;
+  }
+  const stats: NeighborhoodStat[] = [];
+  for (const [nid, t] of totals) {
+    const n = state.neighborhoods.get(nid);
+    const pct = t.total > 0 ? t.done / t.total : 0;
+    stats.push({ id: nid, name: n?.name ?? null, total: t.total, done: t.done, pct, unlocked: pct >= 1 });
+  }
+  stats.sort((a, b) => b.pct - a.pct);
+  return stats;
 }
 
 // ---------------------------------------------------------------------- hook
@@ -190,6 +228,7 @@ export function useWalkedia() {
         junctions: [...state.progress.junctions],
         completed_at: state.progress.completedAt,
         edge_meters: state.progress.edgeMeters,
+        edge_visits: state.progress.edgeVisits,
         updated_at: new Date().toISOString(),
       });
       if (state.progress.sessions.length) {
@@ -240,6 +279,9 @@ export function useWalkedia() {
             state.progress.completedAt[jid] = local ? Math.min(local, at) : at;
           }
           state.progress.edgeMeters = Math.max(state.progress.edgeMeters, data.edge_meters || 0);
+          for (const [eid, count] of Object.entries<number>(data.edge_visits || {})) {
+            state.progress.edgeVisits[eid] = Math.max(state.progress.edgeVisits[eid] || 0, count);
+          }
         }
         const { data: remoteSessions } = await supabase.from('sessions').select('*').eq('user_id', userId);
         if (remoteSessions?.length) {
@@ -296,14 +338,45 @@ export function useWalkedia() {
     [state]
   );
 
+  const mergeNeighborhoods = useCallback(
+    (areas: { id: number; name: string | null; ring: [number, number][] }[]) => {
+      for (const a of areas) state.neighborhoods.set(a.id, a);
+      // Les quartiers arrivent en tâche de fond (voir loadNeighborhoods),
+      // potentiellement après que rebuildGraph a déjà tourné sans eux : on
+      // réassigne ici pour ne pas attendre le prochain chargement de zone.
+      if (state.graph) state.junctionNeighborhood = assignNeighborhoods(state.graph.junctions, state.neighborhoods);
+    },
+    [state]
+  );
+
+  // Chargement des quartiers en arrière-plan, jamais attendu ni bloquant :
+  // une donnée de confort pour les stats de profil, pas pour le cœur du jeu
+  // (voir commentaire dans overpass.js). Best-effort : une erreur ou une
+  // lenteur ici reste totalement invisible pour le joueur.
+  const loadNeighborhoods = useCallback(
+    (lat: number, lon: number) => {
+      fetchNeighborhoods(lat, lon, RADIUS)
+        .then((areas) => {
+          mergeNeighborhoods(areas);
+          rerender();
+        })
+        .catch(() => {});
+    },
+    [mergeNeighborhoods, rerender]
+  );
+
   // buildGraph rend la main à la boucle d'événements entre ses étapes
   // coûteuses (voir graph.js) pour ne pas geler la carte pendant une
   // reconstruction ; on l'attend donc ici plutôt que de bloquer en synchrone.
+  // L'assignation carrefour -> quartier est recalculée juste après : elle ne
+  // dépend que du graphe et des quartiers connus (tous deux figés en dehors
+  // d'un chargement/extension de zone), jamais d'un tick GPS.
   const rebuildGraph = useCallback(async () => {
     state.graph = await buildGraph(
       { nodes: state.osmRaw.nodes, ways: [...state.osmRaw.ways.values()] },
       [...state.greenAreas.values()].map((a) => a.ring)
     );
+    state.junctionNeighborhood = assignNeighborhoods(state.graph.junctions, state.neighborhoods);
   }, [state]);
 
   // Complétion : vérifie un carrefour, retourne true s'il vient d'être complété.
@@ -381,13 +454,14 @@ export function useWalkedia() {
         sweepCompletions(false);
         rerender();
         toast('Nouvelle zone chargée 🗺️');
+        loadNeighborhoods(lat, lon);
       } catch (err: any) {
         toast('Extension de zone impossible : ' + err.message);
       } finally {
         state.expanding = false;
       }
     },
-    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast]
+    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -462,6 +536,7 @@ export function useWalkedia() {
       const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
       for (const fix of interpolatedFixes(prev, cur)) {
         for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+          state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
           if (state.progress.edges.has(edgeId)) continue;
           state.progress.edges.add(edgeId);
           state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
@@ -548,6 +623,12 @@ export function useWalkedia() {
       let anyChange = false;
       for (const fix of fixes) {
         for (const edgeId of state.matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+          // Compteur de passages (heatmap) : incrémenté à chaque tronçon validé
+          // par le matcher, y compris les tronçons déjà découverts (revisite).
+          // matcher.feed() ne renvoie un id qu'une fois par arête et par
+          // session (voir Matcher.traversed dans matching.js), donc pas de
+          // risque de sur-comptage par spam de fix GPS.
+          state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
           if (state.progress.edges.has(edgeId)) continue;
           state.progress.edges.add(edgeId);
           state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
@@ -642,8 +723,9 @@ export function useWalkedia() {
       toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
 
       await startWatch();
+      loadNeighborhoods(lat, lon);
     },
-    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
+    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
   );
 
   const requestLocationAndInit = useCallback(async () => {

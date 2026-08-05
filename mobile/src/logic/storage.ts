@@ -23,6 +23,7 @@ export interface Progress {
   junctions: Set<string>;
   completedAt: Record<string, number>;
   edgeMeters: number;
+  edgeVisits: Record<string, number>;
   sessions: Session[];
 }
 
@@ -36,6 +37,7 @@ export async function load(): Promise<Progress> {
       junctions: new Set(data.junctions || []),
       completedAt: data.completedAt || {}, // junctionId -> ms epoch
       edgeMeters: data.edgeMeters || 0, // distance découverte cumulée (m)
+      edgeVisits: data.edgeVisits || {}, // edgeId -> nombre de fois parcouru (pour la heatmap)
       sessions: data.sessions || [], // { start, end, edges, junctions }
     };
   } catch {
@@ -51,6 +53,7 @@ export async function save(state: Progress): Promise<void> {
       junctions: [...state.junctions],
       completedAt: state.completedAt,
       edgeMeters: Math.round(state.edgeMeters),
+      edgeVisits: state.edgeVisits,
       sessions: state.sessions.slice(-MAX_SESSIONS),
       savedAt: new Date().toISOString(),
     })
@@ -58,5 +61,5 @@ export async function save(state: Progress): Promise<void> {
 }
 
 function fresh(): Progress {
-  return { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, sessions: [] };
+  return { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] };
 }

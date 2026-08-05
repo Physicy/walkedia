@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../theme';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
+import type { NeighborhoodStat } from '../hooks/useWalkedia';
 import { AccountSection } from '../components/AccountSection';
 
 const DAY = 86400000;
@@ -27,10 +28,12 @@ export function ProfileScreen({
   progress,
   auth,
   syncing,
+  neighborhoods,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
+  neighborhoods: NeighborhoodStat[];
 }) {
   const stats = useMemo(() => {
     const today = startOfToday();
@@ -105,6 +108,24 @@ export function ProfileScreen({
         <StatCell value={stats.km} label="km découverts" />
         <StatCell value={stats.sessions} label="sessions" />
       </View>
+
+      <Text style={styles.h3}>Quartiers</Text>
+      {neighborhoods.length === 0 ? (
+        <Text style={styles.emptyList}>
+          Aucun quartier cartographié dans les zones chargées pour l'instant.
+        </Text>
+      ) : (
+        neighborhoods.map((n) => (
+          <View key={n.id} style={styles.neighborhoodRow}>
+            <Text style={styles.neighborhoodName} numberOfLines={1}>
+              {n.name || 'Quartier sans nom'}
+            </Text>
+            <Text style={[styles.neighborhoodPct, n.unlocked && styles.neighborhoodUnlocked]}>
+              {n.unlocked ? 'Débloqué 🔓' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+            </Text>
+          </View>
+        ))
+      )}
 
       <Text style={styles.h3}>Dernières sessions</Text>
       {stats.recent.length === 0 ? (
@@ -183,6 +204,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(148,163,184,0.12)',
   },
+  neighborhoodRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.12)',
+  },
+  neighborhoodName: { fontSize: 13, color: '#cbd5e1', flexShrink: 1 },
+  neighborhoodPct: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
+  neighborhoodUnlocked: { color: COLORS.accentGreen },
   sessionCell: { fontSize: 13, color: '#cbd5e1' },
   sessionPts: { color: COLORS.accentGreen, fontWeight: '600' },
   emptyList: { color: COLORS.textDim, textAlign: 'center', paddingVertical: 10 },

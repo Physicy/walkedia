@@ -7,8 +7,11 @@ import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
 import { Hud } from '../components/Hud';
 import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
+import { CaptureWave } from '../components/CaptureWave';
 import { TAB_BAR_BASE_HEIGHT } from '../components/TabBar';
 import { COLORS } from '../theme';
+import { heatColor, progressColor } from '../logic/color';
+import { haversine } from '../logic/geo';
 
 const UNDISCOVERED_STROKE = 'rgba(148, 163, 184, 0.55)';
 const DISCOVERED_STROKE = 'rgba(34, 197, 94, 0.95)';
@@ -37,6 +40,34 @@ const MAX_RENDER_LATITUDE_DELTA = 0.08; // ~9 km de hauteur visible
 // degré (plus significatifs visuellement) et aux tronçons déjà découverts.
 const MAX_RENDERED_JUNCTIONS = 300;
 const MAX_RENDERED_EDGES = 600;
+
+// Dézoomé au-delà de ce niveau, on affiche un badge "nombre de carrefours"
+// par cellule de grille plutôt que chaque carrefour individuellement — plus
+// lisible et beaucoup moins de Marker natifs à monter sur une vue large.
+const CLUSTER_LATITUDE_DELTA = 0.025; // ~2.8 km de hauteur visible
+// Taille de cellule pour le regroupement, même échelle que DENSITY_CELL
+// (graph.js) : correspond à peu près à un pâté de maisons.
+const CLUSTER_CELL_METERS = 250;
+
+interface JunctionCluster {
+  key: string;
+  lat: number;
+  lon: number;
+  total: number;
+  done: number;
+}
+
+// Sous-ensemble animé des ondes de capture (voir CaptureWave) : seuls les N
+// carrefours non complétés les plus proches pulsent réellement — animer un
+// Marker force tracksViewChanges={true}, coûteux à grande échelle sur
+// react-native-maps (voir le reste de ce fichier). Rayon d'entrée/de sortie
+// asymétrique + recalcul seulement au-delà d'une distance parcourue : évite
+// que la sélection scintille à cause du seul bruit GPS (même pattern que
+// EXPAND_COOLDOWN/EXPAND_MARGIN dans useWalkedia.ts).
+const ANIMATED_COUNT = 10;
+const ANIMATED_RADIUS = 300; // m
+const ANIMATED_EXIT_MARGIN = 80; // m
+const ANIMATED_RECOMPUTE_DISTANCE = 15; // m
 
 function regionBBox(region: Region) {
   const latPad = region.latitudeDelta * VIEWPORT_PAD;
@@ -76,6 +107,14 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // centre pas encore prêts), donc ils gèrent eux-mêmes le cas `null`.
   const [region, setRegion] = useState<Region | null>(null);
 
+  // Sous-ensemble animé des ondes de capture, avec hystérésis (voir
+  // ANIMATED_* ci-dessus) — mutés directement en dehors de React state
+  // volontairement : recalculer à chaque tick GPS ne doit pas déclencher un
+  // re-render à part entière, `onFix` le fait déjà via rerender() côté
+  // useWalkedia.
+  const animatedSet = useRef<Set<string>>(new Set());
+  const lastAnimatedCalcPos = useRef<{ lat: number; lon: number } | null>(null);
+
   const edges = state.graph ? [...state.graph.edges.values()] : [];
   const junctions = state.graph ? [...state.graph.junctions.values()] : [];
 
@@ -85,24 +124,18 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // de traits/points natifs à dessiner sur la carte à mesure que la zone
   // connue grandit (pan vers de nouvelles zones). Mémoïsé sur le graphe et
   // la région pour ne pas recalculer à chaque tick (fix GPS, toast…).
-  const { visibleEdges, visibleJunctions } = useMemo(() => {
-    if (!region) return { visibleEdges: edges, visibleJunctions: junctions };
-    if (region.latitudeDelta > MAX_RENDER_LATITUDE_DELTA) return { visibleEdges: [], visibleJunctions: [] };
+  const { visibleEdges, visibleJunctions, junctionClusters } = useMemo(() => {
+    if (!region) return { visibleEdges: edges, visibleJunctions: junctions, junctionClusters: [] as JunctionCluster[] };
+    if (region.latitudeDelta > MAX_RENDER_LATITUDE_DELTA) {
+      return { visibleEdges: [], visibleJunctions: [], junctionClusters: [] as JunctionCluster[] };
+    }
 
     const viewBBox = regionBBox(region);
     let edgesInView = edges.filter((e: any) => bboxIntersects(coordsBBox(e.coords), viewBBox));
-    let junctionsInView = junctions.filter(
+    const junctionsInView = junctions.filter(
       (j: any) => j.lat >= viewBBox.minLat && j.lat <= viewBBox.maxLat && j.lon >= viewBBox.minLon && j.lon <= viewBBox.maxLon
     );
 
-    // Plafonds : une zone très dense peut dépasser un budget de rendu
-    // raisonnable même dans le viewport. On garde les carrefours les plus
-    // significatifs (haut degré) et les tronçons déjà découverts en priorité.
-    if (junctionsInView.length > MAX_RENDERED_JUNCTIONS) {
-      junctionsInView = [...junctionsInView]
-        .sort((a: any, b: any) => b.requiredEdgeIds.size - a.requiredEdgeIds.size)
-        .slice(0, MAX_RENDERED_JUNCTIONS);
-    }
     if (edgesInView.length > MAX_RENDERED_EDGES) {
       const found: any[] = [];
       const rest: any[] = [];
@@ -110,11 +143,75 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       edgesInView = found.length >= MAX_RENDERED_EDGES ? found.slice(0, MAX_RENDERED_EDGES) : found.concat(rest.slice(0, MAX_RENDERED_EDGES - found.length));
     }
 
-    return { visibleEdges: edgesInView, visibleJunctions: junctionsInView };
+    // Dézoomé : regroupe les carrefours du viewport par cellule de grille
+    // plutôt que d'afficher chaque point. Calculé sur TOUS les carrefours du
+    // viewport, avant tout plafond individuel (sinon les comptes par cellule
+    // seraient biaisés par un plafond qui privilégie le haut degré).
+    if (region.latitudeDelta > CLUSTER_LATITUDE_DELTA) {
+      const kx = 111320 * Math.cos((region.latitude * Math.PI) / 180);
+      const ky = 110540;
+      const cells = new Map<string, { latSum: number; lonSum: number; total: number; done: number }>();
+      for (const j of junctionsInView as any[]) {
+        const key = Math.floor((j.lon * kx) / CLUSTER_CELL_METERS) + ':' + Math.floor((j.lat * ky) / CLUSTER_CELL_METERS);
+        let c = cells.get(key);
+        if (!c) cells.set(key, (c = { latSum: 0, lonSum: 0, total: 0, done: 0 }));
+        c.latSum += j.lat;
+        c.lonSum += j.lon;
+        c.total++;
+        if (junctionIsDone(state, j.id)) c.done++;
+      }
+      const clusters: JunctionCluster[] = [...cells.entries()].map(([key, c]) => ({
+        key,
+        lat: c.latSum / c.total,
+        lon: c.lonSum / c.total,
+        total: c.total,
+        done: c.done,
+      }));
+      return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: clusters };
+    }
+
+    // Zoomé : chaque carrefour individuellement, avec le même plafond que
+    // pour les tronçons (une zone dense peut dépasser un budget de rendu
+    // raisonnable même à ce niveau de zoom) — priorité au haut degré.
+    let pointJunctions = junctionsInView;
+    if (pointJunctions.length > MAX_RENDERED_JUNCTIONS) {
+      pointJunctions = [...pointJunctions]
+        .sort((a: any, b: any) => b.requiredEdgeIds.size - a.requiredEdgeIds.size)
+        .slice(0, MAX_RENDERED_JUNCTIONS);
+    }
+
+    return { visibleEdges: edgesInView, visibleJunctions: pointJunctions, junctionClusters: [] as JunctionCluster[] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.graph, region]);
 
   if (!state.graph || !state.center) return null;
+
+  // Met à jour le sous-ensemble animé (voir ANIMATED_* et le ref plus haut).
+  // Ne recalcule que si la position a assez bougé depuis le dernier calcul —
+  // sinon garde le set précédent tel quel, y compris sa marge de sortie plus
+  // large, pour ne pas faire clignoter les ondes au moindre bruit GPS.
+  const pos = state.position;
+  if (!pos) {
+    animatedSet.current = new Set();
+  } else {
+    const last = lastAnimatedCalcPos.current;
+    const moved = !last || haversine([last.lat, last.lon], [pos.lat, pos.lon]) > ANIMATED_RECOMPUTE_DISTANCE;
+    if (moved) {
+      lastAnimatedCalcPos.current = { lat: pos.lat, lon: pos.lon };
+      const prev = animatedSet.current;
+      const withDist = (visibleJunctions as any[])
+        .filter((j) => !junctionIsDone(state, j.id))
+        .map((j) => ({ j, dist: haversine([pos.lat, pos.lon], [j.lat, j.lon]) }));
+      const kept = withDist.filter(({ j, dist }) => prev.has(j.id) && dist <= ANIMATED_RADIUS + ANIMATED_EXIT_MARGIN);
+      const candidates = withDist.filter(({ dist }) => dist <= ANIMATED_RADIUS).sort((a, b) => a.dist - b.dist);
+      const next = new Set<string>(kept.map(({ j }) => j.id));
+      for (const { j } of candidates) {
+        if (next.size >= ANIMATED_COUNT) break;
+        next.add(j.id);
+      }
+      animatedSet.current = next;
+    }
+  }
 
   const [centerLat, centerLon] = state.center;
 
@@ -169,11 +266,16 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
         {visibleEdges.map((e: any) => {
           const found = edgeIsFound(state, e.id);
+          // Arêtes découvertes avant l'ajout du compteur de passages : pas
+          // encore de edgeVisits enregistré, on suppose au moins 1 passage
+          // plutôt que de les faire soudain apparaître "sans couleur".
+          const visits = found ? state.progress.edgeVisits[e.id] ?? 1 : 0;
+          const strokeColor = found ? heatColor(visits) ?? DISCOVERED_STROKE : UNDISCOVERED_STROKE;
           return (
             <Polyline
               key={e.id}
               coordinates={e.coords.map(toLatLng)}
-              strokeColor={found ? DISCOVERED_STROKE : UNDISCOVERED_STROKE}
+              strokeColor={strokeColor}
               strokeWidth={found ? 4.5 : 2.5}
               zIndex={found ? 2 : 1}
             />
@@ -190,28 +292,35 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           />
         )}
 
+        {junctionClusters.map((c) => {
+          const ratio = c.total > 0 ? c.done / c.total : 0;
+          return (
+            <Marker
+              key={`cluster-${c.key}`}
+              coordinate={{ latitude: c.lat, longitude: c.lon }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+              zIndex={4}
+            >
+              <View style={[styles.clusterBadge, { backgroundColor: progressColor(ratio) }]}>
+                <Text style={styles.clusterBadgeText}>{c.total}</Text>
+              </View>
+            </Marker>
+          );
+        })}
+
         {visibleJunctions.map((j: any) => {
           const done = junctionIsDone(state, j.id);
+          const animated = !done && animatedSet.current.has(j.id);
           return (
             <Marker
               key={j.id}
               coordinate={{ latitude: j.lat, longitude: j.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
-              opacity={done ? 1 : 0.8}
+              tracksViewChanges={animated}
               zIndex={done ? 5 : 4}
             >
-              <View
-                style={[
-                  styles.junctionDot,
-                  {
-                    width: done ? 13 : 9,
-                    height: done ? 13 : 9,
-                    borderRadius: done ? 6.5 : 4.5,
-                    backgroundColor: done ? COLORS.complete : COLORS.incomplete,
-                  },
-                ]}
-              />
+              <CaptureWave done={done} animated={animated} />
             </Marker>
           );
         })}
@@ -257,7 +366,17 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 }
 
 const styles = StyleSheet.create({
-  junctionDot: { borderWidth: 1.5, borderColor: '#0f172a' },
+  clusterBadge: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(15, 23, 42, 0.6)',
+  },
+  clusterBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   positionDot: {
     width: 16,
     height: 16,

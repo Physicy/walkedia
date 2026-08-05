@@ -36,7 +36,8 @@
           "locationWhenInUsePermission": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@maplibre/maplibre-react-native"
     ]
   }
 }

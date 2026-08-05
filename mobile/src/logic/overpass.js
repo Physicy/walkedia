@@ -21,6 +21,13 @@ const HIGHWAY_TYPES =
 const GREEN_LEISURE = 'park|garden|nature_reserve|recreation_ground|pitch|sports_centre';
 const GREEN_LANDUSE = 'forest|meadow';
 
+// Quartiers ("place=suburb/neighbourhood/quarter") : en pratique, ce tag
+// n'a un contour polygonal (way fermé) que dans une minorité de villes bien
+// cartographiées (Paris, Lyon...) — ailleurs, ce n'est qu'un nœud sans
+// géométrie exploitable, donc pas de quartier assigné aux carrefours de la
+// zone (voir assignNeighborhoods dans logic/neighborhoods.js).
+const PLACE_QUARTIER = 'suburb|neighbourhood|quarter';
+
 const HEDGE_DELAY = 5000;   // ms : au-delà, on tente le miroir suivant EN PLUS (sans annuler
                             // le précédent) plutôt que d'attendre son échec complet
 const HARD_TIMEOUT = 60000; // ms : plafond absolu, tous miroirs confondus — un miroir peut
@@ -105,7 +112,11 @@ async function runQuery(query) {
 // donné. Les deux jeux de résultats sont séparés via des sets Overpass
 // nommés (`.roads` / `.green`) pour n'avoir besoin que d'une requête réseau
 // par zone (au lieu de deux, qui doublait notre taux contre des miroirs
-// publics déjà rate-limités).
+// publics déjà rate-limités). Les quartiers (voir fetchNeighborhoods
+// ci-dessous) sont VOLONTAIREMENT une requête séparée, pas fusionnée ici :
+// ce n'est qu'une donnée de confort pour les stats de profil, elle ne doit
+// jamais ralentir/bloquer le chemin critique (chargement de la carte
+// jouable), déjà exposé aux lenteurs des miroirs Overpass publics.
 export async function fetchZone(lat, lon, radius) {
   const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
   const query = `
@@ -148,4 +159,32 @@ function parseZone(json) {
     }
   }
   return { osm: { nodes, ways }, greenAreas };
+}
+
+// Contours de quartiers nommés autour du point donné, EN REQUÊTE SÉPARÉE de
+// fetchZone (voir commentaire ci-dessus) : appelée en tâche de fond une fois
+// la carte déjà jouable (voir useWalkedia.ts), jamais attendue avant
+// d'afficher quoi que ce soit. Timeout serveur plus court : mieux vaut
+// échouer/abandonner vite sur cette donnée secondaire que de consommer le
+// même budget que le chargement critique.
+export async function fetchNeighborhoods(lat, lon, radius) {
+  const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
+  const query = `
+[out:json][timeout:20];
+way(${around})["place"~"^(${PLACE_QUARTIER})$"]["name"]->.quartiers;
+.quartiers out geom;`;
+
+  const json = await runQuery(query);
+  return parseNeighborhoods(json);
+}
+
+function parseNeighborhoods(json) {
+  const neighborhoods = [];
+  for (const el of json.elements || []) {
+    if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
+      const t = el.tags || {};
+      neighborhoods.push({ id: el.id, name: t.name || null, ring: el.geometry.map((p) => [p.lat, p.lon]) });
+    }
+  }
+  return neighborhoods;
 }
