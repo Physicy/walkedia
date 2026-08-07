@@ -26,13 +26,21 @@ function toLatLng([lat, lon]: [number, number]) {
 // bordure d'écran pendant un pan.
 const VIEWPORT_PAD = 0.6;
 
-// Au-delà de cette hauteur visible, on n'affiche plus rien : sans plafond,
-// dézoomer beaucoup fait soudainement rentrer TOUTES les zones déjà chargées
-// dans le filtre viewport (potentiellement des milliers de Marker/Polyline
-// natifs à monter d'un coup), ce qui fige l'app le temps du rendu. Un peu
-// plus permissif que le seuil de chargement (voir onRegionChangeComplete) :
-// entre les deux, on voit encore ce qui est déjà connu sans en recharger.
-const MAX_RENDER_LATITUDE_DELTA = 0.08; // ~9 km de hauteur visible
+// Règles d'affichage par niveau de zoom pour les carrefours (voir aussi
+// useWalkedia.ts pour les règles de chargement des zones) :
+//  1. Zoomé : chaque carrefour individuellement, peu importe son éloignement
+//     de la position du joueur — seul le viewport compte (voir plus bas).
+//  2. Dézoomé au-delà de CLUSTER_LATITUDE_DELTA : regroupement en clusters,
+//     dont la taille grandit en continu avec le dézoom (clusterCellMeters)
+//     plutôt qu'une taille de cellule fixe — plus on dézoome, plus les
+//     clusters sont gros et concentrés.
+//  3. Dézoomé au point de voir plusieurs villes à la fois
+//     (MAX_JUNCTION_RENDER_LATITUDE_DELTA) : plus aucun point/cluster
+//     affiché, quelle que soit la donnée déjà en mémoire.
+// Les tronçons (arêtes) ont leur propre cutoff, plus serré : ils deviennent
+// illisibles/inutiles bien avant l'échelle pertinente pour les carrefours.
+const MAX_EDGE_RENDER_LATITUDE_DELTA = 0.08; // ~9 km de hauteur visible
+const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 1.0; // ~111 km — "plusieurs villes"
 
 // Plafonds absolus, indépendants du zoom : une zone très dense (centre-ville
 // avec beaucoup d'exploration accumulée) peut dépasser un budget de rendu
@@ -45,9 +53,22 @@ const MAX_RENDERED_EDGES = 600;
 // par cellule de grille plutôt que chaque carrefour individuellement — plus
 // lisible et beaucoup moins de Marker natifs à monter sur une vue large.
 const CLUSTER_LATITUDE_DELTA = 0.025; // ~2.8 km de hauteur visible
-// Taille de cellule pour le regroupement, même échelle que DENSITY_CELL
-// (graph.js) : correspond à peu près à un pâté de maisons.
-const CLUSTER_CELL_METERS = 250;
+
+// Taille de cellule de regroupement, calculée à partir de la hauteur visible
+// plutôt que fixe : une fraction constante de ce qui est à l'écran donne un
+// nombre de clusters à peu près stable quel que soit le zoom, donc des
+// clusters visuellement plus gros/concentrés à mesure qu'on dézoome (règle
+// 2). La fraction est calée pour retomber sur ~250 m (l'ancienne valeur
+// fixe, à peu près un pâté de maisons) juste après CLUSTER_LATITUDE_DELTA,
+// pour une transition continue au changement de mode.
+const CLUSTER_CELL_FRACTION = 0.09;
+const CLUSTER_CELL_MIN = 150; // m
+const CLUSTER_CELL_MAX = 20000; // m
+
+function clusterCellMeters(latitudeDelta: number) {
+  const visibleHeightMeters = latitudeDelta * 110540;
+  return Math.min(CLUSTER_CELL_MAX, Math.max(CLUSTER_CELL_MIN, visibleHeightMeters * CLUSTER_CELL_FRACTION));
+}
 
 interface JunctionCluster {
   key: string;
@@ -126,33 +147,44 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // la région pour ne pas recalculer à chaque tick (fix GPS, toast…).
   const { visibleEdges, visibleJunctions, junctionClusters } = useMemo(() => {
     if (!region) return { visibleEdges: edges, visibleJunctions: junctions, junctionClusters: [] as JunctionCluster[] };
-    if (region.latitudeDelta > MAX_RENDER_LATITUDE_DELTA) {
-      return { visibleEdges: [], visibleJunctions: [], junctionClusters: [] as JunctionCluster[] };
-    }
 
     const viewBBox = regionBBox(region);
-    let edgesInView = edges.filter((e: any) => bboxIntersects(coordsBBox(e.coords), viewBBox));
+
+    // Tronçons : cutoff propre, plus serré que celui des carrefours (voir
+    // constantes plus haut).
+    let edgesInView: any[] = [];
+    if (region.latitudeDelta <= MAX_EDGE_RENDER_LATITUDE_DELTA) {
+      edgesInView = edges.filter((e: any) => bboxIntersects(coordsBBox(e.coords), viewBBox));
+      if (edgesInView.length > MAX_RENDERED_EDGES) {
+        const found: any[] = [];
+        const rest: any[] = [];
+        for (const e of edgesInView) (edgeIsFound(state, e.id) ? found : rest).push(e);
+        edgesInView = found.length >= MAX_RENDERED_EDGES ? found.slice(0, MAX_RENDERED_EDGES) : found.concat(rest.slice(0, MAX_RENDERED_EDGES - found.length));
+      }
+    }
+
+    // Carrefours : rien au-delà de l'échelle "plusieurs villes" (règle 3),
+    // quelle que soit la donnée déjà chargée en mémoire.
+    if (region.latitudeDelta > MAX_JUNCTION_RENDER_LATITUDE_DELTA) {
+      return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: [] as JunctionCluster[] };
+    }
+
     const junctionsInView = junctions.filter(
       (j: any) => j.lat >= viewBBox.minLat && j.lat <= viewBBox.maxLat && j.lon >= viewBBox.minLon && j.lon <= viewBBox.maxLon
     );
 
-    if (edgesInView.length > MAX_RENDERED_EDGES) {
-      const found: any[] = [];
-      const rest: any[] = [];
-      for (const e of edgesInView) (edgeIsFound(state, e.id) ? found : rest).push(e);
-      edgesInView = found.length >= MAX_RENDERED_EDGES ? found.slice(0, MAX_RENDERED_EDGES) : found.concat(rest.slice(0, MAX_RENDERED_EDGES - found.length));
-    }
-
-    // Dézoomé : regroupe les carrefours du viewport par cellule de grille
-    // plutôt que d'afficher chaque point. Calculé sur TOUS les carrefours du
-    // viewport, avant tout plafond individuel (sinon les comptes par cellule
-    // seraient biaisés par un plafond qui privilégie le haut degré).
+    // Dézoomé : regroupe les carrefours du viewport par cellule de grille,
+    // dont la taille grandit avec le dézoom (règle 2). Calculé sur TOUS les
+    // carrefours du viewport, avant tout plafond individuel (sinon les
+    // comptes par cellule seraient biaisés par un plafond qui privilégie le
+    // haut degré).
     if (region.latitudeDelta > CLUSTER_LATITUDE_DELTA) {
+      const cellMeters = clusterCellMeters(region.latitudeDelta);
       const kx = 111320 * Math.cos((region.latitude * Math.PI) / 180);
       const ky = 110540;
       const cells = new Map<string, { latSum: number; lonSum: number; total: number; done: number }>();
       for (const j of junctionsInView as any[]) {
-        const key = Math.floor((j.lon * kx) / CLUSTER_CELL_METERS) + ':' + Math.floor((j.lat * ky) / CLUSTER_CELL_METERS);
+        const key = Math.floor((j.lon * kx) / cellMeters) + ':' + Math.floor((j.lat * ky) / cellMeters);
         let c = cells.get(key);
         if (!c) cells.set(key, (c = { latSum: 0, lonSum: 0, total: 0, done: 0 }));
         c.latSum += j.lat;
@@ -170,9 +202,10 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: clusters };
     }
 
-    // Zoomé : chaque carrefour individuellement, avec le même plafond que
-    // pour les tronçons (une zone dense peut dépasser un budget de rendu
-    // raisonnable même à ce niveau de zoom) — priorité au haut degré.
+    // Zoomé : chaque carrefour individuellement, peu importe sa distance à
+    // la position du joueur — seul le viewport compte (règle 1). Même
+    // plafond que pour les tronçons (une zone dense peut dépasser un budget
+    // de rendu raisonnable même à ce niveau de zoom) — priorité au haut degré.
     let pointJunctions = junctionsInView;
     if (pointJunctions.length > MAX_RENDERED_JUNCTIONS) {
       pointJunctions = [...pointJunctions]
@@ -239,12 +272,13 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // proches (voir visibleEdges/visibleJunctions ci-dessus).
   //
   // Trop dézoomé (> MAX_EXPAND_LATITUDE_DELTA de hauteur visible), on
-  // n'auto-charge plus rien au pan : chaque zone ne couvre que RADIUS=800 m,
-  // il en faudrait beaucoup pour remplir une vue très large, les points y
-  // seraient de toute façon minuscules/inutilisables, et enchaîner les
-  // requêtes Overpass à ce rythme serait juste du gaspillage. Le rendu
-  // (visibleEdges/visibleJunctions) continue d'afficher ce qui est déjà connu.
-  const MAX_EXPAND_LATITUDE_DELTA = 0.05; // ~5.5 km de hauteur visible
+  // n'auto-charge plus rien au pan (règle 3/4) : chaque zone ne couvre que
+  // RADIUS=500 m (useWalkedia.ts), il en faudrait beaucoup pour remplir une
+  // vue large, et enchaîner les requêtes Overpass à ce rythme serait du
+  // gaspillage. Le rendu (visibleEdges/visibleJunctions/junctionClusters)
+  // continue d'afficher ce qui est déjà connu, avec son propre cutoff bien
+  // plus permissif pour les carrefours (voir MAX_JUNCTION_RENDER_LATITUDE_DELTA).
+  const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
 
   const onRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion);

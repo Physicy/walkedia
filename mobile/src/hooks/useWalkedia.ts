@@ -29,9 +29,18 @@ const SHADOW_MAX_AGE = 3600000;
 const SHADOW_MAX_POINTS = 4000;
 const SHADOW_MIN_DISTANCE = 80;
 
-const RADIUS = 800;
-const BOUNDARY_MARGIN = 100;
-const EXPAND_MARGIN = 300;
+// Règles de chargement des zones (voir aussi MapScreen.tsx pour l'affichage
+// par niveau de zoom) :
+//  1. Au lancement, on ne charge que les environs immédiats du joueur.
+//  2. En déplaçant la carte, on charge la zone visible (ce même RADIUS,
+//     redéclenché autour du nouveau centre — voir maybeExpand).
+//  3. Au-delà d'un certain dézoom (MapScreen.tsx, MAX_EXPAND_LATITUDE_DELTA),
+//     on arrête de charger de nouvelles zones : à ce niveau de zoom, des
+//     cercles de RADIUS m ne serviraient plus à rien visuellement et
+//     enchaîner les requêtes Overpass serait du gaspillage.
+const RADIUS = 500;
+const BOUNDARY_MARGIN = 60;
+const EXPAND_MARGIN = 200;
 const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
                               // suffisant contre le spam GPS (~14 m parcourus en 8 s à pied)
 
