@@ -4,8 +4,9 @@
 //
 // Le texte de statut (`status`) est affiché même hors erreur, avec un
 // décompte du temps écoulé : sans ça, un spinner nu ne se distingue pas d'un
-// blocage réel pendant les 10-30s (parfois plus) que peuvent prendre les
-// miroirs Overpass publics — voir logic/overpass.js.
+// blocage réel pendant les 10-30s (parfois plus) que peut prendre le premier
+// calcul d'une zone jamais visitée (voir logic/region.ts : les zones déjà en
+// cache, elles, reviennent immédiatement).
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';

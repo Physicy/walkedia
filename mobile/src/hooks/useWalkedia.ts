@@ -9,9 +9,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
-import { fetchZone, fetchNeighborhoods } from '../logic/overpass';
-import { buildGraph } from '../logic/graph';
-import { assignNeighborhoods } from '../logic/neighborhoods';
+import { fetchRegion } from '../logic/region';
+import { emptyGraph, mergeGraph } from '../logic/regionGraph';
+import type { Graph, Neighborhood, Region } from '../logic/regionGraph';
 import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
@@ -48,7 +48,12 @@ const AUTO_START_MAX_GAP = 60000; // ms
 //  3. Au-delà d'un certain dézoom (MapScreen.tsx, MAX_EXPAND_LATITUDE_DELTA),
 //     on arrête de charger de nouvelles zones : à ce niveau de zoom, des
 //     cercles de RADIUS m ne serviraient plus à rien visuellement et
-//     enchaîner les requêtes Overpass serait du gaspillage.
+//     enchaîner les requêtes serait du gaspillage.
+//
+// RADIUS est le pas de la grille de centres : il DOIT rester identique à
+// celui de l'Edge Function get-region, qui s'en sert pour arrondir la
+// position reçue et en faire sa clé de cache (une valeur différente ici
+// ferait manquer le cache à chaque appel).
 const RADIUS = 500;
 const BOUNDARY_MARGIN = 60;
 const EXPAND_MARGIN = 200;
@@ -112,13 +117,11 @@ export interface LoadLogEntry {
 }
 
 interface WalkediaState {
-  graph: any;
+  graph: Graph | null;
   proj: ((lat: number, lon: number) => number[]) | null;
   center: [number, number] | null;
   centers: [number, number][];
-  osmRaw: { nodes: Map<number, [number, number]>; ways: Map<number, any> };
-  greenAreas: Map<number, { id: number; ring: [number, number][] }>;
-  neighborhoods: Map<number, { id: number; name: string | null; ring: [number, number][] }>;
+  neighborhoods: Map<number, Neighborhood>;
   junctionNeighborhood: Map<string, number | null>;
   expanding: boolean;
   lastExpandTry: number;
@@ -151,8 +154,6 @@ function freshState(): WalkediaState {
     proj: null,
     center: null,
     centers: [],
-    osmRaw: { nodes: new Map(), ways: new Map() },
-    greenAreas: new Map(),
     neighborhoods: new Map(),
     junctionNeighborhood: new Map(),
     expanding: false,
@@ -225,8 +226,10 @@ export interface NeighborhoodStat {
 }
 
 // Stats de complétion par quartier OSM, dérivées de junctionNeighborhood
-// (voir rebuildGraph). Les carrefours sans quartier assigné (fréquent, voir
-// logic/neighborhoods.js) ne contribuent à aucune ligne.
+// (assigné côté serveur, voir applyRegion). Les carrefours sans quartier
+// (fréquent : la plupart des villes n'ont pas de contour de quartier dans
+// OSM, voir supabase/functions/_shared/neighborhoods.ts) ne contribuent à
+// aucune ligne.
 export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
   if (!state.graph) return [];
   const totals = new Map<number, { total: number; done: number }>();
@@ -431,61 +434,28 @@ export function useWalkedia() {
 
   // -------------------------------------------------------- zones & graphe
 
-  const mergeOsm = useCallback(
-    (osm: { nodes: Map<number, [number, number]>; ways: any[] }) => {
-      for (const [id, c] of osm.nodes) state.osmRaw.nodes.set(id, c);
-      for (const w of osm.ways) state.osmRaw.ways.set(w.id, w);
+  // Intègre une zone reçue de l'Edge Function. Plus aucune construction de
+  // graphe ici : le serveur l'a déjà fait, avec une marge qui garantit que
+  // deux zones voisines décrivent le recouvrement à l'identique (voir
+  // logic/regionGraph.ts) — il n'y a donc plus rien à recalculer, ni à
+  // reconstruire depuis zéro à chaque nouvelle zone comme avant.
+  // L'assignation carrefour -> quartier vient elle aussi du serveur.
+  const applyRegion = useCallback(
+    (region: Region) => {
+      if (!state.graph) state.graph = emptyGraph();
+      mergeGraph(state.graph, region.graph);
+      for (const n of region.neighborhoods) state.neighborhoods.set(n.id, n);
+      for (const [jid, nid] of region.junctionNeighborhood) state.junctionNeighborhood.set(jid, nid);
+      // Le centre retenu est celui que le SERVEUR a arrondi, pas le point
+      // demandé : c'est lui qui décrit le cercle réellement servi, donc celui
+      // sur lequel doivent porter « zone déjà couverte » et le garde-fou de
+      // bord (voir distToNearestCenter/nearBoundary).
+      if (!state.centers.some((c) => c[0] === region.center[0] && c[1] === region.center[1])) {
+        state.centers.push(region.center);
+      }
     },
     [state]
   );
-
-  const mergeGreenAreas = useCallback(
-    (areas: { id: number; ring: [number, number][] }[]) => {
-      for (const a of areas) state.greenAreas.set(a.id, a);
-    },
-    [state]
-  );
-
-  const mergeNeighborhoods = useCallback(
-    (areas: { id: number; name: string | null; ring: [number, number][] }[]) => {
-      for (const a of areas) state.neighborhoods.set(a.id, a);
-      // Les quartiers arrivent en tâche de fond (voir loadNeighborhoods),
-      // potentiellement après que rebuildGraph a déjà tourné sans eux : on
-      // réassigne ici pour ne pas attendre le prochain chargement de zone.
-      if (state.graph) state.junctionNeighborhood = assignNeighborhoods(state.graph.junctions, state.neighborhoods);
-    },
-    [state]
-  );
-
-  // Chargement des quartiers en arrière-plan, jamais attendu ni bloquant :
-  // une donnée de confort pour les stats de profil, pas pour le cœur du jeu
-  // (voir commentaire dans overpass.js). Best-effort : une erreur ou une
-  // lenteur ici reste totalement invisible pour le joueur.
-  const loadNeighborhoods = useCallback(
-    (lat: number, lon: number) => {
-      fetchNeighborhoods(lat, lon, RADIUS)
-        .then((areas) => {
-          mergeNeighborhoods(areas);
-          rerender();
-        })
-        .catch(() => {});
-    },
-    [mergeNeighborhoods, rerender]
-  );
-
-  // buildGraph rend la main à la boucle d'événements entre ses étapes
-  // coûteuses (voir graph.js) pour ne pas geler la carte pendant une
-  // reconstruction ; on l'attend donc ici plutôt que de bloquer en synchrone.
-  // L'assignation carrefour -> quartier est recalculée juste après : elle ne
-  // dépend que du graphe et des quartiers connus (tous deux figés en dehors
-  // d'un chargement/extension de zone), jamais d'un tick GPS.
-  const rebuildGraph = useCallback(async () => {
-    state.graph = await buildGraph(
-      { nodes: state.osmRaw.nodes, ways: [...state.osmRaw.ways.values()] },
-      [...state.greenAreas.values()].map((a) => a.ring)
-    );
-    state.junctionNeighborhood = assignNeighborhoods(state.graph.junctions, state.neighborhoods);
-  }, [state]);
 
   // Complétion : vérifie un carrefour, retourne true s'il vient d'être complété.
   const checkJunction = useCallback(
@@ -504,6 +474,7 @@ export function useWalkedia() {
 
   const sweepCompletions = useCallback(
     (announce: boolean) => {
+      if (!state.graph) return 0;
       let pruned = 0;
       for (const id of [...state.progress.junctions]) {
         if (state.graph.junctions.has(id)) continue;
@@ -571,22 +542,17 @@ export function useWalkedia() {
       state.lastExpandTry = now;
       const startedAt = Date.now();
       try {
-        const { osm, greenAreas } = await fetchZone(lat, lon, RADIUS);
-        mergeOsm(osm);
-        mergeGreenAreas(greenAreas);
-        state.centers.push([lat, lon]);
-        await rebuildGraph();
+        applyRegion(await fetchRegion(lat, lon));
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
         toast('Nouvelle zone chargée 🗺️');
-        loadNeighborhoods(lat, lon);
         logLoad({
           trigger,
           outcome: 'success',
           durationMs: Date.now() - startedAt,
-          edges: state.graph.edges.size,
-          junctions: state.graph.junctions.size,
+          edges: state.graph!.edges.size,
+          junctions: state.graph!.junctions.size,
         });
       } catch (err: any) {
         toast('Extension de zone impossible : ' + err.message);
@@ -595,16 +561,17 @@ export function useWalkedia() {
         state.expanding = false;
       }
     },
-    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, logLoad]
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
   );
 
   // Remplissage en grille de la zone visible en mode cluster (voir
   // MAX_GRID_LOAD_LATITUDE_DELTA ci-dessus) : calcule les centres de zone
   // (même grille que snapToGrid) manquants dans le viewport, en charge un
-  // lot plafonné séquentiellement (jamais en parallèle — un seul
-  // rebuildGraph à la fin plutôt qu'un par zone), triés du plus proche du
-  // centre visible au plus loin. Un déclenchement qui dépasse le plafond
-  // laisse le reste pour un prochain déclenchement (pan/zoom suivant).
+  // lot plafonné séquentiellement (jamais en parallèle : autant de calculs
+  // complets déclenchés d'un coup côté serveur sur des zones inconnues
+  // seraient autant de rafales vers les miroirs Overpass), triés du plus
+  // proche du centre visible au plus loin. Un déclenchement qui dépasse le
+  // plafond laisse le reste pour un prochain déclenchement (pan/zoom suivant).
   const loadVisibleGrid = useCallback(
     async (lat: number, lon: number, latitudeDelta: number, longitudeDelta: number) => {
       if (latitudeDelta > MAX_GRID_LOAD_LATITUDE_DELTA) {
@@ -652,10 +619,7 @@ export function useWalkedia() {
         // précédent DE CE MÊME lot (zones voisines qui se chevauchent).
         if (distToNearestCenter(state, clat, clon) <= RADIUS - EXPAND_MARGIN) continue;
         try {
-          const { osm, greenAreas } = await fetchZone(clat, clon, RADIUS);
-          mergeOsm(osm);
-          mergeGreenAreas(greenAreas);
-          state.centers.push([clat, clon]);
+          applyRegion(await fetchRegion(clat, clon));
           loaded++;
         } catch {
           failed++;
@@ -663,7 +627,6 @@ export function useWalkedia() {
       }
 
       if (loaded > 0) {
-        await rebuildGraph();
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
@@ -679,7 +642,7 @@ export function useWalkedia() {
       });
       state.gridLoading = false;
     },
-    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast, logLoad]
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -729,7 +692,9 @@ export function useWalkedia() {
   // paramètre.
   const importShadowWalk = useCallback(
     async (fixes: Fix[], startedAt: number) => {
-      const matcher = new Matcher(state.graph, state.proj);
+      const graph = state.graph;
+      if (!graph) return; // appelé une fois la zone initiale chargée (voir init)
+      const matcher = new Matcher(graph, state.proj);
       const newEdges = new Set<string>();
       const newInter = new Set<string>();
       let prevFix: Fix | null = null;
@@ -740,10 +705,10 @@ export function useWalkedia() {
             state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
             if (state.progress.edges.has(edgeId)) continue;
             state.progress.edges.add(edgeId);
-            state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+            state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
             newEdges.add(edgeId);
-            for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-              const j = state.graph.junctions.get(jid);
+            for (const jid of graph.edgeJunctions.get(edgeId) || []) {
+              const j = graph.junctions.get(jid);
               if (j && checkJunction(j)) newInter.add(jid);
             }
           }
@@ -867,6 +832,7 @@ export function useWalkedia() {
       if (accuracy == null || accuracy <= MAX_ACCURACY) state.lastFix = cur;
 
       let anyChange = false;
+      const graph = state.graph!; // une session ne démarre qu'avec un graphe chargé
       for (const fix of fixes) {
         for (const edgeId of state.matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
           // Compteur de passages (heatmap) : incrémenté à chaque tronçon validé
@@ -877,11 +843,11 @@ export function useWalkedia() {
           state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
           if (state.progress.edges.has(edgeId)) continue;
           state.progress.edges.add(edgeId);
-          state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+          state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
           state.session.newEdges.add(edgeId);
           anyChange = true;
-          for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-            const j = state.graph.junctions.get(jid);
+          for (const jid of graph.edgeJunctions.get(edgeId) || []) {
+            const j = graph.junctions.get(jid);
             if (j && checkJunction(j)) {
               state.session.newInter.add(jid);
               toast('Carrefour complété ! +1 point 🎉');
@@ -948,12 +914,12 @@ export function useWalkedia() {
       if (state.mapReady) return;
       state.startStatus = 'Chargement du réseau piéton…';
       rerender();
-      let osm, greenAreas;
       const startedAt = Date.now();
+      let region: Region;
       try {
-        ({ osm, greenAreas } = await fetchZone(lat, lon, RADIUS));
+        region = await fetchRegion(lat, lon);
       } catch (err: any) {
-        state.startStatus = 'Impossible de charger les données OSM : ' + err.message;
+        state.startStatus = 'Impossible de charger la zone : ' + err.message;
         rerender();
         logLoad({ trigger: 'init', outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
         return;
@@ -961,39 +927,23 @@ export function useWalkedia() {
 
       state.center = [lat, lon];
       state.proj = makeProj(lat);
-      mergeOsm(osm);
-      mergeGreenAreas(greenAreas);
-      state.centers.push([lat, lon]);
-      await rebuildGraph();
+      applyRegion(region);
       sweepCompletions(false);
       state.mapReady = true;
       rerender();
-      toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
+      toast(`${state.graph!.edges.size} tronçons · ${state.graph!.junctions.size} carrefours dans la zone`);
       logLoad({
         trigger: 'init',
         outcome: 'success',
         durationMs: Date.now() - startedAt,
-        edges: state.graph.edges.size,
-        junctions: state.graph.junctions.size,
+        edges: state.graph!.edges.size,
+        junctions: state.graph!.junctions.size,
       });
 
       await startWatch();
-      loadNeighborhoods(lat, lon);
       checkBackgroundImport();
     },
-    [
-      state,
-      mergeOsm,
-      mergeGreenAreas,
-      loadNeighborhoods,
-      rebuildGraph,
-      sweepCompletions,
-      rerender,
-      toast,
-      startWatch,
-      logLoad,
-      checkBackgroundImport,
-    ]
+    [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport]
   );
 
   const requestLocationAndInit = useCallback(async () => {

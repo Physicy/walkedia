@@ -1,7 +1,8 @@
-// Copie synchronisée de mobile/src/logic/graph.js — aucune dépendance RN,
-// tourne tel quel côté Deno (Edge Function). Ne pas diverger sans reporter
-// le changement des deux côtés (voir plan : contrat de données backend↔client,
-// c'est cette même fonction qui produit le payload mis en cache).
+// Construction du graphe. Seul exemplaire depuis la bascule du client sur
+// l'Edge Function : le client ne construit plus rien, il fusionne des zones
+// déjà construites (voir mobile/src/logic/region.ts). Toute modification ici
+// change les IDs d'arêtes/carrefours servis, donc invalide la progression
+// déjà enregistrée par les joueurs — bumper VERSION dans get-region/index.ts.
 //
 //  1. repérage des nœuds de jonction (partagés par plusieurs ways),
 //  2. découpage des ways en segments entre jonctions,

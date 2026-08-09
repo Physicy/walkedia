@@ -1,6 +1,7 @@
-// Copie synchronisée de mobile/src/logic/geo.js — aucune dépendance RN,
-// tourne tel quel côté Deno (Edge Function). Ne pas diverger sans reporter
-// le changement des deux côtés (voir plan : contrat de données backend↔client).
+// Copie synchronisée de mobile/src/logic/geo.js — le client garde la sienne
+// (map matching, affichage), celle-ci sert à la construction du graphe côté
+// Deno. Ne pas diverger sans reporter le changement des deux côtés : les IDs
+// d'arêtes dérivent de pointAtFraction/lineLength.
 
 const EARTH_R = 6371000;
 

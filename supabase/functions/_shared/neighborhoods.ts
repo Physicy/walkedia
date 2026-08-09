@@ -1,5 +1,5 @@
-// Copie synchronisée de mobile/src/logic/neighborhoods.js — assigne chaque
-// carrefour au quartier OSM dont le contour le contient (bbox rapide puis
+// Assigne chaque carrefour au quartier OSM dont le contour le contient
+// (bbox rapide puis
 // point-dans-polygone). Un carrefour hors de tout contour connu (fréquent)
 // reste sans quartier.
 

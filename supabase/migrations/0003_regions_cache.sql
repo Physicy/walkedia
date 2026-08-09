@@ -14,8 +14,9 @@ create table regions (
   id text primary key, -- ex: "48.858300,2.347000,500" (centre arrondi + rayon)
   center extensions.geography(point, 4326) not null,
   radius int not null,
-  payload jsonb not null, -- { graph, greenAreas, neighborhoods, junctionNeighborhood, center, radius }
-  version text not null default '1', -- pour une future invalidation/revalidation
+  payload jsonb not null, -- forme exacte : voir supabase/functions/_shared/serialize.ts
+  version text not null default '1', -- une entrée d'une version antérieure à celle
+                                     -- de get-region est ignorée et recalculée
   computed_at timestamptz not null default now()
 );
 

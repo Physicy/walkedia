@@ -1,6 +1,7 @@
-// Copie synchronisée de mobile/src/logic/overpass.js — aucune dépendance
-// RN, tourne tel quel côté Deno (`fetch`/`AbortController` sont natifs).
-// Ne pas diverger sans reporter le changement des deux côtés.
+// Accès à l'API Overpass. Seul exemplaire depuis la bascule du client sur
+// l'Edge Function : plus aucun appareil ne tape Overpass directement, tout
+// passe par get-region et son cache — ce qui rend aussi les pannes de
+// miroirs publics invisibles pour toute zone déjà calculée.
 
 const MIRRORS = [
   'https://overpass-api.de/api/interpreter',

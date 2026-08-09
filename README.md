@@ -66,16 +66,17 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
 
 ## Fonctionnement
 
-- **Graphe** : ways piétons OSM chargés via Overpass dans un rayon de 800 m,
-  découpés aux jonctions puis simplifiés (fusion des nœuds de degré 2) pour que
-  chaque arête relie deux vrais nœuds.
+- **Graphe** : ways piétons OSM découpés aux jonctions puis simplifiés (fusion
+  des nœuds de degré 2) pour que chaque arête relie deux vrais nœuds. Ce
+  calcul se fait **côté serveur** (voir « Backend » ci-dessous), pas sur le
+  téléphone : l'app reçoit un graphe déjà construit par zone de 500 m et se
+  contente de coller les zones bout à bout.
 - **Extension dynamique** : le suivi de position GPS tourne en continu dès
   l'ouverture de la carte (indépendamment du démarrage d'une session) ; dès
-  qu'on s'approche à moins de 300 m du bord de la zone connue, une nouvelle
-  zone de 800 m est téléchargée autour de la position et fusionnée au graphe
-  (données OSM brutes cumulées, graphe reconstruit, couverture de session
-  préservée). En cas d'échec (serveurs saturés), nouvelle tentative au plus
-  tôt 30 s plus tard.
+  qu'on s'éloigne à plus de 300 m du centre de la zone connue, une nouvelle
+  zone est demandée autour de la position et fusionnée au graphe (couverture
+  de session préservée : les IDs d'arêtes sont stables). En cas d'échec,
+  nouvelle tentative au plus tôt 8 s plus tard.
 - **Carrefours** : le degré est calculé sur les branches *significatives* (les
   impasses de moins de 30 m — entrées de bâtiments, allées — ne comptent pas),
   puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
@@ -98,8 +99,8 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
 - **Espaces verts** : exception géométrique à la règle urbaine ci-dessus. Les
   contours des parcs, jardins, forêts et terrains de sport (`leisure=park
   |garden|nature_reserve|recreation_ground|pitch|sports_centre`,
-  `landuse=forest|meadow`, `natural=wood`) sont récupérés via Overpass
-  (`fetchGreenAreas`) ; un carrefour situé à l'intérieur d'un de ces contours
+  `landuse=forest|meadow`, `natural=wood`) sont récupérés via Overpass en même
+  temps que la voirie ; un carrefour situé à l'intérieur d'un de ces contours
   compte toutes ses branches piétonnes, même si la zone environnante est par
   ailleurs classée urbaine. Les places/esplanades restent volontairement
   exclues (règle ci-dessus inchangée pour elles). Limitation connue : seuls
@@ -123,7 +124,7 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   démarrer une session — l'app propose de l'importer.
 - **Progression** : historique d'arêtes et intersections complétées en
   stockage local (`AsyncStorage`), sauvegarde continue pendant la session.
-- **Garde-fou de bord** : les intersections à moins de 100 m du bord de la zone
+- **Garde-fou de bord** : les intersections à moins de 60 m du bord de la zone
   chargée ne sont pas évaluées (des branches pourraient manquer).
 - **Navigation** : menu footer à trois onglets — *Aventure* (la carte, le
   lancement et l'arrêt des sessions), *Recherche* (classement et amis) et
@@ -139,11 +140,40 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   classement n'expose que le total de points par joueur (jamais le détail
   des tronçons parcourus), globalement ou filtré aux amis acceptés.
 
+## Backend (Edge Function `get-region`)
+
+L'app ne parle plus à Overpass directement : elle demande une zone à une Edge
+Function Supabase, qui la calcule au premier appel puis la sert depuis un
+cache partagé entre tous les joueurs (table `regions`). Une zone déjà visitée
+par n'importe qui revient immédiatement, et une panne des miroirs Overpass
+publics (fréquente) devient invisible sur tout ce qui est déjà en cache.
+
+La clé de cache est le centre de la zone **arrondi sur une grille de 500 m**
+(même arrondi côté client et côté serveur, sinon chaque joueur créerait sa
+propre entrée légèrement décalée).
+
+Point subtil : le client fusionne des graphes construits séparément, sans
+jamais reconstruire. Pour que deux zones voisines décrivent leur recouvrement
+à l'identique, la fonction **construit sur 1000 m et ne sert que 550 m** —
+sans cette marge, les chaînes de degré 2 s'interrompent au bord des données et
+produisent des arêtes différentes de part et d'autre. Mesuré sur 4 zones
+adjacentes (Paris et périurbain) : 3 à 6 % d'arêtes en double sans la marge,
+1 arête sur 4834 avec. `scripts/check-region-contract.mjs` rejoue cette
+comparaison de bout en bout.
+
+Déploiement (CLI Supabase, depuis la racine du dépôt) :
+
+```
+npx supabase link --project-ref <ref-projet>
+npx supabase db push
+npx supabase functions deploy get-region
+```
+
 ## Structure
 
 - `mobile/src/logic/geo.js` — utilitaires géométriques (projection, distances)
-- `mobile/src/logic/overpass.js` — requête Overpass (types de voies piétonnes, filtres d'accès)
-- `mobile/src/logic/graph.js` — construction et simplification du graphe, IDs stables
+- `mobile/src/logic/region.ts` — appel de l'Edge Function `get-region`
+- `mobile/src/logic/regionGraph.ts` — forme du graphe côté client, fusion des zones
 - `mobile/src/logic/matching.js` — index spatial en grille + critère de couverture
 - `mobile/src/logic/storage.ts` — persistance locale (`AsyncStorage`)
 - `mobile/src/hooks/useWalkedia.ts` — état global, GPS, sessions, complétion,
@@ -155,8 +185,14 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
 - `mobile/src/screens/` — écrans (démarrage, carte, recherche/social, profil)
 - `mobile/src/components/` — HUD, barre d'onglets, toast, panneau de debug,
   section compte
-- `supabase/migrations/0001_init.sql` — schéma (profils, progression,
-  sessions, amis), policies RLS, vue de classement
+- `supabase/migrations/` — schéma (profils, progression, sessions, amis,
+  cache de zones), policies RLS, vue de classement
+- `supabase/functions/get-region/` — Edge Function de calcul/cache des zones
+- `supabase/functions/_shared/` — requête Overpass, construction du graphe,
+  quartiers, découpe/sérialisation du payload (seuls exemplaires de cette
+  logique depuis la bascule côté serveur)
+- `scripts/check-region-contract.mjs` — vérifie que le graphe fusionné côté
+  client reste identique à un graphe construit d'un seul tenant
 
 ## Limites connues (prototype)
 
