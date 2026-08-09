@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "scheme": "walkedia",
     "orientation": "portrait",
+    "newArchEnabled": false,
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -42,8 +43,7 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-web-browser",
-      "@maplibre/maplibre-react-native"
+      "expo-web-browser"
     ]
   }
 }
