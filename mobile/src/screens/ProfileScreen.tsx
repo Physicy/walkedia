@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { COLORS } from '../theme';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
@@ -29,11 +29,15 @@ export function ProfileScreen({
   auth,
   syncing,
   neighborhoods,
+  backgroundTrackingEnabled,
+  onToggleBackgroundTracking,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
   neighborhoods: NeighborhoodStat[];
+  backgroundTrackingEnabled: boolean;
+  onToggleBackgroundTracking: (next: boolean) => void;
 }) {
   const stats = useMemo(() => {
     const today = startOfToday();
@@ -77,6 +81,21 @@ export function ProfileScreen({
       <Text style={styles.h2}>Profil</Text>
 
       <AccountSection auth={auth} syncing={syncing} />
+
+      <View style={styles.bgTrackingRow}>
+        <View style={styles.bgTrackingText}>
+          <Text style={styles.bgTrackingLabel}>Détecter mes marches même app fermée</Text>
+          <Text style={styles.muted}>
+            Utilise ta position en arrière-plan (permission "Toujours") pour te proposer d'importer tes marches
+            au retour dans l'app. Désactivé par défaut.
+          </Text>
+        </View>
+        <Switch
+          value={backgroundTrackingEnabled}
+          onValueChange={onToggleBackgroundTracking}
+          trackColor={{ true: COLORS.primary }}
+        />
+      </View>
 
       <View style={styles.bigScore}>
         <Text style={styles.bigScoreValue}>{stats.total}</Text>
@@ -176,6 +195,19 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
   },
+  bgTrackingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(148,163,184,0.08)',
+    borderColor: 'rgba(148,163,184,0.15)',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  bgTrackingText: { flex: 1, gap: 4 },
+  bgTrackingLabel: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
   bigScore: { alignItems: 'center', marginVertical: 12 },
   bigScoreValue: { fontSize: 48, fontWeight: '800', color: COLORS.accentGreen, lineHeight: 52 },
   bigScoreLabel: { color: COLORS.textMuted, marginTop: 2 },

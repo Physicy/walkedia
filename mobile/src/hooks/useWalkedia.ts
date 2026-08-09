@@ -17,6 +17,12 @@ import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
 import { supabase } from '../lib/supabase';
+import {
+  consumeBackgroundBuffer,
+  isBackgroundTrackingActive,
+  startBackgroundTracking,
+  stopBackgroundTracking,
+} from '../logic/backgroundLocation';
 
 const INTERP_STEP = 5; // m : ré-échantillonnage entre deux fix GPS successifs
 const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS
@@ -25,9 +31,14 @@ const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vie
 const SPEED_LIMIT_KMH = 20;
 const SPEED_STREAK_LIMIT = 2;
 
-const SHADOW_MAX_AGE = 3600000;
-const SHADOW_MAX_POINTS = 4000;
-const SHADOW_MIN_DISTANCE = 80;
+// Auto-démarrage de session en avant-plan (règle 2, voir onFix) : distance
+// courte accumulée hors session avant de démarrer automatiquement — pas
+// besoin d'attendre/demander comme l'ancien mécanisme "shadow walk" en
+// mémoire, qu'il remplace. AUTO_START_MAX_GAP évite qu'un mouvement
+// accumulé il y a longtemps (le joueur s'est arrêté puis reprend bien plus
+// tard) ne déclenche sur un simple pas isolé.
+const AUTO_START_DISTANCE = 40; // m
+const AUTO_START_MAX_GAP = 60000; // ms
 
 // Règles de chargement des zones (voir aussi MapScreen.tsx pour l'affichage
 // par niveau de zoom) :
@@ -103,7 +114,11 @@ interface WalkediaState {
   position: { lat: number; lon: number; accuracy: number | null } | null;
   lastFix: Fix | null;
   speedStreak: number;
-  shadow: { fixes: Fix[]; startedAt: number | null; prompted: boolean };
+  // Accumulateur de mouvement hors session (voir onFix, règle "auto-
+  // démarrage en avant-plan") : distance roulante depuis le dernier fix
+  // plausible, remis à zéro dès qu'une session démarre ou qu'un trou trop
+  // long survient entre deux fixes.
+  idleMovement: { lat: number; lon: number; t: number; distance: number } | null;
   toast: { msg: string; key: number } | null;
   ready: boolean; // progrès chargé depuis AsyncStorage
   mapReady: boolean; // graphe initial chargé
@@ -111,6 +126,7 @@ interface WalkediaState {
   userId: string | null; // compte Supabase connecté, null si hors-ligne/déconnecté
   syncing: boolean;
   loadLog: LoadLogEntry[];
+  backgroundTrackingEnabled: boolean; // réglage opt-in, voir ProfileScreen.tsx
 }
 
 function freshState(): WalkediaState {
@@ -131,7 +147,7 @@ function freshState(): WalkediaState {
     position: null,
     lastFix: null,
     speedStreak: 0,
-    shadow: { fixes: [], startedAt: null, prompted: false },
+    idleMovement: null,
     toast: null,
     ready: false,
     mapReady: false,
@@ -139,6 +155,7 @@ function freshState(): WalkediaState {
     userId: null,
     syncing: false,
     loadLog: [],
+    backgroundTrackingEnabled: false,
   };
 }
 
@@ -273,6 +290,12 @@ export function useWalkedia() {
     storage.load().then((p: Progress) => {
       state.progress = p;
       state.ready = true;
+      rerender();
+    });
+    // Reflète l'état réel de la tâche de fond (peut avoir été activée lors
+    // d'une session précédente) plutôt que de supposer `false` par défaut.
+    isBackgroundTrackingActive().then((active) => {
+      state.backgroundTrackingEnabled = active;
       rerender();
     });
     return () => {
@@ -562,6 +585,9 @@ export function useWalkedia() {
   const onFixRef = useRef<((lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => void) | undefined>(
     undefined
   );
+  // Référence indirecte pour casser le cycle de dépendance avec onFix (défini
+  // avant startSession, voir plus bas — même pattern que endSessionRef).
+  const startSessionRef = useRef<(() => void) | undefined>(undefined);
 
   function interpolatedFixes(prev: Fix | null, cur: Fix): Fix[] {
     if (!prev) return [cur];
@@ -593,91 +619,84 @@ export function useWalkedia() {
     return (dist / dt) * 3.6;
   }
 
-  const bufferShadowFix = useCallback(
-    (lat: number, lon: number, accuracy: number | null, t: number) => {
-      if (accuracy != null && accuracy > MAX_ACCURACY) return;
-      const fixes = state.shadow.fixes;
-      fixes.push({ lat, lon, accuracy, t });
-      const cutoff = t - SHADOW_MAX_AGE;
-      while (fixes.length && (fixes[0].t ?? 0) < cutoff) fixes.shift();
-      while (fixes.length > SHADOW_MAX_POINTS) fixes.shift();
-      state.shadow.startedAt = fixes.length ? fixes[0].t ?? null : null;
-    },
-    [state]
-  );
-
-  const clearShadow = useCallback(() => {
-    state.shadow.fixes = [];
-    state.shadow.startedAt = null;
-    state.shadow.prompted = false;
-  }, [state]);
-
-  function shadowDistance(fixes: Fix[]) {
-    let d = 0;
-    for (let i = 1; i < fixes.length; i++) d += haversine([fixes[i - 1].lat, fixes[i - 1].lon], [fixes[i].lat, fixes[i].lon]);
-    return d;
-  }
-
-  // Rejoue le tampon de marche hors session à travers un matcher temporaire.
-  const importShadowWalk = useCallback(async () => {
-    const { fixes, startedAt } = state.shadow;
-    const matcher = new Matcher(state.graph, state.proj);
-    const newEdges = new Set<string>();
-    const newInter = new Set<string>();
-    let prevFix: Fix | null = null;
-    for (const cur of fixes) {
-      const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
-      for (const fix of interpolatedFixes(prev, cur)) {
-        for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
-          state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
-          if (state.progress.edges.has(edgeId)) continue;
-          state.progress.edges.add(edgeId);
-          state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
-          newEdges.add(edgeId);
-          for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-            const j = state.graph.junctions.get(jid);
-            if (j && checkJunction(j)) newInter.add(jid);
+  // Rejoue une liste de fixes (marche non trackée) à travers un matcher
+  // temporaire, comme une session normale mais rétroactive. Utilisé par la
+  // détection en arrière-plan (voir backgroundLocation.ts) : la source des
+  // fixes (tampon AsyncStorage rempli par la tâche de fond) est découplée de
+  // cette logique de rejeu, qui ne dépend que de la liste passée en
+  // paramètre.
+  const importShadowWalk = useCallback(
+    async (fixes: Fix[], startedAt: number) => {
+      const matcher = new Matcher(state.graph, state.proj);
+      const newEdges = new Set<string>();
+      const newInter = new Set<string>();
+      let prevFix: Fix | null = null;
+      for (const cur of fixes) {
+        const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
+        for (const fix of interpolatedFixes(prev, cur)) {
+          for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+            state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
+            if (state.progress.edges.has(edgeId)) continue;
+            state.progress.edges.add(edgeId);
+            state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+            newEdges.add(edgeId);
+            for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
+              const j = state.graph.junctions.get(jid);
+              if (j && checkJunction(j)) newInter.add(jid);
+            }
           }
         }
+        if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
       }
-      if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
-    }
 
-    state.progress.sessions.push({
-      start: startedAt as number,
-      end: fixes[fixes.length - 1].t as number,
-      edges: newEdges.size,
-      junctions: newInter.size,
-      imported: true,
-    });
-    await persist();
-    rerender();
-    toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
-    clearShadow();
-  }, [state, checkJunction, persist, rerender, toast, clearShadow]);
+      state.progress.sessions.push({
+        start: startedAt,
+        end: fixes[fixes.length - 1].t as number,
+        edges: newEdges.size,
+        junctions: newInter.size,
+        imported: true,
+      });
+      await persist();
+      rerender();
+      toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
+    },
+    [state, checkJunction, persist, rerender, toast]
+  );
 
-  // Propose l'import dès qu'une marche hors session devient significative
-  // (≥ SHADOW_MIN_DISTANCE), sans attendre que l'utilisateur démarre une
-  // nouvelle session : c'est la détection qui déclenche la proposition, pas
-  // une action explicite sur un bouton. `prompted` évite de redemander pour
-  // la même marche tant qu'elle n'a pas été traitée (importée ou annulée).
-  const maybeImportShadowWalk = useCallback(() => {
-    const { fixes, startedAt, prompted } = state.shadow;
-    if (prompted || fixes.length < 2 || startedAt == null) return;
-    const dist = shadowDistance(fixes);
-    if (dist < SHADOW_MIN_DISTANCE) return; // pas encore assez significatif, on continue à accumuler
-
-    state.shadow.prompted = true;
-    const mins = Math.max(1, Math.round(((fixes[fixes.length - 1].t as number) - startedAt) / 60000));
+  // Règle 1 (app fermée) : vérifie au démarrage si la tâche de fond a
+  // détecté une marche assez significative pendant que l'app n'était pas
+  // ouverte, et propose de l'importer. Appelé une fois le graphe prêt (voir
+  // init) puisque le rejeu a besoin de `state.graph`/`state.proj`.
+  const checkBackgroundImport = useCallback(async () => {
+    const found = await consumeBackgroundBuffer();
+    if (!found) return;
+    const mins = Math.max(1, Math.round((found.fixes[found.fixes.length - 1].t - found.startedAt) / 60000));
     Alert.alert(
       'Marche détectée',
-      `Marche détectée (~${mins} min, ${Math.round(dist)} m).\nImporter ce trajet dans ton historique ?`,
+      `Une marche a été détectée pendant que l'app était fermée (~${mins} min, ${Math.round(found.distance)} m).\nImporter ce trajet dans ton historique ?`,
       [
-        { text: 'Annuler', style: 'cancel', onPress: () => clearShadow() },
-        { text: 'Importer', onPress: () => importShadowWalk() },
+        { text: 'Ignorer', style: 'cancel' },
+        { text: 'Importer', onPress: () => importShadowWalk(found.fixes, found.startedAt) },
       ]
     );
-  }, [state, clearShadow, importShadowWalk]);
+  }, [importShadowWalk]);
+
+  const enableBackgroundTracking = useCallback(async () => {
+    const result = await startBackgroundTracking();
+    if (result.ok) {
+      state.backgroundTrackingEnabled = true;
+      toast('Détection de marche en arrière-plan activée.');
+    } else {
+      toast(result.reason);
+    }
+    rerender();
+  }, [state, rerender, toast]);
+
+  const disableBackgroundTracking = useCallback(async () => {
+    await stopBackgroundTracking();
+    state.backgroundTrackingEnabled = false;
+    rerender();
+  }, [state, rerender]);
 
   const onFix = useCallback(
     (lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => {
@@ -685,9 +704,41 @@ export function useWalkedia() {
       state.position = { lat, lon, accuracy };
       maybeExpand(lat, lon, { trigger: 'gps' });
 
+      // Auto-démarrage de session (règle 2) : accumule une courte distance
+      // roulante tant qu'aucune session n'est active ; dès qu'un mouvement
+      // plausible pour de la marche dépasse AUTO_START_DISTANCE, démarre une
+      // session directement (remplace l'ancien "shadow walk" qui demandait
+      // confirmation après coup). Le garde-fou de vitesse (plus bas, une fois
+      // une session active) reste la protection contre les faux positifs
+      // (voiture, vélo) une fois démarrée.
       if (!state.session) {
-        bufferShadowFix(lat, lon, accuracy, t);
-        maybeImportShadowWalk();
+        if (accuracy != null && accuracy > MAX_ACCURACY) {
+          rerender();
+          return;
+        }
+        const prev = state.idleMovement;
+        if (!prev || t - prev.t > AUTO_START_MAX_GAP) {
+          state.idleMovement = { lat, lon, t, distance: 0 };
+        } else {
+          const stepDist = haversine([prev.lat, prev.lon], [lat, lon]);
+          const dtSec = (t - prev.t) / 1000;
+          const speedKmh = dtSec > 0 ? (stepDist / dtSec) * 3.6 : 0;
+          if (dtSec >= 1 && speedKmh <= SPEED_LIMIT_KMH) {
+            const distance = prev.distance + stepDist;
+            state.idleMovement = { lat, lon, t, distance };
+            if (distance >= AUTO_START_DISTANCE) {
+              state.idleMovement = null;
+              // eslint-disable-next-line @typescript-eslint/no-use-before-define
+              startSessionRef.current?.();
+              toast('Session démarrée automatiquement — bonne marche !');
+            }
+          } else {
+            // Vitesse implausible pour de la marche (saut GPS, véhicule) :
+            // ne compte pas ce pas, repart de ce point sans perdre la
+            // distance déjà accumulée.
+            state.idleMovement = { lat, lon, t, distance: prev.distance };
+          }
+        }
         rerender();
         return;
       }
@@ -742,23 +793,22 @@ export function useWalkedia() {
         // le déplacement seul (trackLine, position) doit quand même se voir
       }
     },
-    [state, maybeExpand, bufferShadowFix, maybeImportShadowWalk, rerender, checkJunction, persist, toast]
+    [state, maybeExpand, rerender, checkJunction, persist, toast]
   );
   onFixRef.current = onFix;
 
   // ---------------------------------------------------------------- session
 
   const startSession = useCallback(() => {
-    // La proposition d'import d'une marche oubliée est gérée indépendamment,
-    // dès qu'elle est détectée (voir maybeImportShadowWalk) : démarrer une
-    // session ne doit pas attendre ni redéclencher cette décision.
     state.matcher = new Matcher(state.graph, state.proj);
     state.lastFix = null;
     state.speedStreak = 0;
+    state.idleMovement = null; // pas de sens hors session, évite un résidu périmé au prochain arrêt
     state.session = { newEdges: new Set(), newInter: new Set(), track: [], startedAt: Date.now() };
     rerender();
     toast('Session démarrée — bonne exploration !');
   }, [state, rerender, toast]);
+  startSessionRef.current = startSession;
 
   const endSession = useCallback(() => {
     if (!state.session) return;
@@ -766,6 +816,7 @@ export function useWalkedia() {
     state.session = null;
     state.matcher = null;
     state.lastFix = null;
+    state.idleMovement = null;
 
     state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
     persist();
@@ -826,8 +877,21 @@ export function useWalkedia() {
 
       await startWatch();
       loadNeighborhoods(lat, lon);
+      checkBackgroundImport();
     },
-    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, startWatch, logLoad]
+    [
+      state,
+      mergeOsm,
+      mergeGreenAreas,
+      loadNeighborhoods,
+      rebuildGraph,
+      sweepCompletions,
+      rerender,
+      toast,
+      startWatch,
+      logLoad,
+      checkBackgroundImport,
+    ]
   );
 
   const requestLocationAndInit = useCallback(async () => {
@@ -954,6 +1018,8 @@ export function useWalkedia() {
       maybeExpand,
       syncOnSignIn,
       signOutLocally,
+      enableBackgroundTracking,
+      disableBackgroundTracking,
     },
   };
 }

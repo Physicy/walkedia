@@ -103,7 +103,16 @@ function AppContent() {
       <MapScreen walkedia={walkedia} />
       {tab === 'search' && <SearchScreen userId={auth.user?.id ?? null} />}
       {tab === 'profile' && (
-        <ProfileScreen progress={state.progress} auth={auth} syncing={state.syncing} neighborhoods={neighborhoodStats(state)} />
+        <ProfileScreen
+          progress={state.progress}
+          auth={auth}
+          syncing={state.syncing}
+          neighborhoods={neighborhoodStats(state)}
+          backgroundTrackingEnabled={state.backgroundTrackingEnabled}
+          onToggleBackgroundTracking={(next) =>
+            next ? actions.enableBackgroundTracking() : actions.disableBackgroundTracking()
+          }
+        />
       )}
       <TabBar active={tab} onChange={setTab} />
       {__DEV__ && (

@@ -10,7 +10,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche."
+        "NSLocationWhenInUseUsageDescription": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Si tu actives la détection de marche en arrière-plan (réglage optionnel, désactivé par défaut) dans ton profil, Walkedia utilise ta position même app fermée pour te proposer d'importer tes marches au retour dans l'app.",
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
@@ -33,7 +35,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche."
+          "locationWhenInUsePermission": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche.",
+          "locationAlwaysAndWhenInUsePermission": "Si tu actives la détection de marche en arrière-plan (réglage optionnel, désactivé par défaut) dans ton profil, Walkedia utilise ta position même app fermée pour te proposer d'importer tes marches au retour dans l'app.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-web-browser",
