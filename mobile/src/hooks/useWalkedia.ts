@@ -43,6 +43,11 @@ const BOUNDARY_MARGIN = 60;
 const EXPAND_MARGIN = 200;
 const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
                               // suffisant contre le spam GPS (~14 m parcourus en 8 s à pied)
+// Règle 3/4 (voir plus haut) : au-delà de cette hauteur visible, on n'auto-
+// charge plus rien au pan — centralisé ici (plutôt que dans MapScreen.tsx)
+// pour que toute décision de chargement, y compris ce skip, passe par
+// maybeExpand et soit donc journalisée de façon cohérente (voir logLoad).
+const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
 
 export interface Fix {
   lat: number;
@@ -56,6 +61,29 @@ export interface SessionState {
   newInter: Set<string>;
   track: [number, number][];
   startedAt: number;
+}
+
+// Journal des tentatives de chargement de zone (voir logLoad) : pour le
+// panneau de monitoring dev (LoadMonitorPanel.tsx), afin de voir exactement
+// pourquoi un chargement a été rapide, lent, ou n'a rien fait.
+export type LoadOutcome =
+  | 'success'
+  | 'error'
+  | 'skip-in-progress'
+  | 'skip-cooldown'
+  | 'skip-covered'
+  | 'skip-too-zoomed-out';
+
+export interface LoadLogEntry {
+  id: number;
+  t: number; // Date.now() de la dernière occurrence
+  trigger: 'init' | 'pan' | 'gps';
+  outcome: LoadOutcome;
+  detail?: string;
+  durationMs?: number;
+  edges?: number;
+  junctions?: number;
+  count: number; // occurrences consécutives identiques repliées (voir logLoad)
 }
 
 interface WalkediaState {
@@ -82,6 +110,7 @@ interface WalkediaState {
   startStatus: string;
   userId: string | null; // compte Supabase connecté, null si hors-ligne/déconnecté
   syncing: boolean;
+  loadLog: LoadLogEntry[];
 }
 
 function freshState(): WalkediaState {
@@ -109,6 +138,7 @@ function freshState(): WalkediaState {
     startStatus: '',
     userId: null,
     syncing: false,
+    loadLog: [],
   };
 }
 
@@ -207,6 +237,34 @@ export function useWalkedia() {
       }, ms);
     },
     [rerender, state]
+  );
+
+  // Journalise une tentative de chargement de zone (voir maybeExpand/init),
+  // pour le panneau de monitoring dev. Les résultats "skip-*" consécutifs et
+  // identiques (même déclencheur/résultat) sont repliés en une seule ligne
+  // avec un compteur plutôt que de spammer une ligne par tick GPS — sinon le
+  // suivi GPS continu (≈1/s) noierait tout le reste du journal en quelques
+  // secondes. "success"/"error" restent toujours des lignes distinctes.
+  const loadLogSeq = useRef(0);
+  const MAX_LOAD_LOG = 40;
+  const COLLAPSIBLE_OUTCOMES = new Set<LoadOutcome>([
+    'skip-in-progress',
+    'skip-cooldown',
+    'skip-covered',
+    'skip-too-zoomed-out',
+  ]);
+  const logLoad = useCallback(
+    (entry: Omit<LoadLogEntry, 'id' | 't' | 'count'>) => {
+      const [last, ...rest] = state.loadLog;
+      if (last && COLLAPSIBLE_OUTCOMES.has(entry.outcome) && last.trigger === entry.trigger && last.outcome === entry.outcome) {
+        state.loadLog = [{ ...last, t: Date.now(), detail: entry.detail, count: last.count + 1 }, ...rest];
+      } else {
+        loadLogSeq.current += 1;
+        state.loadLog = [{ id: loadLogSeq.current, t: Date.now(), count: 1, ...entry }, ...state.loadLog].slice(0, MAX_LOAD_LOG);
+      }
+      rerender();
+    },
+    [state, rerender]
   );
 
   // ---------------------------------------------------------- persistance
@@ -433,26 +491,44 @@ export function useWalkedia() {
   // charge le cas échéant (cooldown, zone déjà couverte) au lieu de rester
   // muet — sinon indiscernable d'un bug. Le suivi GPS continu (onFix, un
   // appel par seconde) reste silencieux dans ces cas pour ne pas spammer.
+  // `trigger`/`latitudeDelta` : uniquement pour la journalisation (voir
+  // logLoad) et le seuil de dézoom (règle 3/4) — le suivi GPS (trigger
+  // 'gps') n'a pas de notion de zoom de carte, donc pas de latitudeDelta,
+  // et n'est jamais coupé par MAX_EXPAND_LATITUDE_DELTA.
   const maybeExpand = useCallback(
-    async (rawLat: number, rawLon: number, opts: { announceSkip?: boolean } = {}) => {
+    async (
+      rawLat: number,
+      rawLon: number,
+      opts: { trigger?: 'pan' | 'gps'; latitudeDelta?: number; announceSkip?: boolean } = {}
+    ) => {
+      const trigger = opts.trigger ?? 'gps';
+      if (opts.latitudeDelta != null && opts.latitudeDelta > MAX_EXPAND_LATITUDE_DELTA) {
+        logLoad({ trigger, outcome: 'skip-too-zoomed-out', detail: `${(opts.latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
+        if (opts.announceSkip) toast('Trop dézoomé pour charger de nouvelles zones.');
+        return;
+      }
       const [lat, lon] = snapToGrid(rawLat, rawLon, RADIUS);
       const now = Date.now();
       if (state.expanding) {
+        logLoad({ trigger, outcome: 'skip-in-progress' });
         if (opts.announceSkip) toast('Chargement déjà en cours…');
         return;
       }
       const wait = EXPAND_COOLDOWN - (now - state.lastExpandTry);
       if (wait > 0) {
+        logLoad({ trigger, outcome: 'skip-cooldown', detail: `encore ${Math.ceil(wait / 1000)}s` });
         if (opts.announceSkip) toast(`Nouvelle zone : réessaie dans ${Math.ceil(wait / 1000)}s…`);
         return;
       }
       const dist = distToNearestCenter(state, lat, lon);
       if (dist <= RADIUS - EXPAND_MARGIN) {
+        logLoad({ trigger, outcome: 'skip-covered', detail: `${Math.round(dist)} m du centre le plus proche` });
         if (opts.announceSkip) toast('Cette zone est déjà couverte.');
         return;
       }
       state.expanding = true;
       state.lastExpandTry = now;
+      const startedAt = Date.now();
       try {
         const { osm, greenAreas } = await fetchZone(lat, lon, RADIUS);
         mergeOsm(osm);
@@ -464,13 +540,21 @@ export function useWalkedia() {
         rerender();
         toast('Nouvelle zone chargée 🗺️');
         loadNeighborhoods(lat, lon);
+        logLoad({
+          trigger,
+          outcome: 'success',
+          durationMs: Date.now() - startedAt,
+          edges: state.graph.edges.size,
+          junctions: state.graph.junctions.size,
+        });
       } catch (err: any) {
         toast('Extension de zone impossible : ' + err.message);
+        logLoad({ trigger, outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
       } finally {
         state.expanding = false;
       }
     },
-    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast]
+    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, logLoad]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -599,7 +683,7 @@ export function useWalkedia() {
     (lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => {
       // position affichée
       state.position = { lat, lon, accuracy };
-      maybeExpand(lat, lon);
+      maybeExpand(lat, lon, { trigger: 'gps' });
 
       if (!state.session) {
         bufferShadowFix(lat, lon, accuracy, t);
@@ -712,11 +796,13 @@ export function useWalkedia() {
       state.startStatus = 'Chargement du réseau piéton…';
       rerender();
       let osm, greenAreas;
+      const startedAt = Date.now();
       try {
         ({ osm, greenAreas } = await fetchZone(lat, lon, RADIUS));
       } catch (err: any) {
         state.startStatus = 'Impossible de charger les données OSM : ' + err.message;
         rerender();
+        logLoad({ trigger: 'init', outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
         return;
       }
 
@@ -730,11 +816,18 @@ export function useWalkedia() {
       state.mapReady = true;
       rerender();
       toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
+      logLoad({
+        trigger: 'init',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+        edges: state.graph.edges.size,
+        junctions: state.graph.junctions.size,
+      });
 
       await startWatch();
       loadNeighborhoods(lat, lon);
     },
-    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
+    [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, startWatch, logLoad]
   );
 
   const requestLocationAndInit = useCallback(async () => {

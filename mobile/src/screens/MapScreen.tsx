@@ -7,6 +7,7 @@ import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
 import { Hud } from '../components/Hud';
 import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
+import { LoadMonitorPanel } from '../components/LoadMonitorPanel';
 import { CaptureWave } from '../components/CaptureWave';
 import { TAB_BAR_BASE_HEIGHT } from '../components/TabBar';
 import { COLORS } from '../theme';
@@ -127,6 +128,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // hooks doivent rester avant tout `return` conditionnel (ici le graphe/
   // centre pas encore prêts), donc ils gèrent eux-mêmes le cas `null`.
   const [region, setRegion] = useState<Region | null>(null);
+  const [showLoadMonitor, setShowLoadMonitor] = useState(false);
 
   // Sous-ensemble animé des ondes de capture, avec hystérésis (voir
   // ANIMATED_* ci-dessus) — mutés directement en dehors de React state
@@ -271,19 +273,20 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // la région affichée, utilisée pour n'afficher que les tronçons/carrefours
   // proches (voir visibleEdges/visibleJunctions ci-dessus).
   //
-  // Trop dézoomé (> MAX_EXPAND_LATITUDE_DELTA de hauteur visible), on
-  // n'auto-charge plus rien au pan (règle 3/4) : chaque zone ne couvre que
-  // RADIUS=500 m (useWalkedia.ts), il en faudrait beaucoup pour remplir une
-  // vue large, et enchaîner les requêtes Overpass à ce rythme serait du
-  // gaspillage. Le rendu (visibleEdges/visibleJunctions/junctionClusters)
+  // Le seuil de dézoom au-delà duquel on arrête de charger (règle 3/4) vit
+  // désormais dans useWalkedia.ts (MAX_EXPAND_LATITUDE_DELTA) : maybeExpand
+  // reçoit latitudeDelta et décide lui-même, pour que ce skip soit aussi
+  // journalisé (voir loadLog / LoadMonitorPanel) comme toute autre décision
+  // de chargement. Le rendu (visibleEdges/visibleJunctions/junctionClusters)
   // continue d'afficher ce qui est déjà connu, avec son propre cutoff bien
-  // plus permissif pour les carrefours (voir MAX_JUNCTION_RENDER_LATITUDE_DELTA).
-  const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
-
+  // plus permissif pour les carrefours (MAX_JUNCTION_RENDER_LATITUDE_DELTA).
   const onRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion);
-    if (newRegion.latitudeDelta > MAX_EXPAND_LATITUDE_DELTA) return;
-    actions.maybeExpand(newRegion.latitude, newRegion.longitude, { announceSkip: true });
+    actions.maybeExpand(newRegion.latitude, newRegion.longitude, {
+      trigger: 'pan',
+      latitudeDelta: newRegion.latitudeDelta,
+      announceSkip: true,
+    });
   };
 
   return (
@@ -382,6 +385,17 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
       <DebugPanel onSimulate={actions.simulateWalk} />
 
+      {__DEV__ && (
+        <TouchableOpacity
+          style={[styles.monitorToggle, { top: insets.top + 122 }]}
+          onPress={() => setShowLoadMonitor((v) => !v)}
+          accessibilityLabel="Monitoring du chargement des zones (debug)"
+        >
+          <Text style={styles.monitorToggleIcon}>📡</Text>
+        </TouchableOpacity>
+      )}
+      {showLoadMonitor && <LoadMonitorPanel log={state.loadLog} />}
+
       <View style={[styles.controls, { bottom: insets.bottom + TAB_BAR_BASE_HEIGHT + 14 }]}>
         <TouchableOpacity
           style={[styles.sessionBtn, state.session && styles.sessionBtnRecording]}
@@ -400,6 +414,20 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 }
 
 const styles = StyleSheet.create({
+  monitorToggle: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 1000,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monitorToggleIcon: { fontSize: 16 },
   clusterBadge: {
     minWidth: 30,
     height: 30,
