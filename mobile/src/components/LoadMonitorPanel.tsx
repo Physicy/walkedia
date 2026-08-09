@@ -13,6 +13,7 @@ const TRIGGER_LABEL: Record<LoadLogEntry['trigger'], string> = {
   init: 'Démarrage',
   pan: 'Déplacement carte',
   gps: 'Suivi GPS',
+  batch: 'Remplissage grille',
 };
 
 const OUTCOME_LABEL: Record<LoadOutcome, string> = {

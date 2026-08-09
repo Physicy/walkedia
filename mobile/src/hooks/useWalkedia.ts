@@ -60,6 +60,20 @@ const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
 // maybeExpand et soit donc journalisée de façon cohérente (voir logLoad).
 const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
 
+// Remplissage en grille au dézoom (mode cluster, voir MapScreen.tsx
+// CLUSTER_LATITUDE_DELTA) : au lieu de n'avoir des clusters que sur les
+// zones déjà chargées ailleurs (typiquement autour d'où le joueur a marché),
+// on complète activement la zone visible avec plusieurs zones de RADIUS m.
+// Le nombre de zones nécessaires croît en O(largeur×hauteur) — sans
+// plafond ni cadence propre, ça enchaînerait des dizaines de requêtes
+// Overpass simultanées et ça irait à l'encontre du but (ne pas ralentir).
+// Chargées séquentiellement (une seule reconstruction de graphe à la fin,
+// pas une par zone), plafonnées par lot, avec leur propre cooldown — pas
+// celui d'EXPAND_COOLDOWN, pensé pour un tout autre usage (GPS/pan ponctuel).
+const MAX_GRID_LOAD_LATITUDE_DELTA = 0.06; // ~6.6 km — au-delà, trop de zones pour rester raisonnable
+const GRID_BATCH_MAX_ZONES = 16;
+const GRID_LOAD_COOLDOWN = 5000; // ms
+
 export interface Fix {
   lat: number;
   lon: number;
@@ -88,7 +102,7 @@ export type LoadOutcome =
 export interface LoadLogEntry {
   id: number;
   t: number; // Date.now() de la dernière occurrence
-  trigger: 'init' | 'pan' | 'gps';
+  trigger: 'init' | 'pan' | 'gps' | 'batch';
   outcome: LoadOutcome;
   detail?: string;
   durationMs?: number;
@@ -108,6 +122,8 @@ interface WalkediaState {
   junctionNeighborhood: Map<string, number | null>;
   expanding: boolean;
   lastExpandTry: number;
+  gridLoading: boolean;
+  lastGridLoadTry: number;
   progress: Progress;
   matcher: any;
   session: SessionState | null;
@@ -141,6 +157,8 @@ function freshState(): WalkediaState {
     junctionNeighborhood: new Map(),
     expanding: false,
     lastExpandTry: 0,
+    gridLoading: false,
+    lastGridLoadTry: 0,
     progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] },
     matcher: null,
     session: null,
@@ -580,6 +598,90 @@ export function useWalkedia() {
     [state, mergeOsm, mergeGreenAreas, loadNeighborhoods, rebuildGraph, sweepCompletions, rerender, toast, logLoad]
   );
 
+  // Remplissage en grille de la zone visible en mode cluster (voir
+  // MAX_GRID_LOAD_LATITUDE_DELTA ci-dessus) : calcule les centres de zone
+  // (même grille que snapToGrid) manquants dans le viewport, en charge un
+  // lot plafonné séquentiellement (jamais en parallèle — un seul
+  // rebuildGraph à la fin plutôt qu'un par zone), triés du plus proche du
+  // centre visible au plus loin. Un déclenchement qui dépasse le plafond
+  // laisse le reste pour un prochain déclenchement (pan/zoom suivant).
+  const loadVisibleGrid = useCallback(
+    async (lat: number, lon: number, latitudeDelta: number, longitudeDelta: number) => {
+      if (latitudeDelta > MAX_GRID_LOAD_LATITUDE_DELTA) {
+        logLoad({ trigger: 'batch', outcome: 'skip-too-zoomed-out', detail: `${(latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
+        return;
+      }
+      if (state.gridLoading) {
+        logLoad({ trigger: 'batch', outcome: 'skip-in-progress' });
+        return;
+      }
+      const now = Date.now();
+      const wait = GRID_LOAD_COOLDOWN - (now - state.lastGridLoadTry);
+      if (wait > 0) {
+        logLoad({ trigger: 'batch', outcome: 'skip-cooldown', detail: `encore ${Math.ceil(wait / 1000)}s` });
+        return;
+      }
+
+      const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+      const ky = 110540;
+      const halfWm = (longitudeDelta * kx) / 2;
+      const halfHm = (latitudeDelta * ky) / 2;
+      const centerX = lon * kx;
+      const centerY = lat * ky;
+      const candidates: [number, number][] = [];
+      for (let x = centerX - halfWm; x <= centerX + halfWm; x += RADIUS) {
+        for (let y = centerY - halfHm; y <= centerY + halfHm; y += RADIUS) {
+          candidates.push([y / ky, x / kx]);
+        }
+      }
+      const missing = candidates.filter(([clat, clon]) => distToNearestCenter(state, clat, clon) > RADIUS - EXPAND_MARGIN);
+      if (!missing.length) {
+        logLoad({ trigger: 'batch', outcome: 'skip-covered', detail: 'zone visible déjà couverte' });
+        return;
+      }
+      missing.sort((a, b) => haversine([lat, lon], a) - haversine([lat, lon], b));
+      const batch = missing.slice(0, GRID_BATCH_MAX_ZONES);
+
+      state.gridLoading = true;
+      state.lastGridLoadTry = now;
+      const startedAt = Date.now();
+      let loaded = 0;
+      let failed = 0;
+      for (const [clat, clon] of batch) {
+        // Un centre proche peut avoir déjà été couvert par un fetch
+        // précédent DE CE MÊME lot (zones voisines qui se chevauchent).
+        if (distToNearestCenter(state, clat, clon) <= RADIUS - EXPAND_MARGIN) continue;
+        try {
+          const { osm, greenAreas } = await fetchZone(clat, clon, RADIUS);
+          mergeOsm(osm);
+          mergeGreenAreas(greenAreas);
+          state.centers.push([clat, clon]);
+          loaded++;
+        } catch {
+          failed++;
+        }
+      }
+
+      if (loaded > 0) {
+        await rebuildGraph();
+        if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
+        sweepCompletions(false);
+        rerender();
+        toast(`${loaded} zone(s) supplémentaire(s) chargée(s) 🗺️`);
+      }
+      logLoad({
+        trigger: 'batch',
+        outcome: loaded > 0 ? 'success' : 'error',
+        detail: `${loaded} chargée(s), ${failed} échouée(s), ${Math.max(0, missing.length - batch.length)} en attente`,
+        durationMs: Date.now() - startedAt,
+        edges: state.graph?.edges.size,
+        junctions: state.graph?.junctions.size,
+      });
+      state.gridLoading = false;
+    },
+    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast, logLoad]
+  );
+
   // ------------------------------------------------------------- suivi GPS
 
   const onFixRef = useRef<((lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => void) | undefined>(
@@ -1016,6 +1118,7 @@ export function useWalkedia() {
       simulateWalk,
       recenter,
       maybeExpand,
+      loadVisibleGrid,
       syncOnSignIn,
       signOutLocally,
       enableBackgroundTracking,

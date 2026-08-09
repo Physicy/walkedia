@@ -287,6 +287,13 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       latitudeDelta: newRegion.latitudeDelta,
       announceSkip: true,
     });
+    // Mode cluster (dézoomé) : complète activement la zone visible plutôt
+    // que de n'avoir des clusters que sur ce qui a déjà été chargé ailleurs
+    // (voir MAX_GRID_LOAD_LATITUDE_DELTA dans useWalkedia.ts pour le
+    // plafond au-delà duquel ça s'arrête).
+    if (newRegion.latitudeDelta > CLUSTER_LATITUDE_DELTA) {
+      actions.loadVisibleGrid(newRegion.latitude, newRegion.longitude, newRegion.latitudeDelta, newRegion.longitudeDelta);
+    }
   };
 
   return (
