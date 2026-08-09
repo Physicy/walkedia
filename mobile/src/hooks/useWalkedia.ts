@@ -9,13 +9,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
-import { fetchZone } from '../logic/overpass';
-import { buildGraph } from '../logic/graph';
+import { fetchRegion } from '../logic/region';
+import { emptyGraph, mergeGraph } from '../logic/regionGraph';
+import type { Graph, Neighborhood, Region } from '../logic/regionGraph';
 import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
 import { supabase } from '../lib/supabase';
+import {
+  consumeBackgroundBuffer,
+  isBackgroundTrackingActive,
+  startBackgroundTracking,
+  stopBackgroundTracking,
+} from '../logic/backgroundLocation';
 
 const INTERP_STEP = 5; // m : ré-échantillonnage entre deux fix GPS successifs
 const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS
@@ -24,15 +31,53 @@ const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vie
 const SPEED_LIMIT_KMH = 20;
 const SPEED_STREAK_LIMIT = 2;
 
-const SHADOW_MAX_AGE = 3600000;
-const SHADOW_MAX_POINTS = 4000;
-const SHADOW_MIN_DISTANCE = 80;
+// Auto-démarrage de session en avant-plan (règle 2, voir onFix) : distance
+// courte accumulée hors session avant de démarrer automatiquement — pas
+// besoin d'attendre/demander comme l'ancien mécanisme "shadow walk" en
+// mémoire, qu'il remplace. AUTO_START_MAX_GAP évite qu'un mouvement
+// accumulé il y a longtemps (le joueur s'est arrêté puis reprend bien plus
+// tard) ne déclenche sur un simple pas isolé.
+const AUTO_START_DISTANCE = 40; // m
+const AUTO_START_MAX_GAP = 60000; // ms
 
-const RADIUS = 800;
-const BOUNDARY_MARGIN = 100;
-const EXPAND_MARGIN = 300;
+// Règles de chargement des zones (voir aussi MapScreen.tsx pour l'affichage
+// par niveau de zoom) :
+//  1. Au lancement, on ne charge que les environs immédiats du joueur.
+//  2. En déplaçant la carte, on charge la zone visible (ce même RADIUS,
+//     redéclenché autour du nouveau centre — voir maybeExpand).
+//  3. Au-delà d'un certain dézoom (MapScreen.tsx, MAX_EXPAND_LATITUDE_DELTA),
+//     on arrête de charger de nouvelles zones : à ce niveau de zoom, des
+//     cercles de RADIUS m ne serviraient plus à rien visuellement et
+//     enchaîner les requêtes serait du gaspillage.
+//
+// RADIUS est le pas de la grille de centres : il DOIT rester identique à
+// celui de l'Edge Function get-region, qui s'en sert pour arrondir la
+// position reçue et en faire sa clé de cache (une valeur différente ici
+// ferait manquer le cache à chaque appel).
+const RADIUS = 500;
+const BOUNDARY_MARGIN = 60;
+const EXPAND_MARGIN = 200;
 const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
                               // suffisant contre le spam GPS (~14 m parcourus en 8 s à pied)
+// Règle 3/4 (voir plus haut) : au-delà de cette hauteur visible, on n'auto-
+// charge plus rien au pan — centralisé ici (plutôt que dans MapScreen.tsx)
+// pour que toute décision de chargement, y compris ce skip, passe par
+// maybeExpand et soit donc journalisée de façon cohérente (voir logLoad).
+const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
+
+// Remplissage en grille au dézoom (mode cluster, voir MapScreen.tsx
+// CLUSTER_LATITUDE_DELTA) : au lieu de n'avoir des clusters que sur les
+// zones déjà chargées ailleurs (typiquement autour d'où le joueur a marché),
+// on complète activement la zone visible avec plusieurs zones de RADIUS m.
+// Le nombre de zones nécessaires croît en O(largeur×hauteur) — sans
+// plafond ni cadence propre, ça enchaînerait des dizaines de requêtes
+// Overpass simultanées et ça irait à l'encontre du but (ne pas ralentir).
+// Chargées séquentiellement (une seule reconstruction de graphe à la fin,
+// pas une par zone), plafonnées par lot, avec leur propre cooldown — pas
+// celui d'EXPAND_COOLDOWN, pensé pour un tout autre usage (GPS/pan ponctuel).
+const MAX_GRID_LOAD_LATITUDE_DELTA = 0.06; // ~6.6 km — au-delà, trop de zones pour rester raisonnable
+const GRID_BATCH_MAX_ZONES = 16;
+const GRID_LOAD_COOLDOWN = 5000; // ms
 
 export interface Fix {
   lat: number;
@@ -48,28 +93,59 @@ export interface SessionState {
   startedAt: number;
 }
 
+// Journal des tentatives de chargement de zone (voir logLoad) : pour le
+// panneau de monitoring dev (LoadMonitorPanel.tsx), afin de voir exactement
+// pourquoi un chargement a été rapide, lent, ou n'a rien fait.
+export type LoadOutcome =
+  | 'success'
+  | 'error'
+  | 'skip-in-progress'
+  | 'skip-cooldown'
+  | 'skip-covered'
+  | 'skip-too-zoomed-out';
+
+export interface LoadLogEntry {
+  id: number;
+  t: number; // Date.now() de la dernière occurrence
+  trigger: 'init' | 'pan' | 'gps' | 'batch';
+  outcome: LoadOutcome;
+  detail?: string;
+  durationMs?: number;
+  edges?: number;
+  junctions?: number;
+  count: number; // occurrences consécutives identiques repliées (voir logLoad)
+}
+
 interface WalkediaState {
-  graph: any;
+  graph: Graph | null;
   proj: ((lat: number, lon: number) => number[]) | null;
   center: [number, number] | null;
   centers: [number, number][];
-  osmRaw: { nodes: Map<number, [number, number]>; ways: Map<number, any> };
-  greenAreas: Map<number, { id: number; ring: [number, number][] }>;
+  neighborhoods: Map<number, Neighborhood>;
+  junctionNeighborhood: Map<string, number | null>;
   expanding: boolean;
   lastExpandTry: number;
+  gridLoading: boolean;
+  lastGridLoadTry: number;
   progress: Progress;
   matcher: any;
   session: SessionState | null;
   position: { lat: number; lon: number; accuracy: number | null } | null;
   lastFix: Fix | null;
   speedStreak: number;
-  shadow: { fixes: Fix[]; startedAt: number | null; prompted: boolean };
+  // Accumulateur de mouvement hors session (voir onFix, règle "auto-
+  // démarrage en avant-plan") : distance roulante depuis le dernier fix
+  // plausible, remis à zéro dès qu'une session démarre ou qu'un trou trop
+  // long survient entre deux fixes.
+  idleMovement: { lat: number; lon: number; t: number; distance: number } | null;
   toast: { msg: string; key: number } | null;
   ready: boolean; // progrès chargé depuis AsyncStorage
   mapReady: boolean; // graphe initial chargé
   startStatus: string;
   userId: string | null; // compte Supabase connecté, null si hors-ligne/déconnecté
   syncing: boolean;
+  loadLog: LoadLogEntry[];
+  backgroundTrackingEnabled: boolean; // réglage opt-in, voir ProfileScreen.tsx
 }
 
 function freshState(): WalkediaState {
@@ -78,23 +154,27 @@ function freshState(): WalkediaState {
     proj: null,
     center: null,
     centers: [],
-    osmRaw: { nodes: new Map(), ways: new Map() },
-    greenAreas: new Map(),
+    neighborhoods: new Map(),
+    junctionNeighborhood: new Map(),
     expanding: false,
     lastExpandTry: 0,
-    progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, sessions: [] },
+    gridLoading: false,
+    lastGridLoadTry: 0,
+    progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] },
     matcher: null,
     session: null,
     position: null,
     lastFix: null,
     speedStreak: 0,
-    shadow: { fixes: [], startedAt: null, prompted: false },
+    idleMovement: null,
     toast: null,
     ready: false,
     mapReady: false,
     startStatus: '',
     userId: null,
     syncing: false,
+    loadLog: [],
+    backgroundTrackingEnabled: false,
   };
 }
 
@@ -136,6 +216,41 @@ export function junctionIsDone(state: WalkediaState, id: string) {
   return state.progress.junctions.has(id);
 }
 
+export interface NeighborhoodStat {
+  id: number;
+  name: string | null;
+  total: number;
+  done: number;
+  pct: number;
+  unlocked: boolean;
+}
+
+// Stats de complétion par quartier OSM, dérivées de junctionNeighborhood
+// (assigné côté serveur, voir applyRegion). Les carrefours sans quartier
+// (fréquent : la plupart des villes n'ont pas de contour de quartier dans
+// OSM, voir supabase/functions/_shared/neighborhoods.ts) ne contribuent à
+// aucune ligne.
+export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
+  if (!state.graph) return [];
+  const totals = new Map<number, { total: number; done: number }>();
+  for (const j of state.graph.junctions.values()) {
+    const nid = state.junctionNeighborhood.get(j.id);
+    if (nid == null) continue;
+    let t = totals.get(nid);
+    if (!t) totals.set(nid, (t = { total: 0, done: 0 }));
+    t.total++;
+    if (junctionIsDone(state, j.id)) t.done++;
+  }
+  const stats: NeighborhoodStat[] = [];
+  for (const [nid, t] of totals) {
+    const n = state.neighborhoods.get(nid);
+    const pct = t.total > 0 ? t.done / t.total : 0;
+    stats.push({ id: nid, name: n?.name ?? null, total: t.total, done: t.done, pct, unlocked: pct >= 1 });
+  }
+  stats.sort((a, b) => b.pct - a.pct);
+  return stats;
+}
+
 // ---------------------------------------------------------------------- hook
 
 export function useWalkedia() {
@@ -162,12 +277,46 @@ export function useWalkedia() {
     [rerender, state]
   );
 
+  // Journalise une tentative de chargement de zone (voir maybeExpand/init),
+  // pour le panneau de monitoring dev. Les résultats "skip-*" consécutifs et
+  // identiques (même déclencheur/résultat) sont repliés en une seule ligne
+  // avec un compteur plutôt que de spammer une ligne par tick GPS — sinon le
+  // suivi GPS continu (≈1/s) noierait tout le reste du journal en quelques
+  // secondes. "success"/"error" restent toujours des lignes distinctes.
+  const loadLogSeq = useRef(0);
+  const MAX_LOAD_LOG = 40;
+  const COLLAPSIBLE_OUTCOMES = new Set<LoadOutcome>([
+    'skip-in-progress',
+    'skip-cooldown',
+    'skip-covered',
+    'skip-too-zoomed-out',
+  ]);
+  const logLoad = useCallback(
+    (entry: Omit<LoadLogEntry, 'id' | 't' | 'count'>) => {
+      const [last, ...rest] = state.loadLog;
+      if (last && COLLAPSIBLE_OUTCOMES.has(entry.outcome) && last.trigger === entry.trigger && last.outcome === entry.outcome) {
+        state.loadLog = [{ ...last, t: Date.now(), detail: entry.detail, count: last.count + 1 }, ...rest];
+      } else {
+        loadLogSeq.current += 1;
+        state.loadLog = [{ id: loadLogSeq.current, t: Date.now(), count: 1, ...entry }, ...state.loadLog].slice(0, MAX_LOAD_LOG);
+      }
+      rerender();
+    },
+    [state, rerender]
+  );
+
   // ---------------------------------------------------------- persistance
 
   useEffect(() => {
     storage.load().then((p: Progress) => {
       state.progress = p;
       state.ready = true;
+      rerender();
+    });
+    // Reflète l'état réel de la tâche de fond (peut avoir été activée lors
+    // d'une session précédente) plutôt que de supposer `false` par défaut.
+    isBackgroundTrackingActive().then((active) => {
+      state.backgroundTrackingEnabled = active;
       rerender();
     });
     return () => {
@@ -190,6 +339,7 @@ export function useWalkedia() {
         junctions: [...state.progress.junctions],
         completed_at: state.progress.completedAt,
         edge_meters: state.progress.edgeMeters,
+        edge_visits: state.progress.edgeVisits,
         updated_at: new Date().toISOString(),
       });
       if (state.progress.sessions.length) {
@@ -240,6 +390,9 @@ export function useWalkedia() {
             state.progress.completedAt[jid] = local ? Math.min(local, at) : at;
           }
           state.progress.edgeMeters = Math.max(state.progress.edgeMeters, data.edge_meters || 0);
+          for (const [eid, count] of Object.entries<number>(data.edge_visits || {})) {
+            state.progress.edgeVisits[eid] = Math.max(state.progress.edgeVisits[eid] || 0, count);
+          }
         }
         const { data: remoteSessions } = await supabase.from('sessions').select('*').eq('user_id', userId);
         if (remoteSessions?.length) {
@@ -281,30 +434,28 @@ export function useWalkedia() {
 
   // -------------------------------------------------------- zones & graphe
 
-  const mergeOsm = useCallback(
-    (osm: { nodes: Map<number, [number, number]>; ways: any[] }) => {
-      for (const [id, c] of osm.nodes) state.osmRaw.nodes.set(id, c);
-      for (const w of osm.ways) state.osmRaw.ways.set(w.id, w);
+  // Intègre une zone reçue de l'Edge Function. Plus aucune construction de
+  // graphe ici : le serveur l'a déjà fait, avec une marge qui garantit que
+  // deux zones voisines décrivent le recouvrement à l'identique (voir
+  // logic/regionGraph.ts) — il n'y a donc plus rien à recalculer, ni à
+  // reconstruire depuis zéro à chaque nouvelle zone comme avant.
+  // L'assignation carrefour -> quartier vient elle aussi du serveur.
+  const applyRegion = useCallback(
+    (region: Region) => {
+      if (!state.graph) state.graph = emptyGraph();
+      mergeGraph(state.graph, region.graph);
+      for (const n of region.neighborhoods) state.neighborhoods.set(n.id, n);
+      for (const [jid, nid] of region.junctionNeighborhood) state.junctionNeighborhood.set(jid, nid);
+      // Le centre retenu est celui que le SERVEUR a arrondi, pas le point
+      // demandé : c'est lui qui décrit le cercle réellement servi, donc celui
+      // sur lequel doivent porter « zone déjà couverte » et le garde-fou de
+      // bord (voir distToNearestCenter/nearBoundary).
+      if (!state.centers.some((c) => c[0] === region.center[0] && c[1] === region.center[1])) {
+        state.centers.push(region.center);
+      }
     },
     [state]
   );
-
-  const mergeGreenAreas = useCallback(
-    (areas: { id: number; ring: [number, number][] }[]) => {
-      for (const a of areas) state.greenAreas.set(a.id, a);
-    },
-    [state]
-  );
-
-  // buildGraph rend la main à la boucle d'événements entre ses étapes
-  // coûteuses (voir graph.js) pour ne pas geler la carte pendant une
-  // reconstruction ; on l'attend donc ici plutôt que de bloquer en synchrone.
-  const rebuildGraph = useCallback(async () => {
-    state.graph = await buildGraph(
-      { nodes: state.osmRaw.nodes, ways: [...state.osmRaw.ways.values()] },
-      [...state.greenAreas.values()].map((a) => a.ring)
-    );
-  }, [state]);
 
   // Complétion : vérifie un carrefour, retourne true s'il vient d'être complété.
   const checkJunction = useCallback(
@@ -323,6 +474,7 @@ export function useWalkedia() {
 
   const sweepCompletions = useCallback(
     (announce: boolean) => {
+      if (!state.graph) return 0;
       let pruned = 0;
       for (const id of [...state.progress.junctions]) {
         if (state.graph.junctions.has(id)) continue;
@@ -351,43 +503,146 @@ export function useWalkedia() {
   // charge le cas échéant (cooldown, zone déjà couverte) au lieu de rester
   // muet — sinon indiscernable d'un bug. Le suivi GPS continu (onFix, un
   // appel par seconde) reste silencieux dans ces cas pour ne pas spammer.
+  // `trigger`/`latitudeDelta` : uniquement pour la journalisation (voir
+  // logLoad) et le seuil de dézoom (règle 3/4) — le suivi GPS (trigger
+  // 'gps') n'a pas de notion de zoom de carte, donc pas de latitudeDelta,
+  // et n'est jamais coupé par MAX_EXPAND_LATITUDE_DELTA.
   const maybeExpand = useCallback(
-    async (rawLat: number, rawLon: number, opts: { announceSkip?: boolean } = {}) => {
+    async (
+      rawLat: number,
+      rawLon: number,
+      opts: { trigger?: 'pan' | 'gps'; latitudeDelta?: number; announceSkip?: boolean } = {}
+    ) => {
+      const trigger = opts.trigger ?? 'gps';
+      if (opts.latitudeDelta != null && opts.latitudeDelta > MAX_EXPAND_LATITUDE_DELTA) {
+        logLoad({ trigger, outcome: 'skip-too-zoomed-out', detail: `${(opts.latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
+        if (opts.announceSkip) toast('Trop dézoomé pour charger de nouvelles zones.');
+        return;
+      }
       const [lat, lon] = snapToGrid(rawLat, rawLon, RADIUS);
       const now = Date.now();
       if (state.expanding) {
+        logLoad({ trigger, outcome: 'skip-in-progress' });
         if (opts.announceSkip) toast('Chargement déjà en cours…');
         return;
       }
       const wait = EXPAND_COOLDOWN - (now - state.lastExpandTry);
       if (wait > 0) {
+        logLoad({ trigger, outcome: 'skip-cooldown', detail: `encore ${Math.ceil(wait / 1000)}s` });
         if (opts.announceSkip) toast(`Nouvelle zone : réessaie dans ${Math.ceil(wait / 1000)}s…`);
         return;
       }
       const dist = distToNearestCenter(state, lat, lon);
       if (dist <= RADIUS - EXPAND_MARGIN) {
+        logLoad({ trigger, outcome: 'skip-covered', detail: `${Math.round(dist)} m du centre le plus proche` });
         if (opts.announceSkip) toast('Cette zone est déjà couverte.');
         return;
       }
       state.expanding = true;
       state.lastExpandTry = now;
+      const startedAt = Date.now();
       try {
-        const { osm, greenAreas } = await fetchZone(lat, lon, RADIUS);
-        mergeOsm(osm);
-        mergeGreenAreas(greenAreas);
-        state.centers.push([lat, lon]);
-        await rebuildGraph();
+        applyRegion(await fetchRegion(lat, lon));
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
         toast('Nouvelle zone chargée 🗺️');
+        logLoad({
+          trigger,
+          outcome: 'success',
+          durationMs: Date.now() - startedAt,
+          edges: state.graph!.edges.size,
+          junctions: state.graph!.junctions.size,
+        });
       } catch (err: any) {
         toast('Extension de zone impossible : ' + err.message);
+        logLoad({ trigger, outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
       } finally {
         state.expanding = false;
       }
     },
-    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast]
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
+  );
+
+  // Remplissage en grille de la zone visible en mode cluster (voir
+  // MAX_GRID_LOAD_LATITUDE_DELTA ci-dessus) : calcule les centres de zone
+  // (même grille que snapToGrid) manquants dans le viewport, en charge un
+  // lot plafonné séquentiellement (jamais en parallèle : autant de calculs
+  // complets déclenchés d'un coup côté serveur sur des zones inconnues
+  // seraient autant de rafales vers les miroirs Overpass), triés du plus
+  // proche du centre visible au plus loin. Un déclenchement qui dépasse le
+  // plafond laisse le reste pour un prochain déclenchement (pan/zoom suivant).
+  const loadVisibleGrid = useCallback(
+    async (lat: number, lon: number, latitudeDelta: number, longitudeDelta: number) => {
+      if (latitudeDelta > MAX_GRID_LOAD_LATITUDE_DELTA) {
+        logLoad({ trigger: 'batch', outcome: 'skip-too-zoomed-out', detail: `${(latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
+        return;
+      }
+      if (state.gridLoading) {
+        logLoad({ trigger: 'batch', outcome: 'skip-in-progress' });
+        return;
+      }
+      const now = Date.now();
+      const wait = GRID_LOAD_COOLDOWN - (now - state.lastGridLoadTry);
+      if (wait > 0) {
+        logLoad({ trigger: 'batch', outcome: 'skip-cooldown', detail: `encore ${Math.ceil(wait / 1000)}s` });
+        return;
+      }
+
+      const kx = 111320 * Math.cos((lat * Math.PI) / 180);
+      const ky = 110540;
+      const halfWm = (longitudeDelta * kx) / 2;
+      const halfHm = (latitudeDelta * ky) / 2;
+      const centerX = lon * kx;
+      const centerY = lat * ky;
+      const candidates: [number, number][] = [];
+      for (let x = centerX - halfWm; x <= centerX + halfWm; x += RADIUS) {
+        for (let y = centerY - halfHm; y <= centerY + halfHm; y += RADIUS) {
+          candidates.push([y / ky, x / kx]);
+        }
+      }
+      const missing = candidates.filter(([clat, clon]) => distToNearestCenter(state, clat, clon) > RADIUS - EXPAND_MARGIN);
+      if (!missing.length) {
+        logLoad({ trigger: 'batch', outcome: 'skip-covered', detail: 'zone visible déjà couverte' });
+        return;
+      }
+      missing.sort((a, b) => haversine([lat, lon], a) - haversine([lat, lon], b));
+      const batch = missing.slice(0, GRID_BATCH_MAX_ZONES);
+
+      state.gridLoading = true;
+      state.lastGridLoadTry = now;
+      const startedAt = Date.now();
+      let loaded = 0;
+      let failed = 0;
+      for (const [clat, clon] of batch) {
+        // Un centre proche peut avoir déjà été couvert par un fetch
+        // précédent DE CE MÊME lot (zones voisines qui se chevauchent).
+        if (distToNearestCenter(state, clat, clon) <= RADIUS - EXPAND_MARGIN) continue;
+        try {
+          applyRegion(await fetchRegion(clat, clon));
+          loaded++;
+        } catch {
+          failed++;
+        }
+      }
+
+      if (loaded > 0) {
+        if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
+        sweepCompletions(false);
+        rerender();
+        toast(`${loaded} zone(s) supplémentaire(s) chargée(s) 🗺️`);
+      }
+      logLoad({
+        trigger: 'batch',
+        outcome: loaded > 0 ? 'success' : 'error',
+        detail: `${loaded} chargée(s), ${failed} échouée(s), ${Math.max(0, missing.length - batch.length)} en attente`,
+        durationMs: Date.now() - startedAt,
+        edges: state.graph?.edges.size,
+        junctions: state.graph?.junctions.size,
+      });
+      state.gridLoading = false;
+    },
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -395,6 +650,9 @@ export function useWalkedia() {
   const onFixRef = useRef<((lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => void) | undefined>(
     undefined
   );
+  // Référence indirecte pour casser le cycle de dépendance avec onFix (défini
+  // avant startSession, voir plus bas — même pattern que endSessionRef).
+  const startSessionRef = useRef<(() => void) | undefined>(undefined);
 
   function interpolatedFixes(prev: Fix | null, cur: Fix): Fix[] {
     if (!prev) return [cur];
@@ -426,100 +684,128 @@ export function useWalkedia() {
     return (dist / dt) * 3.6;
   }
 
-  const bufferShadowFix = useCallback(
-    (lat: number, lon: number, accuracy: number | null, t: number) => {
-      if (accuracy != null && accuracy > MAX_ACCURACY) return;
-      const fixes = state.shadow.fixes;
-      fixes.push({ lat, lon, accuracy, t });
-      const cutoff = t - SHADOW_MAX_AGE;
-      while (fixes.length && (fixes[0].t ?? 0) < cutoff) fixes.shift();
-      while (fixes.length > SHADOW_MAX_POINTS) fixes.shift();
-      state.shadow.startedAt = fixes.length ? fixes[0].t ?? null : null;
-    },
-    [state]
-  );
-
-  const clearShadow = useCallback(() => {
-    state.shadow.fixes = [];
-    state.shadow.startedAt = null;
-    state.shadow.prompted = false;
-  }, [state]);
-
-  function shadowDistance(fixes: Fix[]) {
-    let d = 0;
-    for (let i = 1; i < fixes.length; i++) d += haversine([fixes[i - 1].lat, fixes[i - 1].lon], [fixes[i].lat, fixes[i].lon]);
-    return d;
-  }
-
-  // Rejoue le tampon de marche hors session à travers un matcher temporaire.
-  const importShadowWalk = useCallback(async () => {
-    const { fixes, startedAt } = state.shadow;
-    const matcher = new Matcher(state.graph, state.proj);
-    const newEdges = new Set<string>();
-    const newInter = new Set<string>();
-    let prevFix: Fix | null = null;
-    for (const cur of fixes) {
-      const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
-      for (const fix of interpolatedFixes(prev, cur)) {
-        for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
-          if (state.progress.edges.has(edgeId)) continue;
-          state.progress.edges.add(edgeId);
-          state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
-          newEdges.add(edgeId);
-          for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-            const j = state.graph.junctions.get(jid);
-            if (j && checkJunction(j)) newInter.add(jid);
+  // Rejoue une liste de fixes (marche non trackée) à travers un matcher
+  // temporaire, comme une session normale mais rétroactive. Utilisé par la
+  // détection en arrière-plan (voir backgroundLocation.ts) : la source des
+  // fixes (tampon AsyncStorage rempli par la tâche de fond) est découplée de
+  // cette logique de rejeu, qui ne dépend que de la liste passée en
+  // paramètre.
+  const importShadowWalk = useCallback(
+    async (fixes: Fix[], startedAt: number) => {
+      const graph = state.graph;
+      if (!graph) return; // appelé une fois la zone initiale chargée (voir init)
+      const matcher = new Matcher(graph, state.proj);
+      const newEdges = new Set<string>();
+      const newInter = new Set<string>();
+      let prevFix: Fix | null = null;
+      for (const cur of fixes) {
+        const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
+        for (const fix of interpolatedFixes(prev, cur)) {
+          for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+            state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
+            if (state.progress.edges.has(edgeId)) continue;
+            state.progress.edges.add(edgeId);
+            state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
+            newEdges.add(edgeId);
+            for (const jid of graph.edgeJunctions.get(edgeId) || []) {
+              const j = graph.junctions.get(jid);
+              if (j && checkJunction(j)) newInter.add(jid);
+            }
           }
         }
+        if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
       }
-      if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
-    }
 
-    state.progress.sessions.push({
-      start: startedAt as number,
-      end: fixes[fixes.length - 1].t as number,
-      edges: newEdges.size,
-      junctions: newInter.size,
-      imported: true,
-    });
-    await persist();
-    rerender();
-    toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
-    clearShadow();
-  }, [state, checkJunction, persist, rerender, toast, clearShadow]);
+      state.progress.sessions.push({
+        start: startedAt,
+        end: fixes[fixes.length - 1].t as number,
+        edges: newEdges.size,
+        junctions: newInter.size,
+        imported: true,
+      });
+      await persist();
+      rerender();
+      toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
+    },
+    [state, checkJunction, persist, rerender, toast]
+  );
 
-  // Propose l'import dès qu'une marche hors session devient significative
-  // (≥ SHADOW_MIN_DISTANCE), sans attendre que l'utilisateur démarre une
-  // nouvelle session : c'est la détection qui déclenche la proposition, pas
-  // une action explicite sur un bouton. `prompted` évite de redemander pour
-  // la même marche tant qu'elle n'a pas été traitée (importée ou annulée).
-  const maybeImportShadowWalk = useCallback(() => {
-    const { fixes, startedAt, prompted } = state.shadow;
-    if (prompted || fixes.length < 2 || startedAt == null) return;
-    const dist = shadowDistance(fixes);
-    if (dist < SHADOW_MIN_DISTANCE) return; // pas encore assez significatif, on continue à accumuler
-
-    state.shadow.prompted = true;
-    const mins = Math.max(1, Math.round(((fixes[fixes.length - 1].t as number) - startedAt) / 60000));
+  // Règle 1 (app fermée) : vérifie au démarrage si la tâche de fond a
+  // détecté une marche assez significative pendant que l'app n'était pas
+  // ouverte, et propose de l'importer. Appelé une fois le graphe prêt (voir
+  // init) puisque le rejeu a besoin de `state.graph`/`state.proj`.
+  const checkBackgroundImport = useCallback(async () => {
+    const found = await consumeBackgroundBuffer();
+    if (!found) return;
+    const mins = Math.max(1, Math.round((found.fixes[found.fixes.length - 1].t - found.startedAt) / 60000));
     Alert.alert(
       'Marche détectée',
-      `Marche détectée (~${mins} min, ${Math.round(dist)} m).\nImporter ce trajet dans ton historique ?`,
+      `Une marche a été détectée pendant que l'app était fermée (~${mins} min, ${Math.round(found.distance)} m).\nImporter ce trajet dans ton historique ?`,
       [
-        { text: 'Annuler', style: 'cancel', onPress: () => clearShadow() },
-        { text: 'Importer', onPress: () => importShadowWalk() },
+        { text: 'Ignorer', style: 'cancel' },
+        { text: 'Importer', onPress: () => importShadowWalk(found.fixes, found.startedAt) },
       ]
     );
-  }, [state, clearShadow, importShadowWalk]);
+  }, [importShadowWalk]);
+
+  const enableBackgroundTracking = useCallback(async () => {
+    const result = await startBackgroundTracking();
+    if (result.ok) {
+      state.backgroundTrackingEnabled = true;
+      toast('Détection de marche en arrière-plan activée.');
+    } else {
+      toast(result.reason);
+    }
+    rerender();
+  }, [state, rerender, toast]);
+
+  const disableBackgroundTracking = useCallback(async () => {
+    await stopBackgroundTracking();
+    state.backgroundTrackingEnabled = false;
+    rerender();
+  }, [state, rerender]);
 
   const onFix = useCallback(
     (lat: number, lon: number, accuracy: number | null, t: number, speed: number | null) => {
       // position affichée
       state.position = { lat, lon, accuracy };
-      maybeExpand(lat, lon);
+      maybeExpand(lat, lon, { trigger: 'gps' });
 
+      // Auto-démarrage de session (règle 2) : accumule une courte distance
+      // roulante tant qu'aucune session n'est active ; dès qu'un mouvement
+      // plausible pour de la marche dépasse AUTO_START_DISTANCE, démarre une
+      // session directement (remplace l'ancien "shadow walk" qui demandait
+      // confirmation après coup). Le garde-fou de vitesse (plus bas, une fois
+      // une session active) reste la protection contre les faux positifs
+      // (voiture, vélo) une fois démarrée.
       if (!state.session) {
-        bufferShadowFix(lat, lon, accuracy, t);
-        maybeImportShadowWalk();
+        if (accuracy != null && accuracy > MAX_ACCURACY) {
+          rerender();
+          return;
+        }
+        const prev = state.idleMovement;
+        if (!prev || t - prev.t > AUTO_START_MAX_GAP) {
+          state.idleMovement = { lat, lon, t, distance: 0 };
+        } else {
+          const stepDist = haversine([prev.lat, prev.lon], [lat, lon]);
+          const dtSec = (t - prev.t) / 1000;
+          const speedKmh = dtSec > 0 ? (stepDist / dtSec) * 3.6 : 0;
+          if (dtSec >= 1 && speedKmh <= SPEED_LIMIT_KMH) {
+            const distance = prev.distance + stepDist;
+            state.idleMovement = { lat, lon, t, distance };
+            if (distance >= AUTO_START_DISTANCE) {
+              state.idleMovement = null;
+              // eslint-disable-next-line @typescript-eslint/no-use-before-define
+              startSessionRef.current?.();
+              toast('Session démarrée automatiquement — bonne marche !');
+            }
+          } else {
+            // Vitesse implausible pour de la marche (saut GPS, véhicule) :
+            // ne compte pas ce pas, repart de ce point sans perdre la
+            // distance déjà accumulée.
+            state.idleMovement = { lat, lon, t, distance: prev.distance };
+          }
+        }
         rerender();
         return;
       }
@@ -546,15 +832,22 @@ export function useWalkedia() {
       if (accuracy == null || accuracy <= MAX_ACCURACY) state.lastFix = cur;
 
       let anyChange = false;
+      const graph = state.graph!; // une session ne démarre qu'avec un graphe chargé
       for (const fix of fixes) {
         for (const edgeId of state.matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
+          // Compteur de passages (heatmap) : incrémenté à chaque tronçon validé
+          // par le matcher, y compris les tronçons déjà découverts (revisite).
+          // matcher.feed() ne renvoie un id qu'une fois par arête et par
+          // session (voir Matcher.traversed dans matching.js), donc pas de
+          // risque de sur-comptage par spam de fix GPS.
+          state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
           if (state.progress.edges.has(edgeId)) continue;
           state.progress.edges.add(edgeId);
-          state.progress.edgeMeters += state.graph.edges.get(edgeId).length;
+          state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
           state.session.newEdges.add(edgeId);
           anyChange = true;
-          for (const jid of state.graph.edgeJunctions.get(edgeId) || []) {
-            const j = state.graph.junctions.get(jid);
+          for (const jid of graph.edgeJunctions.get(edgeId) || []) {
+            const j = graph.junctions.get(jid);
             if (j && checkJunction(j)) {
               state.session.newInter.add(jid);
               toast('Carrefour complété ! +1 point 🎉');
@@ -568,23 +861,22 @@ export function useWalkedia() {
         // le déplacement seul (trackLine, position) doit quand même se voir
       }
     },
-    [state, maybeExpand, bufferShadowFix, maybeImportShadowWalk, rerender, checkJunction, persist, toast]
+    [state, maybeExpand, rerender, checkJunction, persist, toast]
   );
   onFixRef.current = onFix;
 
   // ---------------------------------------------------------------- session
 
   const startSession = useCallback(() => {
-    // La proposition d'import d'une marche oubliée est gérée indépendamment,
-    // dès qu'elle est détectée (voir maybeImportShadowWalk) : démarrer une
-    // session ne doit pas attendre ni redéclencher cette décision.
     state.matcher = new Matcher(state.graph, state.proj);
     state.lastFix = null;
     state.speedStreak = 0;
+    state.idleMovement = null; // pas de sens hors session, évite un résidu périmé au prochain arrêt
     state.session = { newEdges: new Set(), newInter: new Set(), track: [], startedAt: Date.now() };
     rerender();
     toast('Session démarrée — bonne exploration !');
   }, [state, rerender, toast]);
+  startSessionRef.current = startSession;
 
   const endSession = useCallback(() => {
     if (!state.session) return;
@@ -592,6 +884,7 @@ export function useWalkedia() {
     state.session = null;
     state.matcher = null;
     state.lastFix = null;
+    state.idleMovement = null;
 
     state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
     persist();
@@ -621,29 +914,36 @@ export function useWalkedia() {
       if (state.mapReady) return;
       state.startStatus = 'Chargement du réseau piéton…';
       rerender();
-      let osm, greenAreas;
+      const startedAt = Date.now();
+      let region: Region;
       try {
-        ({ osm, greenAreas } = await fetchZone(lat, lon, RADIUS));
+        region = await fetchRegion(lat, lon);
       } catch (err: any) {
-        state.startStatus = 'Impossible de charger les données OSM : ' + err.message;
+        state.startStatus = 'Impossible de charger la zone : ' + err.message;
         rerender();
+        logLoad({ trigger: 'init', outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
         return;
       }
 
       state.center = [lat, lon];
       state.proj = makeProj(lat);
-      mergeOsm(osm);
-      mergeGreenAreas(greenAreas);
-      state.centers.push([lat, lon]);
-      await rebuildGraph();
+      applyRegion(region);
       sweepCompletions(false);
       state.mapReady = true;
       rerender();
-      toast(`${state.graph.edges.size} tronçons · ${state.graph.junctions.size} carrefours dans la zone`);
+      toast(`${state.graph!.edges.size} tronçons · ${state.graph!.junctions.size} carrefours dans la zone`);
+      logLoad({
+        trigger: 'init',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+        edges: state.graph!.edges.size,
+        junctions: state.graph!.junctions.size,
+      });
 
       await startWatch();
+      checkBackgroundImport();
     },
-    [state, mergeOsm, mergeGreenAreas, rebuildGraph, sweepCompletions, rerender, toast, startWatch]
+    [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport]
   );
 
   const requestLocationAndInit = useCallback(async () => {
@@ -768,8 +1068,11 @@ export function useWalkedia() {
       simulateWalk,
       recenter,
       maybeExpand,
+      loadVisibleGrid,
       syncOnSignIn,
       signOutLocally,
+      enableBackgroundTracking,
+      disableBackgroundTracking,
     },
   };
 }

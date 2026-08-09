@@ -3,8 +3,9 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useWalkedia } from './src/hooks/useWalkedia';
+import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { StartScreen } from './src/screens/StartScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
@@ -35,14 +36,36 @@ function AppContent() {
   // chargée, on déclenche la géolocalisation sans attendre un appui sur un
   // bouton. Le bouton de l'écran de démarrage reste affiché pendant le
   // chargement et sert de nouvelle tentative manuelle en cas d'échec (refus
-  // de permission, position indisponible…).
+  // de permission, position indisponible…). Ne démarre qu'une fois connecté :
+  // voir la porte d'authentification ci-dessous.
   const autoStarted = useRef(false);
   useEffect(() => {
-    if (state.ready && !state.mapReady && !autoStarted.current) {
+    if (auth.user && state.ready && !state.mapReady && !autoStarted.current) {
       autoStarted.current = true;
       actions.requestLocationAndInit();
     }
-  }, [state.ready, state.mapReady, actions]);
+  }, [auth.user, state.ready, state.mapReady, actions]);
+
+  // Porte d'authentification : rien d'autre (carte, recherche, profil) ne
+  // s'affiche tant qu'il n'y a pas de session Supabase. Passe avant l'état
+  // de chargement de la progression locale, qui continue en tâche de fond.
+  if (auth.loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={COLORS.accentCyan} />
+        <StatusBar style="light" />
+      </View>
+    );
+  }
+
+  if (!auth.user) {
+    return (
+      <View style={styles.fill}>
+        <LoginScreen auth={auth} />
+        <StatusBar style="light" />
+      </View>
+    );
+  }
 
   if (!state.ready) {
     return (
@@ -66,7 +89,18 @@ function AppContent() {
     <View style={styles.fill}>
       <MapScreen walkedia={walkedia} />
       {tab === 'search' && <SearchScreen userId={auth.user?.id ?? null} />}
-      {tab === 'profile' && <ProfileScreen progress={state.progress} auth={auth} syncing={state.syncing} />}
+      {tab === 'profile' && (
+        <ProfileScreen
+          progress={state.progress}
+          auth={auth}
+          syncing={state.syncing}
+          neighborhoods={neighborhoodStats(state)}
+          backgroundTrackingEnabled={state.backgroundTrackingEnabled}
+          onToggleBackgroundTracking={(next) =>
+            next ? actions.enableBackgroundTracking() : actions.disableBackgroundTracking()
+          }
+        />
+      )}
       <TabBar active={tab} onChange={setTab} />
       <StatusBar style="light" />
     </View>

@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { COLORS } from '../theme';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
+import type { NeighborhoodStat } from '../hooks/useWalkedia';
 import { AccountSection } from '../components/AccountSection';
 
 const DAY = 86400000;
@@ -27,10 +28,16 @@ export function ProfileScreen({
   progress,
   auth,
   syncing,
+  neighborhoods,
+  backgroundTrackingEnabled,
+  onToggleBackgroundTracking,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
+  neighborhoods: NeighborhoodStat[];
+  backgroundTrackingEnabled: boolean;
+  onToggleBackgroundTracking: (next: boolean) => void;
 }) {
   const stats = useMemo(() => {
     const today = startOfToday();
@@ -75,6 +82,21 @@ export function ProfileScreen({
 
       <AccountSection auth={auth} syncing={syncing} />
 
+      <View style={styles.bgTrackingRow}>
+        <View style={styles.bgTrackingText}>
+          <Text style={styles.bgTrackingLabel}>Détecter mes marches même app fermée</Text>
+          <Text style={styles.muted}>
+            Utilise ta position en arrière-plan (permission "Toujours") pour te proposer d'importer tes marches
+            au retour dans l'app. Désactivé par défaut.
+          </Text>
+        </View>
+        <Switch
+          value={backgroundTrackingEnabled}
+          onValueChange={onToggleBackgroundTracking}
+          trackColor={{ true: COLORS.primary }}
+        />
+      </View>
+
       <View style={styles.bigScore}>
         <Text style={styles.bigScoreValue}>{stats.total}</Text>
         <Text style={styles.bigScoreLabel}>points au total</Text>
@@ -105,6 +127,24 @@ export function ProfileScreen({
         <StatCell value={stats.km} label="km découverts" />
         <StatCell value={stats.sessions} label="sessions" />
       </View>
+
+      <Text style={styles.h3}>Quartiers</Text>
+      {neighborhoods.length === 0 ? (
+        <Text style={styles.emptyList}>
+          Aucun quartier cartographié dans les zones chargées pour l'instant.
+        </Text>
+      ) : (
+        neighborhoods.map((n) => (
+          <View key={n.id} style={styles.neighborhoodRow}>
+            <Text style={styles.neighborhoodName} numberOfLines={1}>
+              {n.name || 'Quartier sans nom'}
+            </Text>
+            <Text style={[styles.neighborhoodPct, n.unlocked && styles.neighborhoodUnlocked]}>
+              {n.unlocked ? 'Débloqué 🔓' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+            </Text>
+          </View>
+        ))
+      )}
 
       <Text style={styles.h3}>Dernières sessions</Text>
       {stats.recent.length === 0 ? (
@@ -155,6 +195,19 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 8,
   },
+  bgTrackingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(148,163,184,0.08)',
+    borderColor: 'rgba(148,163,184,0.15)',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  bgTrackingText: { flex: 1, gap: 4 },
+  bgTrackingLabel: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
   bigScore: { alignItems: 'center', marginVertical: 12 },
   bigScoreValue: { fontSize: 48, fontWeight: '800', color: COLORS.accentGreen, lineHeight: 52 },
   bigScoreLabel: { color: COLORS.textMuted, marginTop: 2 },
@@ -183,6 +236,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(148,163,184,0.12)',
   },
+  neighborhoodRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.12)',
+  },
+  neighborhoodName: { fontSize: 13, color: '#cbd5e1', flexShrink: 1 },
+  neighborhoodPct: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
+  neighborhoodUnlocked: { color: COLORS.accentGreen },
   sessionCell: { fontSize: 13, color: '#cbd5e1' },
   sessionPts: { color: COLORS.accentGreen, fontWeight: '600' },
   emptyList: { color: COLORS.textDim, textAlign: 'center', paddingVertical: 10 },

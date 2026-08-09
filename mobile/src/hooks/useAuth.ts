@@ -5,8 +5,14 @@
 // "walkedia://", voir app.json) et on établit la session manuellement.
 // Nécessite un dev client (EAS Build) : Expo Go ne supporte pas les schemes
 // d'URL personnalisés requis pour cette redirection.
+//
+// Connexion par e-mail (lien magique) : supabase.auth.signInWithOtp() envoie
+// un mail contenant un lien vers "walkedia://" avec les mêmes tokens en
+// fragment. On les récupère via l'écoute des deep links (Linking), à froid
+// (app fermée, getInitialURL) comme à chaud (app déjà ouverte, l'event 'url').
 
 import { useCallback, useEffect, useState } from 'react';
+import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
@@ -34,6 +40,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -48,6 +55,25 @@ export function useAuth() {
       setSession(newSession);
     });
     return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Lien magique par e-mail : reçoit les tokens via deep link plutôt que via
+  // WebBrowser.openAuthSessionAsync (l'utilisateur ouvre le mail depuis son
+  // client mail, pas depuis un onglet ouvert par l'app).
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const applyUrl = async (url: string | null) => {
+      if (!url) return;
+      const params = parseFragmentParams(url);
+      if (!params.access_token || !params.refresh_token) return;
+      await supabase.auth.setSession({
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      });
+    };
+    Linking.getInitialURL().then(applyUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => applyUrl(url));
+    return () => sub.remove();
   }, []);
 
   const signInWithProvider = useCallback(async (provider: Provider) => {
@@ -81,6 +107,22 @@ export function useAuth() {
     }
   }, []);
 
+  const signInWithEmail = useCallback(async (email: string) => {
+    setBusy(true);
+    setEmailSent(false);
+    try {
+      const redirectTo = AuthSession.makeRedirectUri({ scheme: 'walkedia' });
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: redirectTo },
+      });
+      if (error) throw error;
+      setEmailSent(true);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -90,9 +132,11 @@ export function useAuth() {
     user: session?.user ?? null,
     loading,
     busy,
+    emailSent,
     isConfigured: isSupabaseConfigured,
     signInWithGoogle: () => signInWithProvider('google'),
     signInWithApple: () => signInWithProvider('apple'),
+    signInWithEmail,
     signOut,
   };
 }

@@ -16,7 +16,10 @@ if (!url || !anonKey) {
 // projet Supabase n'est pas configuré (voir .env.example). Toute tentative
 // de connexion échouera proprement (réseau injoignable) plutôt que de
 // planter l'app entière.
-export const supabase = createClient(url || 'https://placeholder.supabase.co', anonKey || 'placeholder', {
+export const supabaseUrl = url || 'https://placeholder.supabase.co';
+export const supabaseAnonKey = anonKey || 'placeholder';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

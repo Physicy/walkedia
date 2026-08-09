@@ -1,4 +1,9 @@
-// Construction du graphe routier à partir des données OSM brutes :
+// Construction du graphe. Seul exemplaire depuis la bascule du client sur
+// l'Edge Function : le client ne construit plus rien, il fusionne des zones
+// déjà construites (voir mobile/src/logic/region.ts). Toute modification ici
+// change les IDs d'arêtes/carrefours servis, donc invalide la progression
+// déjà enregistrée par les joueurs — bumper VERSION dans get-region/index.ts.
+//
 //  1. repérage des nœuds de jonction (partagés par plusieurs ways),
 //  2. découpage des ways en segments entre jonctions,
 //  3. fusion des chaînes de degré 2 pour que chaque arête relie deux
@@ -15,22 +20,18 @@
 // seuls les carrefours du réseau routier accessible en voiture comptent :
 // les maillages de places et trottoirs ne génèrent plus de points. Exception
 // géométrique : un nœud situé à l'intérieur d'un contour d'espace vert
-// (parc, jardin, forêt, terrain de sport — voir overpass.js/fetchGreenAreas)
-// est toujours traité en mode "rural" (toutes ses branches comptent), même
-// si la zone environnante est par ailleurs classée urbaine. En environnement
-// rural, les sentiers et chemins SONT le réseau principal, donc toutes les
-// voies piétonnes comptent (règle d'origine).
+// (parc, jardin, forêt, terrain de sport) est toujours traité en mode
+// "rural" (toutes ses branches comptent), même si la zone environnante est
+// par ailleurs classée urbaine. En environnement rural, les sentiers et
+// chemins SONT le réseau principal, donc toutes les voies piétonnes
+// comptent (règle d'origine).
 
-import { lineLength, pointAtFraction, haversine, pointInPolygon, ringBBox } from './geo.js';
-
-// Rend la main à la boucle d'événements JS entre deux étapes coûteuses de
-// buildGraph : sans ça, reconstruire un graphe qui a accumulé plusieurs
-// zones (exploration prolongée de la carte) bloque le thread JS d'un seul
-// bloc, ce qui fige aussi bien le rendu que les gestes de pan/zoom de la
-// carte (gérés nativement, mais dont les callbacks passent par ce même
-// thread). Découper en étapes qui se redonnent la main garde l'app réactive
-// même si le calcul total prend plus de temps.
-const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
+// Contrairement à la version client, pas de yieldToEventLoop() entre les
+// étapes : ça n'a de sens que pour ne pas geler un thread UI, absent ici.
+// Mesuré (script de mesure, voir plan Phase 1) : ~110-150ms même sur une
+// zone dense (Paris/Châtelet, ~1900 ways) à RADIUS=500 — largement dans le
+// budget CPU d'une Edge Function (2s).
+import { lineLength, pointAtFraction, haversine, pointInPolygon, ringBBox } from './geo.ts';
 
 const STUB_MAX = 30;    // impasse plus courte que ça -> branche non significative (m)
 const LINK_MAX = 25;    // arête plus courte entre deux carrefours -> fusion (m)
@@ -44,17 +45,17 @@ const DENSITY_CELL = 250;    // taille des cellules de la grille de densité (m)
 const URBAN_MIN_ROAD = 2200; // urbain si >= ce total de voirie carrossable (m)
                              // dans la fenêtre 3x3 autour du nœud (750 m de côté)
 
-export function nodeKey(c) {
+export function nodeKey(c: [number, number]): string {
   return c[0].toFixed(6) + ',' + c[1].toFixed(6);
 }
 
-function coordKey5(c) {
+function coordKey5(c: [number, number]): string {
   return c[0].toFixed(5) + ',' + c[1].toFixed(5);
 }
 
 // ID stable : extrémités triées + point milieu géométrique + longueur arrondie.
 // Le milieu distingue deux arêtes parallèles reliant les mêmes extrémités.
-function edgeId(coords, length) {
+function edgeId(coords: [number, number][], length: number): string {
   const a = coordKey5(coords[0]);
   const b = coordKey5(coords[coords.length - 1]);
   const mid = coordKey5(pointAtFraction(coords, 0.5));
@@ -62,10 +63,21 @@ function edgeId(coords, length) {
   return ends + '|' + mid + '|' + Math.round(length);
 }
 
-export async function buildGraph(osm, greenAreas = []) {
+interface OsmWay {
+  id: number;
+  nodes: number[];
+  tags: Record<string, string>;
+}
+
+interface OsmData {
+  nodes: Map<number, [number, number]>;
+  ways: OsmWay[];
+}
+
+export async function buildGraph(osm: OsmData, greenAreas: [number, number][][] = []) {
   // Filtre rapide par bbox avant le test point-dans-polygone, plus coûteux.
   const greenPolys = greenAreas.map((ring) => ({ ring, bbox: ringBBox(ring) }));
-  const inGreenArea = (lat, lon) =>
+  const inGreenArea = (lat: number, lon: number) =>
     greenPolys.some(
       ({ ring, bbox }) =>
         lat >= bbox.minLat &&
@@ -78,11 +90,11 @@ export async function buildGraph(osm, greenAreas = []) {
   // 0. Attributs par paire de nœuds consécutifs (carrossable, sens unique,
   //    rond-point, passage piéton) : permet de retrouver, après
   //    découpage/fusion, les attributs de chaque arête finale.
-  const pairKey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
-  const carPairs = new Set();
-  const onewayPairs = new Set();
-  const roundaboutPairs = new Set();
-  const crossingPairs = new Set();
+  const pairKey = (a: number, b: number) => (a < b ? a + ':' + b : b + ':' + a);
+  const carPairs = new Set<string>();
+  const onewayPairs = new Set<string>();
+  const roundaboutPairs = new Set<string>();
+  const crossingPairs = new Set<string>();
   for (const w of osm.ways) {
     const t = w.tags;
     const car = CAR_HIGHWAYS.has(t.highway);
@@ -99,18 +111,16 @@ export async function buildGraph(osm, greenAreas = []) {
     }
   }
 
-  await yieldToEventLoop();
-
   // 1. Un nœud est une jonction s'il apparaît au moins 2 fois (dans plusieurs
   //    ways, ou deux fois dans un way fermé).
-  const usage = new Map();
+  const usage = new Map<number, number>();
   for (const w of osm.ways) {
     for (const nid of w.nodes) usage.set(nid, (usage.get(nid) || 0) + 1);
   }
-  const isJunction = (nid) => (usage.get(nid) || 0) >= 2;
+  const isJunction = (nid: number) => (usage.get(nid) || 0) >= 2;
 
   // 2. Découpage des ways aux jonctions.
-  const all = [];
+  const all: { nodes: number[]; dead: boolean }[] = [];
   for (const w of osm.ways) {
     let start = 0;
     for (let i = 1; i < w.nodes.length; i++) {
@@ -121,11 +131,9 @@ export async function buildGraph(osm, greenAreas = []) {
     }
   }
 
-  await yieldToEventLoop();
-
   // 3. Fusion des nœuds de degré 2 (artefacts de découpage OSM).
-  const adj = new Map();
-  const addAdj = (nid, seg) => {
+  const adj = new Map<number, { nodes: number[]; dead: boolean }[]>();
+  const addAdj = (nid: number, seg: { nodes: number[]; dead: boolean }) => {
     let list = adj.get(nid);
     if (!list) adj.set(nid, (list = []));
     list.push(seg);
@@ -138,7 +146,6 @@ export async function buildGraph(osm, greenAreas = []) {
   let changed = true;
   while (changed) {
     changed = false;
-    await yieldToEventLoop(); // chaînes longues (routes rurales) -> plusieurs passes possibles
     for (const [nid, list] of adj) {
       const live = list.filter((s) => !s.dead);
       adj.set(nid, live);
@@ -160,14 +167,12 @@ export async function buildGraph(osm, greenAreas = []) {
     }
   }
 
-  await yieldToEventLoop();
-
   // 4. Structures finales : arêtes et nœuds.
-  const edges = new Map(); // id -> { id, coords, length, a, b }
-  const nodes = new Map(); // key -> { key, lat, lon, edgeIds }
+  const edges = new Map<string, any>(); // id -> { id, coords, length, a, b }
+  const nodes = new Map<string, any>(); // key -> { key, lat, lon, edgeIds }
   for (const s of all) {
     if (s.dead) continue;
-    const coords = s.nodes.map((nid) => osm.nodes.get(nid)).filter(Boolean);
+    const coords = s.nodes.map((nid) => osm.nodes.get(nid)).filter(Boolean) as [number, number][];
     if (coords.length < 2) continue;
     const length = lineLength(coords);
     if (length < 1) continue;
@@ -200,14 +205,12 @@ export async function buildGraph(osm, greenAreas = []) {
       b: nodeKey(coords[coords.length - 1]),
     };
     edges.set(id, e);
-    for (const [key, c] of [[e.a, coords[0]], [e.b, coords[coords.length - 1]]]) {
+    for (const [key, c] of [[e.a, coords[0]] as const, [e.b, coords[coords.length - 1]] as const]) {
       let n = nodes.get(key);
-      if (!n) nodes.set(key, (n = { key, lat: c[0], lon: c[1], edgeIds: [] }));
+      if (!n) nodes.set(key, (n = { key, lat: c[0], lon: c[1], edgeIds: [] as string[] }));
       n.edgeIds.push(id);
     }
   }
-
-  await yieldToEventLoop();
 
   // 5a. Classification urbain/rural : densité locale de voirie carrossable,
   //     accumulée dans une grille de cellules de 250 m (fenêtre 3x3 lissée).
@@ -220,18 +223,18 @@ export async function buildGraph(osm, greenAreas = []) {
   lat0 = count ? lat0 / count : 0;
   const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
   const ky = 110540;
-  const cellKey = (lat, lon) =>
+  const cellKey = (lat: number, lon: number) =>
     Math.floor((lon * kx) / DENSITY_CELL) + ':' + Math.floor((lat * ky) / DENSITY_CELL);
-  const density = new Map();
+  const density = new Map<string, number>();
   for (const e of edges.values()) {
     if (!e.car) continue;
     for (let i = 1; i < e.coords.length; i++) {
-      const mid = [(e.coords[i - 1][0] + e.coords[i][0]) / 2, (e.coords[i - 1][1] + e.coords[i][1]) / 2];
+      const mid: [number, number] = [(e.coords[i - 1][0] + e.coords[i][0]) / 2, (e.coords[i - 1][1] + e.coords[i][1]) / 2];
       const k = cellKey(mid[0], mid[1]);
       density.set(k, (density.get(k) || 0) + haversine(e.coords[i - 1], e.coords[i]));
     }
   }
-  const isUrban = (lat, lon) => {
+  const isUrban = (lat: number, lon: number) => {
     const cx = Math.floor((lon * kx) / DENSITY_CELL);
     const cy = Math.floor((lat * ky) / DENSITY_CELL);
     let sum = 0;
@@ -241,30 +244,26 @@ export async function buildGraph(osm, greenAreas = []) {
     return sum >= URBAN_MIN_ROAD;
   };
 
-  await yieldToEventLoop();
-
   // 5b. Branches significatives : une impasse courte (entrée de bâtiment,
   //     allée de garage) ne compte ni dans le degré, ni dans la complétion.
   //     En zone urbaine, seules les branches carrossables comptent.
-  const isStubFor = (e, key) => {
+  const isStubFor = (e: any, key: string) => {
     const other = e.a === key ? e.b : e.a;
     if (other === key) return e.length < STUB_MAX; // boucle courte sur le nœud
     return e.length < STUB_MAX && nodes.get(other).edgeIds.length === 1;
   };
 
-  const candidates = new Set(); // nœuds avec >= 3 branches significatives
-  const urbanNode = new Map();  // key -> bool (mode retenu pour ce nœud)
+  const candidates = new Set<string>(); // nœuds avec >= 3 branches significatives
+  const urbanNode = new Map<string, boolean>();  // key -> bool (mode retenu pour ce nœud)
   for (const n of nodes.values()) {
     const urban = isUrban(n.lat, n.lon) && !inGreenArea(n.lat, n.lon);
-    const pool = urban ? n.edgeIds.filter((id) => edges.get(id).car) : n.edgeIds;
-    const sig = pool.filter((id) => !isStubFor(edges.get(id), n.key));
+    const pool = urban ? n.edgeIds.filter((id: string) => edges.get(id).car) : n.edgeIds;
+    const sig = pool.filter((id: string) => !isStubFor(edges.get(id), n.key));
     if (sig.length >= 3) {
       candidates.add(n.key);
       urbanNode.set(n.key, urban);
     }
   }
-
-  await yieldToEventLoop();
 
   // 5c. Consolidation : union-find des candidats reliés par une arête courte,
   //     avec plafond de taille pour ne pas avaler un maillage de place entière.
@@ -275,7 +274,7 @@ export async function buildGraph(osm, greenAreas = []) {
   //     Un tronçon de rue normale à double sens ne fusionne jamais : deux
   //     intersections décalées le long d'un même axe restent deux carrefours
   //     distincts, chacun avec ses propres branches à parcourir.
-  const onewayHub = new Set();
+  const onewayHub = new Set<string>();
   for (const n of nodes.values()) {
     let ow = 0;
     for (const id of n.edgeIds) {
@@ -284,23 +283,23 @@ export async function buildGraph(osm, greenAreas = []) {
     }
     if (ow >= 2) onewayHub.add(n.key);
   }
-  const isArtifactLink = (e) =>
+  const isArtifactLink = (e: any) =>
     e.roundabout ||
     (e.car && e.oneway) ||
     (!e.car && e.crossing) ||
     onewayHub.has(e.a) ||
     onewayHub.has(e.b);
-  const parent = new Map();
-  const bbox = new Map();
+  const parent = new Map<string, string>();
+  const bbox = new Map<string, { minLat: number; maxLat: number; minLon: number; maxLon: number }>();
   for (const key of candidates) {
     parent.set(key, key);
     const n = nodes.get(key);
     bbox.set(key, { minLat: n.lat, maxLat: n.lat, minLon: n.lon, maxLon: n.lon });
   }
-  const find = (k) => {
+  const find = (k: string): string => {
     while (parent.get(k) !== k) {
-      parent.set(k, parent.get(parent.get(k)));
-      k = parent.get(k);
+      parent.set(k, parent.get(parent.get(k)!)!);
+      k = parent.get(k)!;
     }
     return k;
   };
@@ -312,8 +311,8 @@ export async function buildGraph(osm, greenAreas = []) {
     const ra = find(e.a);
     const rb = find(e.b);
     if (ra === rb) continue;
-    const A = bbox.get(ra);
-    const B = bbox.get(rb);
+    const A = bbox.get(ra)!;
+    const B = bbox.get(rb)!;
     const m = {
       minLat: Math.min(A.minLat, B.minLat),
       maxLat: Math.max(A.maxLat, B.maxLat),
@@ -325,7 +324,7 @@ export async function buildGraph(osm, greenAreas = []) {
     bbox.set(rb, m);
   }
 
-  const clusters = new Map(); // racine -> [keys]
+  const clusters = new Map<string, string[]>(); // racine -> [keys]
   for (const key of candidates) {
     const r = find(key);
     let list = clusters.get(r);
@@ -333,19 +332,17 @@ export async function buildGraph(osm, greenAreas = []) {
     list.push(key);
   }
 
-  await yieldToEventLoop();
-
   // 5d. Carrefours consolidés : complétés quand toutes les branches EXTERNES
   //     significatives ont été parcourues. Les micro-arêtes internes au
   //     carrefour (passages piétons, traversées) ne sont pas exigées.
   //     Un groupe est urbain dès qu'un de ses membres l'est : seules ses
   //     branches carrossables sont alors exigées.
-  const junctions = new Map();     // id -> { id, lat, lon, members, requiredEdgeIds }
-  const edgeJunctions = new Map(); // edgeId -> [junctionId]
+  const junctions = new Map<string, any>();     // id -> { id, lat, lon, members, requiredEdgeIds }
+  const edgeJunctions = new Map<string, string[]>(); // edgeId -> [junctionId]
   for (const members of clusters.values()) {
     const memberSet = new Set(members);
     const urban = members.some((key) => urbanNode.get(key));
-    const required = new Set();
+    const required = new Set<string>();
     for (const key of members) {
       for (const id of nodes.get(key).edgeIds) {
         const e = edges.get(id);

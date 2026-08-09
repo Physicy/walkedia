@@ -1,5 +1,7 @@
-// Récupération du réseau piéton (et des espaces verts) depuis l'API
-// Overpass (OpenStreetMap), en une seule requête par zone.
+// Accès à l'API Overpass. Seul exemplaire depuis la bascule du client sur
+// l'Edge Function : plus aucun appareil ne tape Overpass directement, tout
+// passe par get-region et son cache — ce qui rend aussi les pannes de
+// miroirs publics invisibles pour toute zone déjà calculée.
 
 const MIRRORS = [
   'https://overpass-api.de/api/interpreter',
@@ -16,20 +18,21 @@ const HIGHWAY_TYPES =
 
 // Tags "espace vert" : parcs/jardins, forêts, terrains de sport. Un carrefour
 // piéton situé à l'intérieur d'un de ces contours compte toutes ses branches
-// même en zone urbaine (voir graph.js) — volontairement distinct des
+// même en zone urbaine (voir graph.ts) — volontairement distinct des
 // places/esplanades, dont l'exclusion des maillages urbains reste voulue.
 const GREEN_LEISURE = 'park|garden|nature_reserve|recreation_ground|pitch|sports_centre';
 const GREEN_LANDUSE = 'forest|meadow';
 
-const HEDGE_DELAY = 5000;   // ms : au-delà, on tente le miroir suivant EN PLUS (sans annuler
-                            // le précédent) plutôt que d'attendre son échec complet
-const HARD_TIMEOUT = 60000; // ms : plafond absolu, tous miroirs confondus — un miroir peut
-                            // mettre en file d'attente une requête sans jamais répondre
-                            // (le [timeout:40] serveur ne borne que l'exécution une fois
-                            // démarrée, pas l'attente en file), donc on ne compte pas
-                            // uniquement sur son propre timeout.
+// Quartiers ("place=suburb/neighbourhood/quarter") : en pratique, ce tag
+// n'a un contour polygonal (way fermé) que dans une minorité de villes bien
+// cartographiées — ailleurs, ce n'est qu'un nœud sans géométrie
+// exploitable, donc pas de quartier assigné aux carrefours de la zone.
+const PLACE_QUARTIER = 'suburb|neighbourhood|quarter';
 
-function fetchMirror(url, query, signal) {
+const HEDGE_DELAY = 5000;
+const HARD_TIMEOUT = 60000;
+
+function fetchMirror(url: string, query: string, signal: AbortSignal) {
   return fetch(url, {
     method: 'POST',
     body: 'data=' + encodeURIComponent(query),
@@ -45,22 +48,21 @@ function fetchMirror(url, query, signal) {
 }
 
 // Interroge les miroirs en parallèle plutôt qu'en séquence : un miroir lent
-// ou en file d'attente ne doit pas bloquer les autres (avant, jusqu'à 45s ×
-// 3 miroirs pouvaient s'accumuler avant l'échec final). Le premier miroir
-// est lancé seul ; si aucune réponse après HEDGE_DELAY, le suivant est lancé
-// EN PLUS (pas à sa place), et ainsi de suite — le premier qui répond
-// gagne, les autres sont annulés. Un plafond HARD_TIMEOUT global garantit
-// qu'on échoue proprement même si tous les miroirs restent muets.
-async function runQuery(query) {
+// ou en file d'attente ne doit pas bloquer les autres. Le premier miroir est
+// lancé seul ; si aucune réponse après HEDGE_DELAY, le suivant est lancé EN
+// PLUS (pas à sa place), et ainsi de suite — le premier qui répond gagne,
+// les autres sont annulés. Un plafond HARD_TIMEOUT global garantit qu'on
+// échoue proprement même si tous les miroirs restent muets.
+async function runQuery(query: string): Promise<any> {
   const controllers = MIRRORS.map(() => new AbortController());
   const hardAbort = setTimeout(() => controllers.forEach((c) => c.abort()), HARD_TIMEOUT);
 
   try {
     return await new Promise((resolve, reject) => {
-      const errors = [];
+      const errors: any[] = [];
       let settled = false;
       let launched = 0;
-      let hedgeTimer = null;
+      let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
 
       const launchNext = () => {
         const i = launched++;
@@ -68,7 +70,7 @@ async function runQuery(query) {
           (json) => {
             if (settled) return;
             settled = true;
-            clearTimeout(hedgeTimer);
+            if (hedgeTimer) clearTimeout(hedgeTimer);
             resolve(json);
           },
           (err) => {
@@ -78,9 +80,7 @@ async function runQuery(query) {
               settled = true;
               reject(errors);
             } else if (launched < MIRRORS.length) {
-              // Échec avant le délai de hedge (ex: 429 immédiat) : inutile
-              // d'attendre le reste du délai, on tente le suivant de suite.
-              clearTimeout(hedgeTimer);
+              if (hedgeTimer) clearTimeout(hedgeTimer);
               launchNext();
             }
           }
@@ -96,17 +96,35 @@ async function runQuery(query) {
       : errors.find(Boolean);
   } finally {
     clearTimeout(hardAbort);
-    controllers.forEach((c) => c.abort()); // annule les tentatives encore en cours (perdantes ou non résolues)
+    controllers.forEach((c) => c.abort());
   }
 }
 
+export interface OsmWay {
+  id: number;
+  nodes: number[];
+  tags: Record<string, string>;
+}
+
+export interface GreenArea {
+  id: number;
+  ring: [number, number][];
+}
+
+export interface Neighborhood {
+  id: number;
+  name: string | null;
+  ring: [number, number][];
+}
+
 // Récupère en un seul appel le réseau piéton (ways + nœuds) et les contours
-// des espaces verts (parcs/jardins/forêts/terrains de sport) autour du point
-// donné. Les deux jeux de résultats sont séparés via des sets Overpass
-// nommés (`.roads` / `.green`) pour n'avoir besoin que d'une requête réseau
-// par zone (au lieu de deux, qui doublait notre taux contre des miroirs
-// publics déjà rate-limités).
-export async function fetchZone(lat, lon, radius) {
+// des espaces verts autour du point donné. Les quartiers (fetchNeighborhoods
+// ci-dessous) sont une requête séparée, jamais fusionnée ici.
+export async function fetchZone(
+  lat: number,
+  lon: number,
+  radius: number
+): Promise<{ osm: { nodes: Map<number, [number, number]>; ways: OsmWay[] }; greenAreas: GreenArea[] }> {
   const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
   const query = `
 [out:json][timeout:40];
@@ -130,22 +148,40 @@ out skel qt;
   return parseZone(json);
 }
 
-// Sépare les éléments de la réponse combinée : les ways avec `geometry`
-// inline (issus de `.green out geom`) sont des contours d'espace vert ; les
-// autres ways (avec `nodes` + `tags`, issus de `.roads out body`) sont le
-// réseau piéton, dont les nœuds sont résolus depuis les éléments `node`.
-function parseZone(json) {
-  const nodes = new Map(); // id -> [lat, lon]
-  const ways = [];
-  const greenAreas = [];
+function parseZone(json: any) {
+  const nodes = new Map<number, [number, number]>();
+  const ways: OsmWay[] = [];
+  const greenAreas: GreenArea[] = [];
   for (const el of json.elements || []) {
     if (el.type === 'node') {
       nodes.set(el.id, [el.lat, el.lon]);
     } else if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
-      greenAreas.push({ id: el.id, ring: el.geometry.map((p) => [p.lat, p.lon]) });
+      greenAreas.push({ id: el.id, ring: el.geometry.map((p: any) => [p.lat, p.lon]) });
     } else if (el.type === 'way' && el.nodes && el.nodes.length >= 2) {
       ways.push({ id: el.id, nodes: el.nodes, tags: el.tags || {} });
     }
   }
   return { osm: { nodes, ways }, greenAreas };
+}
+
+export async function fetchNeighborhoods(lat: number, lon: number, radius: number): Promise<Neighborhood[]> {
+  const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
+  const query = `
+[out:json][timeout:20];
+way(${around})["place"~"^(${PLACE_QUARTIER})$"]["name"]->.quartiers;
+.quartiers out geom;`;
+
+  const json = await runQuery(query);
+  return parseNeighborhoods(json);
+}
+
+function parseNeighborhoods(json: any): Neighborhood[] {
+  const neighborhoods: Neighborhood[] = [];
+  for (const el of json.elements || []) {
+    if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
+      const t = el.tags || {};
+      neighborhoods.push({ id: el.id, name: t.name || null, ring: el.geometry.map((p: any) => [p.lat, p.lon]) });
+    }
+  }
+  return neighborhoods;
 }
