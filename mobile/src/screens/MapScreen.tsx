@@ -138,8 +138,33 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const animatedSet = useRef<Set<string>>(new Set());
   const lastAnimatedCalcPos = useRef<{ lat: number; lon: number } | null>(null);
 
-  const edges = state.graph ? [...state.graph.edges.values()] : [];
-  const junctions = state.graph ? [...state.graph.junctions.values()] : [];
+  // Deux sources de géométrie, fusionnées ici :
+  //  - `state.graph`, le réseau de la zone chargée depuis le serveur (tout le
+  //    réseau, découvert ou non) ;
+  //  - `state.discovered`, ce que le joueur a déjà parcouru, persisté
+  //    localement (logic/discovered.ts) et donc disponible dès l'ouverture,
+  //    même pour des quartiers dont la zone n'est pas (ou plus) chargée.
+  // Le graphe prime quand un ID est présent des deux côtés : il porte les
+  // attributs complets (car/oneway/…), la version persistée n'a que la
+  // polyligne. Le vert « découvert » comme la heatmap sortent tous deux de
+  // `progress` (voir le rendu plus bas), donc les deux sources s'affichent
+  // exactement pareil.
+  const { edges, junctions } = useMemo(() => {
+    const e: any[] = state.graph ? [...state.graph.edges.values()] : [];
+    const vus = new Set(e.map((x) => x.id));
+    for (const [id, d] of state.discovered.edges) {
+      if (!vus.has(id)) e.push({ id, coords: d.coords, length: d.length });
+    }
+    const j: any[] = state.graph ? [...state.graph.junctions.values()] : [];
+    const vusJ = new Set(j.map((x) => x.id));
+    for (const [id, [lat, lon]] of state.discovered.junctions) {
+      if (!vusJ.has(id)) j.push({ id, lat, lon, requiredEdgeIds: new Set<string>() });
+    }
+    return { edges: e, junctions: j };
+    // `discovered` est muté en place (comme tout l'état de useWalkedia) : on
+    // se raccroche à sa taille, qui change à chaque nouvel élément mémorisé.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.graph, state.discovered.edges.size, state.discovered.junctions.size]);
 
   // Le graphe complet reste toujours en mémoire (nécessaire pour que le
   // matching GPS et la progression fonctionnent même hors écran), mais on
@@ -217,9 +242,11 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
     return { visibleEdges: edgesInView, visibleJunctions: pointJunctions, junctionClusters: [] as JunctionCluster[] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.graph, region]);
+  }, [edges, junctions, region]);
 
-  if (!state.graph || !state.center) return null;
+  // Plus de garde sur `state.graph` : la carte s'affiche dès que la position
+  // est connue, avec l'historique persisté, pendant que la zone charge.
+  if (!state.center) return null;
 
   // Met à jour le sous-ensemble animé (voir ANIMATED_* et le ref plus haut).
   // Ne recalcule que si la position a assez bougé depuis le dernier calcul —

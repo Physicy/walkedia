@@ -16,6 +16,8 @@ import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
+import * as discovered from '../logic/discovered';
+import type { Discovered } from '../logic/discovered';
 import { supabase } from '../lib/supabase';
 import {
   consumeBackgroundBuffer,
@@ -123,6 +125,10 @@ interface WalkediaState {
   centers: [number, number][];
   neighborhoods: Map<number, Neighborhood>;
   junctionNeighborhood: Map<string, number | null>;
+  // Géométrie de ce qui a déjà été découvert, persistée localement (voir
+  // logic/discovered.ts) : permet de dessiner l'historique du joueur dès
+  // l'ouverture, sans attendre qu'une zone revienne du serveur.
+  discovered: Discovered;
   expanding: boolean;
   lastExpandTry: number;
   gridLoading: boolean;
@@ -156,6 +162,7 @@ function freshState(): WalkediaState {
     centers: [],
     neighborhoods: new Map(),
     junctionNeighborhood: new Map(),
+    discovered: discovered.fresh(),
     expanding: false,
     lastExpandTry: 0,
     gridLoading: false,
@@ -320,6 +327,14 @@ export function useWalkedia() {
       state.ready = true;
       rerender();
     });
+    // Géométrie déjà découverte : chargée en parallèle de la progression, et
+    // indépendamment d'elle. C'est ce qui permet à la carte d'afficher
+    // l'historique du joueur avant même que la première zone soit revenue du
+    // serveur.
+    discovered.load().then((d: Discovered) => {
+      state.discovered = d;
+      rerender();
+    });
     // Reflète l'état réel de la tâche de fond (peut avoir été activée lors
     // d'une session précédente) plutôt que de supposer `false` par défaut.
     isBackgroundTrackingActive().then((active) => {
@@ -451,6 +466,28 @@ export function useWalkedia() {
   // sans attendre les quartiers (une requête Overpass à part, qui pesait
   // jusqu'à 60 s) et complète sa ligne de cache ensuite. Les statistiques par
   // quartier du profil apparaissent alors au prochain chargement de la zone.
+  // Mémorise la géométrie d'un tronçon/carrefour au moment où il est acquis,
+  // pour pouvoir le redessiner plus tard sans sa zone (voir
+  // logic/discovered.ts). L'écriture sur disque est différée et regroupée :
+  // ces appels arrivent en pleine boucle GPS.
+  const rememberEdge = useCallback(
+    (edgeId: string) => {
+      const e = state.graph?.edges.get(edgeId);
+      if (!e) return;
+      state.discovered.edges.set(edgeId, { coords: e.coords, length: e.length, at: Date.now() });
+      discovered.scheduleSave(state.discovered);
+    },
+    [state]
+  );
+
+  const rememberJunction = useCallback(
+    (j: { id: string; lat: number; lon: number }) => {
+      state.discovered.junctions.set(j.id, [j.lat, j.lon]);
+      discovered.scheduleSave(state.discovered);
+    },
+    [state]
+  );
+
   const applyRegion = useCallback(
     (region: Region) => {
       if (!state.graph) state.graph = emptyGraph();
@@ -464,6 +501,33 @@ export function useWalkedia() {
       if (!state.centers.some((c) => c[0] === region.center[0] && c[1] === region.center[1])) {
         state.centers.push(region.center);
       }
+
+      // Rattrapage : la zone qui arrive contient peut-être la géométrie de
+      // tronçons/carrefours déjà acquis mais qu'on ne savait pas dessiner —
+      // progression revenue d'un autre appareil, ou acquise avant l'ajout de
+      // ce magasin. On en profite pour la mémoriser.
+      let rattrapes = 0;
+      for (const id of state.progress.edges) {
+        if (state.discovered.edges.has(id)) continue;
+        const e = region.graph.edges.get(id);
+        if (!e) continue;
+        state.discovered.edges.set(id, { coords: e.coords, length: e.length, at: Date.now() });
+        rattrapes++;
+      }
+      for (const id of state.progress.junctions) {
+        if (state.discovered.junctions.has(id)) continue;
+        const j = region.graph.junctions.get(id);
+        if (!j) continue;
+        state.discovered.junctions.set(id, [j.lat, j.lon]);
+        rattrapes++;
+      }
+      if (rattrapes > 0) discovered.scheduleSave(state.discovered);
+
+      // Nouvelle référence d'objet, mêmes Map à l'intérieur : le graphe est
+      // fusionné EN PLACE, or le rendu de la carte le mémoïse sur cette
+      // référence (useMemo dans MapScreen). Sans ça, une zone chargée par le
+      // GPS à l'arrêt n'apparaîtrait qu'au prochain déplacement de la carte.
+      state.graph = { ...state.graph };
     },
     [state]
   );
@@ -478,9 +542,10 @@ export function useWalkedia() {
       }
       state.progress.junctions.add(j.id);
       state.progress.completedAt[j.id] = Date.now();
+      rememberJunction(j);
       return true;
     },
-    [state]
+    [state, rememberJunction]
   );
 
   const sweepCompletions = useCallback(
@@ -717,6 +782,7 @@ export function useWalkedia() {
             if (state.progress.edges.has(edgeId)) continue;
             state.progress.edges.add(edgeId);
             state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
+            rememberEdge(edgeId);
             newEdges.add(edgeId);
             for (const jid of graph.edgeJunctions.get(edgeId) || []) {
               const j = graph.junctions.get(jid);
@@ -738,7 +804,7 @@ export function useWalkedia() {
       rerender();
       toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
     },
-    [state, checkJunction, persist, rerender, toast]
+    [state, checkJunction, persist, rememberEdge, rerender, toast]
   );
 
   // Règle 1 (app fermée) : vérifie au démarrage si la tâche de fond a
@@ -808,7 +874,10 @@ export function useWalkedia() {
               state.idleMovement = null;
               // eslint-disable-next-line @typescript-eslint/no-use-before-define
               startSessionRef.current?.();
-              toast('Session démarrée automatiquement — bonne marche !');
+              // startSession refuse tant que la zone n'est pas chargée : ne pas
+              // annoncer un démarrage qui n'a pas eu lieu (il en émet alors son
+              // propre message).
+              if (state.session) toast('Session démarrée automatiquement — bonne marche !');
             }
           } else {
             // Vitesse implausible pour de la marche (saut GPS, véhicule) :
@@ -855,6 +924,7 @@ export function useWalkedia() {
           if (state.progress.edges.has(edgeId)) continue;
           state.progress.edges.add(edgeId);
           state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
+          rememberEdge(edgeId);
           state.session.newEdges.add(edgeId);
           anyChange = true;
           for (const jid of graph.edgeJunctions.get(edgeId) || []) {
@@ -872,13 +942,21 @@ export function useWalkedia() {
         // le déplacement seul (trackLine, position) doit quand même se voir
       }
     },
-    [state, maybeExpand, rerender, checkJunction, persist, toast]
+    [state, maybeExpand, rerender, checkJunction, persist, rememberEdge, toast]
   );
   onFixRef.current = onFix;
 
   // ---------------------------------------------------------------- session
 
   const startSession = useCallback(() => {
+    // La carte s'ouvre désormais avant que la zone soit chargée (voir init) :
+    // sans réseau, le map matching n'a rien sur quoi projeter, et une session
+    // démarrée là ne créditerait aucun tronçon. Vaut aussi pour le démarrage
+    // automatique déclenché par onFix.
+    if (!state.graph) {
+      toast('Zone pas encore chargée — la session démarrera dès que le réseau sera là.');
+      return;
+    }
     state.matcher = new Matcher(state.graph, state.proj);
     state.lastFix = null;
     state.speedStreak = 0;
@@ -899,6 +977,10 @@ export function useWalkedia() {
 
     state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
     persist();
+    // Fin de session : on n'attend pas le prochain cycle différé pour écrire
+    // la géométrie découverte — c'est typiquement le moment où l'app va être
+    // mise en arrière-plan ou fermée.
+    discovered.flush(state.discovered).catch(() => {});
 
     const mins = Math.round((Date.now() - startedAt) / 60000);
     toast(`Session terminée (${mins} min) : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
@@ -923,24 +1005,40 @@ export function useWalkedia() {
   const init = useCallback(
     async (lat: number, lon: number) => {
       if (state.mapReady) return;
+
+      // La carte s'ouvre dès que la position est connue, SANS attendre la
+      // zone : l'historique déjà découvert (logic/discovered.ts) est
+      // dessinable immédiatement, et le premier chargement de zone peut
+      // prendre des dizaines de secondes quand les miroirs Overpass rament.
+      // Le réseau non encore découvert apparaît quand la zone arrive.
+      state.center = [lat, lon];
+      state.proj = makeProj(lat);
+      state.mapReady = true;
       state.startStatus = 'Chargement du réseau piéton…';
+      // `expanding` pendant tout le chargement initial : c'est le même verrou
+      // que maybeExpand, donc un tick GPS survenant entre-temps ne relancera
+      // pas une requête pour la même zone.
+      state.expanding = true;
       rerender();
+
+      await startWatch();
+
       const startedAt = Date.now();
       let region: Region;
       try {
         region = await fetchRegion(lat, lon);
       } catch (err: any) {
+        state.expanding = false;
         state.startStatus = 'Impossible de charger la zone : ' + err.message;
         rerender();
+        toast('Zone indisponible : ' + err.message, 6000);
         logLoad({ trigger: 'init', outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
         return;
       }
 
-      state.center = [lat, lon];
-      state.proj = makeProj(lat);
       applyRegion(region);
+      state.expanding = false;
       sweepCompletions(false);
-      state.mapReady = true;
       rerender();
       toast(`${state.graph!.edges.size} tronçons · ${state.graph!.junctions.size} carrefours dans la zone`);
       logLoad({
@@ -951,7 +1049,6 @@ export function useWalkedia() {
         junctions: state.graph!.junctions.size,
       });
 
-      await startWatch();
       checkBackgroundImport();
     },
     [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport]
