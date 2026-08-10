@@ -51,10 +51,16 @@ const VERSION = '2';
 // ne sert jamais (chaque joueur créerait sa propre entrée légèrement
 // décalée).
 function snapToGrid(lat: number, lon: number, cellMeters: number): [number, number] {
-  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
   const ky = 110540;
-  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   const gy = (Math.round((lat * ky) / cellMeters) * cellMeters) / ky;
+  // `kx` dérive de la latitude ARRONDIE, jamais de celle reçue. Sinon deux
+  // points de la même case, à des latitudes un peu différentes, retombent bien
+  // sur le même index de case mais reconstruisent une longitude légèrement
+  // différente : deux clés de cache pour la même zone, donc un recalcul complet
+  // par joueur au lieu d'un cache partagé. Observé en production avant
+  // correction : 2.348362 et 2.348386 pour la même case.
+  const kx = 111320 * Math.cos((gy * Math.PI) / 180);
+  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   return [gy, gx];
 }
 

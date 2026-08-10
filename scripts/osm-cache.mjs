@@ -93,12 +93,13 @@ export async function fetchZone(lat, lon, radius) {
   return { osm: { nodes, ways }, greenAreas };
 }
 
-// Même arrondi que snapToGrid côté client et côté Edge Function.
+// Même arrondi que snapToGrid côté client et côté Edge Function : `kx` dérive
+// de la latitude arrondie, jamais de celle reçue (voir get-region/index.ts).
 export function snapToGrid(lat, lon, cellMeters) {
-  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
   const ky = 110540;
-  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   const gy = (Math.round((lat * ky) / cellMeters) * cellMeters) / ky;
+  const kx = 111320 * Math.cos((gy * Math.PI) / 180);
+  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   return [gy, gx];
 }
 

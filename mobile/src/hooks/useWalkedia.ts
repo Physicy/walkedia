@@ -193,11 +193,18 @@ function distToNearestCenter(state: WalkediaState, lat: number, lon: number) {
 // nouveau cercle de 800 m dès qu'on dépasse le seuil de distance — au lieu
 // de réutiliser la zone déjà chargée juste à côté. La grille fait retomber
 // les points proches sur le même centre, donc sur la même zone.
+//
+// Doit rester rigoureusement identique à snapToGrid dans get-region/index.ts :
+// c'est ce calcul qui produit la clé de cache côté serveur.
 function snapToGrid(lat: number, lon: number, cellMeters: number): [number, number] {
-  const kx = 111320 * Math.cos((lat * Math.PI) / 180);
   const ky = 110540;
-  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   const gy = (Math.round((lat * ky) / cellMeters) * cellMeters) / ky;
+  // `kx` dérive de la latitude ARRONDIE, jamais de celle reçue : sinon deux
+  // points de la même case, à des latitudes un peu différentes, reconstruisent
+  // une longitude légèrement différente et ne partagent plus ni le même centre
+  // ici, ni la même entrée de cache côté serveur.
+  const kx = 111320 * Math.cos((gy * Math.PI) / 180);
+  const gx = (Math.round((lon * kx) / cellMeters) * cellMeters) / kx;
   return [gy, gx];
 }
 

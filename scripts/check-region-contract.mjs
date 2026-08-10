@@ -148,6 +148,36 @@ async function run(label, lat0, lon0) {
   );
 }
 
+// La clé de cache, c'est le centre arrondi : tous les points d'une même case
+// doivent produire EXACTEMENT le même centre, sinon chaque joueur crée sa
+// propre entrée et le cache n'est jamais partagé. Un `kx` dérivé de la
+// latitude reçue plutôt que de la latitude arrondie suffit à casser ça (bug
+// observé en production : 2.348362 et 2.348386 pour la même case).
+function checkGridDeterminism(label, lat0, lon0) {
+  console.log(`\n=== Clé de cache — ${label} ===`);
+  const [clat, clon] = snapToGrid(lat0, lon0, RADIUS);
+  const ky = 110540;
+  const kx = 111320 * Math.cos((clat * Math.PI) / 180);
+  const keys = new Set();
+  // Balayage de l'intérieur de la case (± 40 % de sa taille, pour rester à
+  // l'écart des frontières où basculer de case est le comportement voulu).
+  for (let dy = -0.4; dy <= 0.4; dy += 0.1) {
+    for (let dx = -0.4; dx <= 0.4; dx += 0.1) {
+      const [slat, slon] = snapToGrid(clat + (dy * RADIUS) / ky, clon + (dx * RADIUS) / kx, RADIUS);
+      keys.add(`${slat.toFixed(6)},${slon.toFixed(6)},${RADIUS}`);
+    }
+  }
+  check(keys.size === 1, `81 points d'une même case donnent une seule clé (${keys.size}) : ${[...keys].join(' ')}`);
+
+  // Ré-arrondir un centre déjà arrondi ne doit rien changer.
+  const [rlat, rlon] = snapToGrid(clat, clon, RADIUS);
+  check(rlat === clat && rlon === clon, 'arrondir un centre déjà arrondi est neutre');
+}
+
+checkGridDeterminism('Paris', 48.8566, 2.348);
+checkGridDeterminism('Périurbain', 48.12, -1.6);
+checkGridDeterminism('Latitude élevée', 60.17, 24.94);
+
 // Un centre-ville très dense et une zone périurbaine : les deux régimes que
 // buildGraph traite différemment (classification urbain/rural).
 await run('Paris — Châtelet', 48.8566, 2.348);
