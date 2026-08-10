@@ -446,7 +446,11 @@ export function useWalkedia() {
   // deux zones voisines décrivent le recouvrement à l'identique (voir
   // logic/regionGraph.ts) — il n'y a donc plus rien à recalculer, ni à
   // reconstruire depuis zéro à chaque nouvelle zone comme avant.
-  // L'assignation carrefour -> quartier vient elle aussi du serveur.
+  // L'assignation carrefour -> quartier vient elle aussi du serveur — mais
+  // elle peut arriver vide sur une zone jamais visitée : le serveur répond
+  // sans attendre les quartiers (une requête Overpass à part, qui pesait
+  // jusqu'à 60 s) et complète sa ligne de cache ensuite. Les statistiques par
+  // quartier du profil apparaissent alors au prochain chargement de la zone.
   const applyRegion = useCallback(
     (region: Region) => {
       if (!state.graph) state.graph = emptyGraph();
