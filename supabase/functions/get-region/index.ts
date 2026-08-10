@@ -68,21 +68,22 @@ function regionId(lat: number, lon: number, radius: number): string {
   return `${lat.toFixed(6)},${lon.toFixed(6)},${radius}`;
 }
 
-const json = (body: unknown, status = 200, timings?: Record<string, number>) =>
-  new Response(JSON.stringify(body), {
+// `timings` (ms) est ajouté au corps de la RÉPONSE, jamais au payload stocké :
+// des durées mises en cache seraient figées et trompeuses à la relecture. Il a
+// d'abord été exposé en en-tête `x-walkedia-timings`, mais la passerelle
+// Supabase/Cloudflare filtre les en-têtes de réponse inconnus. Le client ignore
+// ce champ (regionGraph.ts ne lit que les clés qu'il connaît) ; il sert à
+// savoir d'où vient une lenteur sans redéployer une version instrumentée.
+const json = (body: unknown, status = 200, timings?: Record<string, number>) => {
+  const withTimings =
+    timings && body && typeof body === 'object'
+      ? { ...(body as object), timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])) }
+      : body;
+  return new Response(JSON.stringify(withTimings), {
     status,
-    headers: {
-      'content-type': 'application/json',
-      // Détail du temps passé, en ms, exposé en en-tête plutôt que dans le
-      // payload : le payload est mis en cache tel quel, des durées y seraient
-      // figées et trompeuses à la relecture. Sert à savoir si une lenteur vient
-      // d'Overpass, de la construction du graphe ou de l'écriture du cache,
-      // sans avoir à redéployer une version instrumentée.
-      ...(timings
-        ? { 'x-walkedia-timings': Object.entries(timings).map(([k, v]) => `${k}=${Math.round(v)}`).join(';') }
-        : {}),
-    },
+    headers: { 'content-type': 'application/json' },
   });
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'POST uniquement' }, 405);
