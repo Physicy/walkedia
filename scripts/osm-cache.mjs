@@ -49,6 +49,15 @@ out skel qt;
 .green out geom;`;
 }
 
+// Miroir privilégié pour toute la durée du processus : les miroirs publics
+// sont désynchronisés entre eux (chacun son retard sur la base OSM), et
+// panacher au sein d'un même run compare des instantanés différents. On
+// réessaie donc en priorité celui qui a déjà répondu — mais sans s'y enfermer
+// (un 429 en cours de route ne doit pas tuer le run). Le vrai garde-fou est en
+// aval : check-region-contract.mjs refuse de conclure si les instantanés
+// obtenus sont trop étalés dans le temps.
+let preferredMirror = null;
+
 export async function fetchZone(lat, lon, radius) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   const file = path.join(CACHE_DIR, `${lat.toFixed(6)}_${lon.toFixed(6)}_${radius}.json`);
@@ -58,7 +67,8 @@ export async function fetchZone(lat, lon, radius) {
     json = JSON.parse(fs.readFileSync(file, 'utf8'));
   } else {
     const errors = [];
-    for (const mirror of MIRRORS) {
+    const ordered = preferredMirror ? [preferredMirror, ...MIRRORS.filter((m) => m !== preferredMirror)] : MIRRORS;
+    for (const mirror of ordered) {
       try {
         const res = await fetch(mirror, {
           method: 'POST',
@@ -71,6 +81,7 @@ export async function fetchZone(lat, lon, radius) {
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         json = await res.json();
+        preferredMirror = mirror;
         break;
       } catch (err) {
         errors.push(`${new URL(mirror).host}: ${err.message}`);
@@ -90,7 +101,9 @@ export async function fetchZone(lat, lon, radius) {
     else if (el.type === 'way' && el.nodes && el.nodes.length >= 2)
       ways.push({ id: el.id, nodes: el.nodes, tags: el.tags || {} });
   }
-  return { osm: { nodes, ways }, greenAreas };
+  // Horodatage de l'instantané OSM servi : deux zones issues d'instantanés
+  // différents ne sont pas comparables (voir check-region-contract.mjs).
+  return { osm: { nodes, ways }, greenAreas, snapshot: json.osm3s?.timestamp_osm_base ?? 'inconnu' };
 }
 
 // Même arrondi que snapToGrid côté client et côté Edge Function : `kx` dérive

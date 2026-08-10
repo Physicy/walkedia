@@ -39,6 +39,14 @@ const check = (ok, msg) => {
 // du bruit des éditions OSM quotidiennes », pas l'égalité stricte.
 const tolerable = (n, total) => n <= 1 || n / total <= 0.005;
 
+// Écart, en heures, entre le plus ancien et le plus récent instantané OSM
+// utilisé dans un run.
+function spanHours(snapshots) {
+  const times = [...snapshots].map((s) => Date.parse(s)).filter(Number.isFinite);
+  if (times.length < 2) return 0;
+  return (Math.max(...times) - Math.min(...times)) / 3600000;
+}
+
 async function run(label, lat0, lon0) {
   console.log(`\n=== ${label} ===`);
 
@@ -52,9 +60,11 @@ async function run(label, lat0, lon0) {
   ];
 
   // --- ce que fait l'Edge Function, zone par zone
+  const snapshots = new Set();
   const payloads = [];
   for (const center of centers) {
     const z = await fetchZone(center[0], center[1], BUILD_RADIUS);
+    snapshots.add(z.snapshot);
     const full = await buildGraph(z.osm, z.greenAreas.map((a) => a.ring));
     payloads.push(
       JSON.stringify({
@@ -77,6 +87,7 @@ async function run(label, lat0, lon0) {
   const greenById = new Map();
   for (const center of centers) {
     const z = await fetchZone(center[0], center[1], RADIUS);
+    snapshots.add(z.snapshot);
     for (const [id, c] of z.osm.nodes) nodes.set(id, c);
     for (const w of z.osm.ways) waysById.set(w.id, w);
     for (const a of z.greenAreas) greenById.set(a.id, a);
@@ -135,11 +146,27 @@ async function run(label, lat0, lon0) {
   const missingJ = [...refJunctions].filter((id) => !mergedJunctions.has(id)).length;
   const extraJ = [...mergedJunctions].filter((id) => !refJunctions.has(id)).length;
 
-  check(tolerable(missingE, refEdges.size), `arêtes manquantes vs référence : ${missingE}/${refEdges.size}`);
-  check(tolerable(extraE, refEdges.size), `arêtes en trop vs référence : ${extraE}/${refEdges.size}`);
-  check(tolerable(missingJ, refJunctions.size), `carrefours manquants vs référence : ${missingJ}/${refJunctions.size}`);
-  check(tolerable(extraJ, refJunctions.size), `carrefours en trop vs référence : ${extraJ}/${refJunctions.size}`);
-  check(tolerable(diffRequired, refJunctions.size), `carrefours aux branches exigées différentes : ${diffRequired}/${refJunctions.size}`);
+  // Comparer merged et ref n'a de sens que si les 8 requêtes Overpass viennent
+  // du MÊME instantané OSM. Les miroirs publics ont chacun leur retard, et
+  // `overpass-api.de` est un pool de serveurs dont le retard varie d'une
+  // requête à l'autre : on a déjà vu, dans un même run, un fetch du 10 août
+  // comparé à un fetch du 6 mai. Les écarts d'arêtes qui en résultent sont des
+  // éditions OSM réelles, pas un défaut du code — les signaler comme un échec
+  // serait un faux positif, donc on ne conclut pas.
+  const span = spanHours(snapshots);
+  if (span > 6) {
+    console.log(
+      `  IGNORÉ  comparaison à la référence non concluante : instantanés OSM étalés sur ${span.toFixed(0)} h ` +
+        `(${[...snapshots].sort().join(', ')}).\n` +
+        `          Purge scripts/.osm-cache et relance quand les miroirs Overpass sont sains.`
+    );
+  } else {
+    check(tolerable(missingE, refEdges.size), `arêtes manquantes vs référence : ${missingE}/${refEdges.size}`);
+    check(tolerable(extraE, refEdges.size), `arêtes en trop vs référence : ${extraE}/${refEdges.size}`);
+    check(tolerable(missingJ, refJunctions.size), `carrefours manquants vs référence : ${missingJ}/${refJunctions.size}`);
+    check(tolerable(extraJ, refJunctions.size), `carrefours en trop vs référence : ${extraJ}/${refJunctions.size}`);
+    check(tolerable(diffRequired, refJunctions.size), `carrefours aux branches exigées différentes : ${diffRequired}/${refJunctions.size}`);
+  }
 
   const bytes = payloads.reduce((sum, p) => sum + p.length, 0);
   console.log(
