@@ -68,8 +68,21 @@ function regionId(lat: number, lon: number, radius: number): string {
   return `${lat.toFixed(6)},${lon.toFixed(6)},${radius}`;
 }
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const json = (body: unknown, status = 200, timings?: Record<string, number>) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      // Détail du temps passé, en ms, exposé en en-tête plutôt que dans le
+      // payload : le payload est mis en cache tel quel, des durées y seraient
+      // figées et trompeuses à la relecture. Sert à savoir si une lenteur vient
+      // d'Overpass, de la construction du graphe ou de l'écriture du cache,
+      // sans avoir à redéployer une version instrumentée.
+      ...(timings
+        ? { 'x-walkedia-timings': Object.entries(timings).map(([k, v]) => `${k}=${Math.round(v)}`).join(';') }
+        : {}),
+    },
+  });
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'POST uniquement' }, 405);
@@ -89,20 +102,32 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+  const t0 = performance.now();
+  const since = (t: number) => performance.now() - t;
+
   const { data: existing, error: readError } = await supabase
     .from('regions')
     .select('payload, version')
     .eq('id', id)
     .maybeSingle();
+  const readMs = since(t0);
   if (readError) return json({ error: 'Lecture cache impossible : ' + readError.message }, 500);
-  if (existing && existing.version === VERSION) return json(existing.payload);
+  if (existing && existing.version === VERSION) return json(existing.payload, 200, { lecture: readMs, total: since(t0) });
 
   // Cache miss (ou entrée périmée) : calcule, écrit, répond.
   let osm, greenAreas, neighborhoods: Neighborhood[];
+  let zoneMs = 0;
+  let quartiersMs = 0;
+  const tFetch = performance.now();
   try {
+    // Chronométrés séparément bien qu'exécutés en parallèle : le total ne dit
+    // pas lequel des deux fait attendre, et les quartiers (donnée de confort)
+    // ne doivent surtout pas être le facteur limitant.
     const [zone, quartiers] = await Promise.all([
-      fetchZone(slat, slon, BUILD_RADIUS),
-      fetchNeighborhoods(slat, slon, SERVE_RADIUS).catch(() => [] as Neighborhood[]),
+      fetchZone(slat, slon, BUILD_RADIUS).then((r) => ((zoneMs = since(tFetch)), r)),
+      fetchNeighborhoods(slat, slon, SERVE_RADIUS)
+        .catch(() => [] as Neighborhood[])
+        .then((r) => ((quartiersMs = since(tFetch)), r)),
     ]);
     osm = zone.osm;
     greenAreas = zone.greenAreas;
@@ -111,14 +136,17 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Overpass indisponible : ' + (err as Error).message }, 502);
   }
 
+  const tBuild = performance.now();
   const full = await buildGraph(osm, greenAreas.map((a) => a.ring));
   const graph = clipGraph(full, [slat, slon], SERVE_RADIUS);
   const neighborhoodMap = new Map(neighborhoods.map((n) => [n.id, n]));
   const junctionNeighborhood = assignNeighborhoods(graph.junctions, neighborhoodMap);
+  const buildMs = since(tBuild);
 
   // Les espaces verts ne servaient qu'à buildGraph (voir graph.ts) : plus
   // rien côté client n'en a besoin maintenant que le graphe arrive construit,
   // donc ils ne sont pas dans le payload (~15 % de poids en moins).
+  const tSerialize = performance.now();
   const payload = {
     graph: serializeGraph(graph),
     neighborhoods,
@@ -126,7 +154,9 @@ Deno.serve(async (req: Request) => {
     center: [slat, slon],
     radius: RADIUS,
   };
+  const serializeMs = since(tSerialize);
 
+  const tWrite = performance.now();
   const { error: writeError } = await supabase.from('regions').upsert({
     id,
     center: `SRID=4326;POINT(${slon} ${slat})`,
@@ -142,5 +172,13 @@ Deno.serve(async (req: Request) => {
     console.error('Écriture cache échouée:', writeError.message);
   }
 
-  return json(payload);
+  return json(payload, 200, {
+    lecture: readMs,
+    overpass_zone: zoneMs,
+    overpass_quartiers: quartiersMs,
+    construction: buildMs,
+    serialisation: serializeMs,
+    ecriture_cache: since(tWrite),
+    total: since(t0),
+  });
 });
