@@ -64,8 +64,10 @@ const REGION_RADIUS_M = 500;
 
 // Plafond de cellules estimées calculées pour un viewport. La taille de
 // cellule étant une fraction de la hauteur visible, le compte est
-// naturellement stable (~150) : ce plafond n'est qu'un garde-fou.
-const MAX_ESTIMATED_CELLS = 400;
+// naturellement stable — mesuré à 91 de 2,8 km à 500 km de hauteur visible.
+// Ce plafond n'est donc qu'un garde-fou contre un viewport aberrant (écran
+// très allongé, projection extrême) : il ne se déclenche à aucun zoom normal.
+const MAX_ESTIMATED_CELLS = 600;
 
 // Dézoomé au-delà de ce niveau, on affiche un badge "nombre de carrefours"
 // par cellule de grille plutôt que chaque carrefour individuellement — plus
