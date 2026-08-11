@@ -14,6 +14,12 @@ import { COLORS } from '../theme';
 import { heatColor, progressColor } from '../logic/color';
 import { haversine } from '../logic/geo';
 
+// Cellules estimées : volontairement neutres et translucides, pour se
+// distinguer au premier coup d'œil des badges colorés par la progression
+// réelle (voir progressColor).
+const ESTIMATED_CLUSTER_BG = 'rgba(71, 85, 105, 0.45)';
+const ESTIMATED_CLUSTER_BORDER = 'rgba(226, 232, 240, 0.45)';
+
 const UNDISCOVERED_STROKE = 'rgba(148, 163, 184, 0.55)';
 const DISCOVERED_STROKE = 'rgba(34, 197, 94, 0.95)';
 const TRACK_STROKE = 'rgba(79, 70, 229, 0.65)';
@@ -50,6 +56,17 @@ const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 1.0; // ~111 km — "plusieurs villes
 const MAX_RENDERED_JUNCTIONS = 300;
 const MAX_RENDERED_EDGES = 600;
 
+// Rayon d'une zone servie par get-region : sert à convertir le nombre de
+// carrefours d'une zone chargée en densité (carrefours/km²), pour estimer les
+// cellules dont la zone n'est pas chargée. Doit suivre RADIUS dans
+// useWalkedia.ts.
+const REGION_RADIUS_M = 500;
+
+// Plafond de cellules estimées calculées pour un viewport. La taille de
+// cellule étant une fraction de la hauteur visible, le compte est
+// naturellement stable (~150) : ce plafond n'est qu'un garde-fou.
+const MAX_ESTIMATED_CELLS = 400;
+
 // Dézoomé au-delà de ce niveau, on affiche un badge "nombre de carrefours"
 // par cellule de grille plutôt que chaque carrefour individuellement — plus
 // lisible et beaucoup moins de Marker natifs à monter sur une vue large.
@@ -77,6 +94,10 @@ interface JunctionCluster {
   lon: number;
   total: number;
   done: number;
+  // Cellule dont la zone n'est pas chargée : `total` est une extrapolation de
+  // densité, `done` n'est pas connu. Affiché différemment pour ne jamais
+  // laisser croire à un décompte réel (voir le rendu des badges).
+  estimated?: boolean;
 }
 
 // Sous-ensemble animé des ondes de capture (voir CaptureWave) : seuls les N
@@ -209,6 +230,8 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       const cellMeters = clusterCellMeters(region.latitudeDelta);
       const kx = 111320 * Math.cos((region.latitude * Math.PI) / 180);
       const ky = 110540;
+
+      // 1. Comptage EXACT là où la zone est chargée.
       const cells = new Map<string, { latSum: number; lonSum: number; total: number; done: number }>();
       for (const j of junctionsInView as any[]) {
         const key = Math.floor((j.lon * kx) / cellMeters) + ':' + Math.floor((j.lat * ky) / cellMeters);
@@ -219,13 +242,57 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         c.total++;
         if (junctionIsDone(state, j.id)) c.done++;
       }
-      const clusters: JunctionCluster[] = [...cells.entries()].map(([key, c]) => ({
-        key,
-        lat: c.latSum / c.total,
-        lon: c.lonSum / c.total,
-        total: c.total,
-        done: c.done,
-      }));
+
+      const clusters: JunctionCluster[] = [];
+      for (const [key, c] of cells) {
+        clusters.push({ key, lat: c.latSum / c.total, lon: c.lonSum / c.total, total: c.total, done: c.done });
+      }
+
+      // 2. Remplissage ESTIMÉ partout ailleurs dans le viewport. Le but est
+      //    d'avoir une carte lisible au dézoom sans télécharger des dizaines
+      //    de zones : au-delà d'un certain niveau, charger pour compter
+      //    exactement coûterait bien plus que ça ne rapporte visuellement.
+      //    La densité vient de la zone chargée la plus proche (voir
+      //    regionStats) — pas d'une constante, parce qu'entre un centre-ville
+      //    et la campagne l'écart est d'un ordre de grandeur.
+      const stats = state.regionStats;
+      if (stats.length) {
+        const cellAreaKm2 = (cellMeters / 1000) ** 2;
+        const zoneAreaKm2 = Math.PI * (REGION_RADIUS_M / 1000) ** 2;
+        const minCx = Math.floor((viewBBox.minLon * kx) / cellMeters);
+        const maxCx = Math.floor((viewBBox.maxLon * kx) / cellMeters);
+        const minCy = Math.floor((viewBBox.minLat * ky) / cellMeters);
+        const maxCy = Math.floor((viewBBox.maxLat * ky) / cellMeters);
+
+        // Garde-fou : la taille de cellule étant une fraction de la hauteur
+        // visible, le viewport en contient un nombre à peu près constant —
+        // mais une projection extrême ou un viewport très allongé pourrait
+        // faire déraper le compte.
+        const nbCells = (maxCx - minCx + 1) * (maxCy - minCy + 1);
+        if (nbCells <= MAX_ESTIMATED_CELLS) {
+          for (let cx = minCx; cx <= maxCx; cx++) {
+            for (let cy = minCy; cy <= maxCy; cy++) {
+              const key = cx + ':' + cy;
+              if (cells.has(key)) continue; // déjà compté exactement
+              const lat = ((cy + 0.5) * cellMeters) / ky;
+              const lon = ((cx + 0.5) * cellMeters) / kx;
+              let best = stats[0];
+              let bestDist = Infinity;
+              for (const s of stats) {
+                const d = haversine([lat, lon], s.center);
+                if (d < bestDist) {
+                  bestDist = d;
+                  best = s;
+                }
+              }
+              const estimation = Math.round((best.junctions / zoneAreaKm2) * cellAreaKm2);
+              if (estimation < 1) continue;
+              clusters.push({ key, lat, lon, total: estimation, done: 0, estimated: true });
+            }
+          }
+        }
+      }
+
       return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: clusters };
     }
 
@@ -365,16 +432,29 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
         {junctionClusters.map((c) => {
           const ratio = c.total > 0 ? c.done / c.total : 0;
+          // Une cellule estimée n'a pas de progression connue : la colorer
+          // comme une cellule à 0 % complété ferait passer une inconnue pour
+          // une certitude. Elle reste neutre, translucide, et son nombre est
+          // préfixé d'un « ~ ».
           return (
             <Marker
               key={`cluster-${c.key}`}
               coordinate={{ latitude: c.lat, longitude: c.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={false}
-              zIndex={4}
+              zIndex={c.estimated ? 3 : 4}
             >
-              <View style={[styles.clusterBadge, { backgroundColor: progressColor(ratio) }]}>
-                <Text style={styles.clusterBadgeText}>{c.total}</Text>
+              <View
+                style={[
+                  styles.clusterBadge,
+                  c.estimated
+                    ? { backgroundColor: ESTIMATED_CLUSTER_BG, borderWidth: 1, borderColor: ESTIMATED_CLUSTER_BORDER }
+                    : { backgroundColor: progressColor(ratio) },
+                ]}
+              >
+                <Text style={[styles.clusterBadgeText, c.estimated && styles.clusterBadgeTextEstimated]}>
+                  {c.estimated ? `~${c.total}` : c.total}
+                </Text>
               </View>
             </Marker>
           );
@@ -473,6 +553,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(15, 23, 42, 0.6)',
   },
   clusterBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  clusterBadgeTextEstimated: { color: 'rgba(255, 255, 255, 0.85)', fontWeight: '600' },
   positionDot: {
     width: 16,
     height: 16,

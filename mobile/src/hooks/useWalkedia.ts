@@ -123,6 +123,12 @@ interface WalkediaState {
   proj: ((lat: number, lon: number) => number[]) | null;
   center: [number, number] | null;
   centers: [number, number][];
+  // Nombre de carrefours réellement trouvés dans chaque zone chargée. Sert à
+  // estimer la densité locale là où RIEN n'est chargé, pour remplir la carte
+  // de clusters au dézoom sans télécharger ces zones (voir MapScreen,
+  // clusters estimés). Une seule densité globale ne marcherait pas : entre un
+  // centre-ville et la campagne, l'écart est d'un ordre de grandeur.
+  regionStats: { center: [number, number]; junctions: number }[];
   neighborhoods: Map<number, Neighborhood>;
   junctionNeighborhood: Map<string, number | null>;
   // Géométrie de ce qui a déjà été découvert, persistée localement (voir
@@ -160,6 +166,7 @@ function freshState(): WalkediaState {
     proj: null,
     center: null,
     centers: [],
+    regionStats: [],
     neighborhoods: new Map(),
     junctionNeighborhood: new Map(),
     discovered: discovered.fresh(),
@@ -500,6 +507,8 @@ export function useWalkedia() {
       // bord (voir distToNearestCenter/nearBoundary).
       if (!state.centers.some((c) => c[0] === region.center[0] && c[1] === region.center[1])) {
         state.centers.push(region.center);
+        // Densité observée de cette zone, retenue pour extrapoler ailleurs.
+        state.regionStats.push({ center: region.center, junctions: region.graph.junctions.size });
       }
 
       // Rattrapage : la zone qui arrive contient peut-être la géométrie de
