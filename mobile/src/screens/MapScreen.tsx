@@ -47,7 +47,7 @@ const VIEWPORT_PAD = 0.6;
 // Les tronçons (arêtes) ont leur propre cutoff, plus serré : ils deviennent
 // illisibles/inutiles bien avant l'échelle pertinente pour les carrefours.
 const MAX_EDGE_RENDER_LATITUDE_DELTA = 0.08; // ~9 km de hauteur visible
-const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 1.0; // ~111 km — "plusieurs villes"
+const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 4.5; // ~500 km — échelle "pays"
 
 // Plafonds absolus, indépendants du zoom : une zone très dense (centre-ville
 // avec beaucoup d'exploration accumulée) peut dépasser un budget de rendu
@@ -81,7 +81,13 @@ const CLUSTER_LATITUDE_DELTA = 0.025; // ~2.8 km de hauteur visible
 // pour une transition continue au changement de mode.
 const CLUSTER_CELL_FRACTION = 0.09;
 const CLUSTER_CELL_MIN = 150; // m
-const CLUSTER_CELL_MAX = 20000; // m
+// Doit rester au-dessus de MAX_JUNCTION_RENDER_LATITUDE_DELTA × 110540 ×
+// CLUSTER_CELL_FRACTION, sinon la cellule cesse de grandir avec le dézoom et
+// c'est toute la propriété "nombre de badges constant" qui tombe : à 500 km de
+// hauteur visible, un plafond à 20 km donnerait ~1000 cellules au lieu de
+// ~150 — autant de marqueurs natifs, et l'estimation se couperait d'elle-même
+// en dépassant MAX_ESTIMATED_CELLS.
+const CLUSTER_CELL_MAX = 60000; // m
 
 function clusterCellMeters(latitudeDelta: number) {
   const visibleHeightMeters = latitudeDelta * 110540;
@@ -259,10 +265,15 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       if (stats.length) {
         const cellAreaKm2 = (cellMeters / 1000) ** 2;
         const zoneAreaKm2 = Math.PI * (REGION_RADIUS_M / 1000) ** 2;
-        const minCx = Math.floor((viewBBox.minLon * kx) / cellMeters);
-        const maxCx = Math.floor((viewBBox.maxLon * kx) / cellMeters);
-        const minCy = Math.floor((viewBBox.minLat * ky) / cellMeters);
-        const maxCy = Math.floor((viewBBox.maxLat * ky) / cellMeters);
+        // Viewport RÉEL, sans la marge anti-pop-in de viewBBox : celle-ci
+        // multiplie la surface par ~4,8, donc autant de marqueurs natifs
+        // montés pour rien. Un badge de cluster qui apparaît juste après un
+        // pan est acceptable — onRegionChangeComplete se déclenche de toute
+        // façon à la fin du geste.
+        const minCx = Math.floor(((region.longitude - region.longitudeDelta / 2) * kx) / cellMeters);
+        const maxCx = Math.floor(((region.longitude + region.longitudeDelta / 2) * kx) / cellMeters);
+        const minCy = Math.floor(((region.latitude - region.latitudeDelta / 2) * ky) / cellMeters);
+        const maxCy = Math.floor(((region.latitude + region.latitudeDelta / 2) * ky) / cellMeters);
 
         // Garde-fou : la taille de cellule étant une fraction de la hauteur
         // visible, le viewport en contient un nombre à peu près constant —
