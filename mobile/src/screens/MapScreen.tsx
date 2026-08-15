@@ -1,9 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Circle, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
+import MapView, { Circle, Marker, Polygon, Polyline, Region, UrlTile } from 'react-native-maps';
 
 import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
+import type { Neighborhood } from '../logic/regionGraph';
 import { Hud } from '../components/Hud';
 import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
@@ -17,6 +18,14 @@ import { haversine } from '../logic/geo';
 const UNDISCOVERED_STROKE = 'rgba(148, 163, 184, 0.55)';
 const DISCOVERED_STROKE = 'rgba(34, 197, 94, 0.95)';
 const TRACK_STROKE = 'rgba(79, 70, 229, 0.65)';
+
+// Contours de quartier : même violet que la trace de session (COLORS.primary,
+// #4f46e5), mais très atténué — c'est un repère de fond, pas un élément de
+// jeu, et il ne doit ni concurrencer les tronçons ni assombrir le fond de
+// carte là où plusieurs quartiers se touchent. Le trait plein fermé suffit à
+// le distinguer de la trace, qui est en pointillés.
+const NEIGHBORHOOD_STROKE = 'rgba(79, 70, 229, 0.55)';
+const NEIGHBORHOOD_FILL = 'rgba(79, 70, 229, 0.07)';
 
 function toLatLng([lat, lon]: [number, number]) {
   return { latitude: lat, longitude: lon };
@@ -49,6 +58,16 @@ const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 1.0; // ~111 km — "plusieurs villes
 // degré (plus significatifs visuellement) et aux tronçons déjà découverts.
 const MAX_RENDERED_JUNCTIONS = 300;
 const MAX_RENDERED_EDGES = 600;
+
+// Quartiers : cutoff propre, entre celui des tronçons et celui des carrefours.
+// Un contour de quartier reste lisible et utile bien après que les rues sont
+// devenues illisibles (c'est justement à cette échelle qu'on veut voir « ce
+// qu'il reste à faire dans ce quartier »), mais au-delà de ~30 km de hauteur
+// visible les contours se réduisent à des taches superposées. Le plafond de
+// nombre suit la même logique que les tronçons/carrefours : la liste
+// accumulée grandit avec l'exploration, pas avec ce qui est à l'écran.
+const MAX_NEIGHBORHOOD_RENDER_LATITUDE_DELTA = 0.3; // ~33 km de hauteur visible
+const MAX_RENDERED_NEIGHBORHOODS = 40;
 
 // Dézoomé au-delà de ce niveau, on affiche un badge "nombre de carrefours"
 // par cellule de grille plutôt que chaque carrefour individuellement — plus
@@ -140,6 +159,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
   const edges = state.graph ? [...state.graph.edges.values()] : [];
   const junctions = state.graph ? [...state.graph.junctions.values()] : [];
+  const neighborhoods = [...state.neighborhoods.values()];
 
   // Le graphe complet reste toujours en mémoire (nécessaire pour que le
   // matching GPS et la progression fonctionnent même hors écran), mais on
@@ -147,10 +167,28 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // de traits/points natifs à dessiner sur la carte à mesure que la zone
   // connue grandit (pan vers de nouvelles zones). Mémoïsé sur le graphe et
   // la région pour ne pas recalculer à chaque tick (fix GPS, toast…).
-  const { visibleEdges, visibleJunctions, junctionClusters } = useMemo(() => {
-    if (!region) return { visibleEdges: edges, visibleJunctions: junctions, junctionClusters: [] as JunctionCluster[] };
+  const { visibleEdges, visibleJunctions, junctionClusters, visibleNeighborhoods } = useMemo(() => {
+    if (!region) {
+      return {
+        visibleEdges: edges,
+        visibleJunctions: junctions,
+        junctionClusters: [] as JunctionCluster[],
+        visibleNeighborhoods: neighborhoods,
+      };
+    }
 
     const viewBBox = regionBBox(region);
+
+    // Contours de quartier : filtrés comme le reste sur la zone visible, mais
+    // sans dépendre du mode d'affichage des carrefours (points ou clusters) —
+    // ils restent utiles dans les deux, et à des échelles où les tronçons ne
+    // sont plus dessinés du tout.
+    let neighborhoodsInView: Neighborhood[] = [];
+    if (region.latitudeDelta <= MAX_NEIGHBORHOOD_RENDER_LATITUDE_DELTA) {
+      neighborhoodsInView = neighborhoods
+        .filter((n) => bboxIntersects(coordsBBox(n.ring), viewBBox))
+        .slice(0, MAX_RENDERED_NEIGHBORHOODS);
+    }
 
     // Tronçons : cutoff propre, plus serré que celui des carrefours (voir
     // constantes plus haut).
@@ -168,7 +206,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
     // Carrefours : rien au-delà de l'échelle "plusieurs villes" (règle 3),
     // quelle que soit la donnée déjà chargée en mémoire.
     if (region.latitudeDelta > MAX_JUNCTION_RENDER_LATITUDE_DELTA) {
-      return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: [] as JunctionCluster[] };
+      return {
+        visibleEdges: edgesInView,
+        visibleJunctions: [],
+        junctionClusters: [] as JunctionCluster[],
+        visibleNeighborhoods: neighborhoodsInView,
+      };
     }
 
     const junctionsInView = junctions.filter(
@@ -201,7 +244,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         total: c.total,
         done: c.done,
       }));
-      return { visibleEdges: edgesInView, visibleJunctions: [], junctionClusters: clusters };
+      return {
+        visibleEdges: edgesInView,
+        visibleJunctions: [],
+        junctionClusters: clusters,
+        visibleNeighborhoods: neighborhoodsInView,
+      };
     }
 
     // Zoomé : chaque carrefour individuellement, peu importe sa distance à
@@ -215,9 +263,17 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         .slice(0, MAX_RENDERED_JUNCTIONS);
     }
 
-    return { visibleEdges: edgesInView, visibleJunctions: pointJunctions, junctionClusters: [] as JunctionCluster[] };
+    return {
+      visibleEdges: edgesInView,
+      visibleJunctions: pointJunctions,
+      junctionClusters: [] as JunctionCluster[],
+      visibleNeighborhoods: neighborhoodsInView,
+    };
+    // `state.neighborhoods.size` en dépendance : la Map est mutée en place par
+    // applyRegion (comme le graphe), donc sa taille est le seul signal qui
+    // change quand une zone apporte de nouveaux quartiers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.graph, region]);
+  }, [state.graph, state.neighborhoods.size, region]);
 
   if (!state.graph || !state.center) return null;
 
@@ -307,6 +363,23 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         onRegionChangeComplete={onRegionChangeComplete}
       >
         <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+
+        {/* Contours de quartier. Rendus en premier ET à zIndex 0 : sous les
+            tronçons, la trace et les carrefours dans les deux cas (le zIndex
+            n'est honoré que par le provider Google, l'ordre de montage fait
+            foi sur Apple Maps). Un carrefour à l'intérieur d'un contour est
+            un carrefour qui compte pour ce quartier — c'est le lien avec le
+            pourcentage affiché dans le profil (voir neighborhoodStats). */}
+        {visibleNeighborhoods.map((n) => (
+          <Polygon
+            key={`quartier-${n.id}`}
+            coordinates={n.ring.map(toLatLng)}
+            strokeColor={NEIGHBORHOOD_STROKE}
+            fillColor={NEIGHBORHOOD_FILL}
+            strokeWidth={1.5}
+            zIndex={0}
+          />
+        ))}
 
         {visibleEdges.map((e: any) => {
           const found = edgeIsFound(state, e.id);

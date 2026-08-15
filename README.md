@@ -106,6 +106,16 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   exclues (règle ci-dessus inchangée pour elles). Limitation connue : seuls
   les contours simples (ways fermés) sont gérés, pas les relations
   multipolygones (rare pour les parcs).
+- **Quartiers** : les contours OSM (`place=suburb|neighbourhood|quarter` avec
+  un `name` et une géométrie de way fermé) sont récupérés par l'Edge Function
+  en même temps que la zone, et chaque carrefour est assigné au quartier qui
+  le contient. La carte les dessine en violet translucide : le contour délimite
+  l'ensemble des carrefours qui comptent pour ce quartier, donc tout ce qui
+  reste à compléter pour le débloquer — le pourcentage correspondant est
+  listé dans le *Profil*. Ils ne sont plus dessinés au-delà de ~30 km de
+  hauteur visible. Limitation connue : beaucoup de villes ne taguent leurs
+  quartiers que par un nœud sans contour, auquel cas rien n'est affiché et
+  aucun carrefour n'est assigné.
 - **IDs d'arêtes** : dérivés de la géométrie (extrémités + milieu + longueur),
   stables entre sessions et indépendants des IDs OSM.
 - **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur
