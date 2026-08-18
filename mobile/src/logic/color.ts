@@ -35,13 +35,16 @@ export function heatColor(count: number): string | null {
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 }
 
-// Gris (rien de complété) -> bleu (tout complété) : couleur des ondes de
-// capture individuelles ET des badges de cluster (LOD par zoom), pour rester
-// cohérent visuellement d'un niveau de zoom à l'autre.
-const WAVE_GRAY: [number, number, number] = [148, 163, 184];
-const WAVE_BLUE: [number, number, number] = [59, 130, 246];
+// Gris (rien de complété) -> violet (tout complété) : couleur des ondes de
+// capture individuelles ET des badges de cluster (LOD par zoom). Le violet ne
+// désigne que de la géométrie parcourue ou un point gagné (règle du système
+// encre et papier) — un ratio de complétion en fait partie, contrairement à
+// heatColor ci-dessus qui reste sur sa propre échelle (fréquence de passage,
+// pas possession).
+const WAVE_GRAY: [number, number, number] = [138, 140, 163];
+const WAVE_VIOLET: [number, number, number] = [108, 93, 244];
 
 export function progressColor(ratio: number): string {
-  const [r, g, b] = mix(WAVE_GRAY, WAVE_BLUE, Math.max(0, Math.min(1, ratio)));
+  const [r, g, b] = mix(WAVE_GRAY, WAVE_VIOLET, Math.max(0, Math.min(1, ratio)));
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 }

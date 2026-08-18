@@ -6,14 +6,13 @@
 // immuable et limite le risque de régression sur une logique dense.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
 import { fetchRegion } from '../logic/region';
 import { emptyGraph, mergeGraph } from '../logic/regionGraph';
 import type { Graph, Neighborhood, Region } from '../logic/regionGraph';
 import { Matcher, MAX_ACCURACY } from '../logic/matching';
-import { makeProj, haversine } from '../logic/geo';
+import { makeProj, haversine, lineLength } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
 import * as discovered from '../logic/discovered';
@@ -95,6 +94,46 @@ export interface SessionState {
   startedAt: number;
 }
 
+// Un carrefour complété, en attente d'être montré par le voile plein écran
+// (voir MapChrome/SessionSummary — anciennement une simple ligne de toast).
+// File d'attente plutôt qu'un singleton : le map matching peut créditer
+// plusieurs tronçons d'un même lot de fixes GPS interpolés (voir onFix) et
+// donc compléter plusieurs carrefours d'un coup ; ils se montrent alors l'un
+// après l'autre plutôt que d'en perdre.
+export interface PointGagne {
+  junctionId: string;
+  numero: number;
+  // Combien des rues de ce carrefour étaient inédites (jamais marchées avant
+  // cette session), sur son nombre total de branches requises. Capturé au
+  // moment de la complétion plutôt que recalculé à l'affichage : la session
+  // peut se terminer (arrêt automatique) entre les deux, et `newEdges`
+  // disparaît avec elle.
+  nouvelles: number;
+  total: number;
+}
+
+// Résumé affiché à la fin d'une session — remplace le toast : dit ce qui a
+// été gagné ET ce qui ne comptait pas (voir SessionSummary.tsx), ce qu'une
+// ligne de toast ne peut pas faire. `raisonVitesse` distingue un arrêt
+// automatique (le joueur roulait) d'un arrêt volontaire.
+export interface SortieResume {
+  edges: number;
+  junctions: number;
+  km: number;
+  minutes: number;
+  raisonVitesse: number | null;
+}
+
+// Marche détectée en arrière-plan pendant que l'app était fermée (voir
+// checkBackgroundImport) — remplace l'ancienne `Alert` système : une boîte
+// native ne peut ni montrer ce que la marche rapporterait ni être stylée.
+export interface MarcheDetectee {
+  distanceM: number;
+  minutes: number;
+  fixes: Fix[];
+  startedAt: number;
+}
+
 // Journal des tentatives de chargement de zone (voir logLoad) : pour le
 // panneau de monitoring dev (LoadMonitorPanel.tsx), afin de voir exactement
 // pourquoi un chargement a été rapide, lent, ou n'a rien fait.
@@ -145,6 +184,9 @@ interface WalkediaState {
   // long survient entre deux fixes.
   idleMovement: { lat: number; lon: number; t: number; distance: number } | null;
   toast: { msg: string; key: number } | null;
+  pointsGagnes: PointGagne[];
+  sortieResume: SortieResume | null;
+  marcheDetectee: MarcheDetectee | null;
   ready: boolean; // progrès chargé depuis AsyncStorage
   mapReady: boolean; // graphe initial chargé
   startStatus: string;
@@ -175,6 +217,9 @@ function freshState(): WalkediaState {
     speedStreak: 0,
     idleMovement: null,
     toast: null,
+    pointsGagnes: [],
+    sortieResume: null,
+    marcheDetectee: null,
     ready: false,
     mapReady: false,
     startStatus: '',
@@ -815,15 +860,21 @@ export function useWalkedia() {
     const found = await consumeBackgroundBuffer();
     if (!found) return;
     const mins = Math.max(1, Math.round((found.fixes[found.fixes.length - 1].t - found.startedAt) / 60000));
-    Alert.alert(
-      'Marche détectée',
-      `Une marche a été détectée pendant que l'app était fermée (~${mins} min, ${Math.round(found.distance)} m).\nImporter ce trajet dans ton historique ?`,
-      [
-        { text: 'Ignorer', style: 'cancel' },
-        { text: 'Importer', onPress: () => importShadowWalk(found.fixes, found.startedAt) },
-      ]
-    );
-  }, [importShadowWalk]);
+    state.marcheDetectee = { distanceM: found.distance, minutes: mins, fixes: found.fixes, startedAt: found.startedAt };
+    rerender();
+  }, [state, rerender]);
+
+  const importerMarcheDetectee = useCallback(() => {
+    const m = state.marcheDetectee;
+    if (!m) return;
+    state.marcheDetectee = null;
+    importShadowWalk(m.fixes, m.startedAt);
+  }, [state, importShadowWalk]);
+
+  const ignorerMarcheDetectee = useCallback(() => {
+    state.marcheDetectee = null;
+    rerender();
+  }, [state, rerender]);
 
   const enableBackgroundTracking = useCallback(async () => {
     const result = await startBackgroundTracking();
@@ -899,9 +950,8 @@ export function useWalkedia() {
         state.speedStreak++;
         if (state.speedStreak >= SPEED_STREAK_LIMIT) {
           state.speedStreak = 0;
-          toast(`Session arrêtée : vitesse trop élevée (${Math.round(speedKmh)} km/h) pour de la marche.`, 6000);
           // eslint-disable-next-line @typescript-eslint/no-use-before-define
-          endSessionRef.current?.();
+          endSessionRef.current?.(Math.round(speedKmh));
           return;
         }
       } else {
@@ -931,7 +981,14 @@ export function useWalkedia() {
             const j = graph.junctions.get(jid);
             if (j && checkJunction(j)) {
               state.session.newInter.add(jid);
-              toast('Carrefour complété ! +1 point 🎉');
+              let nouvelles = 0;
+              for (const id of j.requiredEdgeIds) if (state.session.newEdges.has(id)) nouvelles++;
+              state.pointsGagnes.push({
+                junctionId: jid,
+                numero: state.progress.junctions.size,
+                nouvelles,
+                total: j.requiredEdgeIds.size,
+              });
             }
           }
           persist();
@@ -967,25 +1024,37 @@ export function useWalkedia() {
   }, [state, rerender, toast]);
   startSessionRef.current = startSession;
 
-  const endSession = useCallback(() => {
-    if (!state.session) return;
-    const { newEdges, newInter, startedAt } = state.session;
-    state.session = null;
-    state.matcher = null;
-    state.lastFix = null;
-    state.idleMovement = null;
+  // `vitesseKmh` : présent seulement quand l'arrêt est automatique (le joueur
+  // roulait), voir onFix. Porté jusqu'au résumé plutôt que traité ici, pour
+  // que SessionSummary puisse dire « tu roulais à 24 km/h » au lieu d'un
+  // arrêt qui semble arbitraire.
+  const endSession = useCallback(
+    (vitesseKmh?: number) => {
+      if (!state.session) return;
+      const { newEdges, newInter, track, startedAt } = state.session;
+      state.session = null;
+      state.matcher = null;
+      state.lastFix = null;
+      state.idleMovement = null;
 
-    state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
-    persist();
-    // Fin de session : on n'attend pas le prochain cycle différé pour écrire
-    // la géométrie découverte — c'est typiquement le moment où l'app va être
-    // mise en arrière-plan ou fermée.
-    discovered.flush(state.discovered).catch(() => {});
+      state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
+      persist();
+      // Fin de session : on n'attend pas le prochain cycle différé pour écrire
+      // la géométrie découverte — c'est typiquement le moment où l'app va être
+      // mise en arrière-plan ou fermée.
+      discovered.flush(state.discovered).catch(() => {});
 
-    const mins = Math.round((Date.now() - startedAt) / 60000);
-    toast(`Session terminée (${mins} min) : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
-    rerender();
-  }, [state, persist, toast, rerender]);
+      state.sortieResume = {
+        edges: newEdges.size,
+        junctions: newInter.size,
+        km: lineLength(track) / 1000,
+        minutes: Math.round((Date.now() - startedAt) / 60000),
+        raisonVitesse: vitesseKmh ?? null,
+      };
+      rerender();
+    },
+    [state, persist, rerender]
+  );
 
   const endSessionRef = useRef(endSession);
   endSessionRef.current = endSession;
@@ -1167,12 +1236,29 @@ export function useWalkedia() {
     return state.center;
   }, [state]);
 
+  // Consomme le point gagné affiché en tête de file (voir PointGagne) : au
+  // pluriel dans state pour ne pas en perdre si le matching en crédite
+  // plusieurs d'un coup, mais montré un par un.
+  const dismissPointGagne = useCallback(() => {
+    state.pointsGagnes.shift();
+    rerender();
+  }, [state, rerender]);
+
+  const dismissSortieResume = useCallback(() => {
+    state.sortieResume = null;
+    rerender();
+  }, [state, rerender]);
+
   return {
     state,
     actions: {
       requestLocationAndInit,
       startSession,
       endSession,
+      dismissPointGagne,
+      dismissSortieResume,
+      importerMarcheDetectee,
+      ignorerMarcheDetectee,
       simulateWalk,
       recenter,
       maybeExpand,

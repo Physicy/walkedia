@@ -1,10 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Circle, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
 
 import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
-import { Hud } from '../components/Hud';
+import { ReleveBar, BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
+import { PointGagneVoile } from '../components/PointGagneVoile';
+import { SessionSummary } from '../components/SessionSummary';
 import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
 import { LoadMonitorPanel } from '../components/LoadMonitorPanel';
@@ -13,13 +15,21 @@ import { TAB_BAR_BASE_HEIGHT } from '../components/TabBar';
 import { COLORS } from '../theme';
 import { heatColor, progressColor } from '../logic/color';
 import { haversine } from '../logic/geo';
+import { branchesForGlyph, orientationsManquantes, objectifLePlusProche } from '../logic/junctionInfo';
 
-const UNDISCOVERED_STROKE = 'rgba(148, 163, 184, 0.55)';
-const DISCOVERED_STROKE = 'rgba(34, 197, 94, 0.95)';
-const TRACK_STROKE = 'rgba(79, 70, 229, 0.65)';
+const UNDISCOVERED_STROKE = 'rgba(26, 27, 46, 0.22)';
+const DISCOVERED_STROKE = COLORS.trace;
+const TRACK_STROKE = COLORS.traceClair;
 
 function toLatLng([lat, lon]: [number, number]) {
   return { latitude: lat, longitude: lon };
+}
+
+function formatDuree(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
 }
 
 // Marge autour de la zone visible (en fraction du delta affiché) : évite que
@@ -134,6 +144,23 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // centre pas encore prêts), donc ils gèrent eux-mêmes le cas `null`.
   const [region, setRegion] = useState<Region | null>(null);
   const [showLoadMonitor, setShowLoadMonitor] = useState(false);
+
+  // Hauteur réelle du panneau du bas (prêt/session), mesurée plutôt que
+  // devinée : ses deux états n'ont pas la même hauteur (le panneau de session
+  // a des compteurs et un fil en plus), et une valeur en dur se déréglerait au
+  // moindre changement de contenu. La carte d'objectif se cale juste au-dessus.
+  const [hauteurSocle, setHauteurSocle] = useState(0);
+  const onLayoutSocle = (e: LayoutChangeEvent) => setHauteurSocle(e.nativeEvent.layout.height);
+
+  // Fait vivre le compteur de durée du panneau de session (voir
+  // PanneauSession) sans dépendre d'un nouveau fix GPS pour se rafraîchir —
+  // purement local, ne touche pas à l'état du hook.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!state.session) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [state.session]);
 
   // Sous-ensemble animé des ondes de capture, avec hystérésis (voir
   // ANIMATED_* ci-dessus) — mutés directement en dehors de React state
@@ -286,8 +313,6 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
   let foundEdges = 0;
   for (const e of edges) if (edgeIsFound(state, e.id)) foundEdges++;
-  let doneJunctions = 0;
-  for (const j of junctions) if (junctionIsDone(state, j.id)) doneJunctions++;
 
   const recenter = () => {
     const target = actions.recenter();
@@ -329,6 +354,37 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       actions.loadVisibleGrid(newRegion.latitude, newRegion.longitude, newRegion.latitudeDelta, newRegion.longitudeDelta);
     }
   };
+
+  // Carte d'objectif : le carrefour incomplet le plus proche de la position
+  // (ou du centre chargé, avant tout fix GPS), recalculé à chaque rendu — bon
+  // marché (une passe sur les carrefours déjà en mémoire, voir
+  // junctionInfo.ts), et toujours à jour sans état séparé à invalider.
+  const objectifPos: [number, number] = pos ? [pos.lat, pos.lon] : [centerLat, centerLon];
+  const objectif = state.graph ? objectifLePlusProche(state.graph, state.progress.junctions, objectifPos) : null;
+  const objectifBranches = objectif ? branchesForGlyph(state.graph!, objectif.junction, state.progress.edges) : [];
+  const objectifManque = objectif ? orientationsManquantes(state.graph!, objectif.junction, state.progress.edges) : [];
+
+  // File d'attente des points gagnés (voir PointGagne) : montré un par un,
+  // plein écran, par-dessus tout le reste — y compris pendant une session
+  // active, qui continue de tourner derrière.
+  const pointGagne = state.pointsGagnes[0];
+  const junctionPointGagne = pointGagne && state.graph ? state.graph.junctions.get(pointGagne.junctionId) : null;
+
+  // Fil de la session en cours : les derniers gains, les plus récents
+  // d'abord. Pas de nom de rue (voir MapChrome.tsx) : seulement le type et
+  // l'ancienneté, dérivés de discovered.edges / progress.completedAt.
+  const fil: FilEntree[] = [];
+  if (state.session) {
+    for (const id of state.session.newEdges) {
+      const at = state.discovered.edges.get(id)?.at;
+      if (at != null) fil.push({ id, type: 'troncon', at });
+    }
+    for (const id of state.session.newInter) {
+      const at = state.progress.completedAt[id];
+      if (at != null) fil.push({ id, type: 'carrefour', at });
+    }
+    fil.sort((a, b) => b.at - a.at);
+  }
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -408,8 +464,8 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
             <Circle
               center={{ latitude: state.position.lat, longitude: state.position.lon }}
               radius={state.position.accuracy || 0}
-              strokeColor="rgba(59,130,246,0.3)"
-              fillColor="rgba(59,130,246,0.08)"
+              strokeColor="rgba(108, 93, 244, 0.28)"
+              fillColor="rgba(108, 93, 244, 0.08)"
             />
             <Marker
               coordinate={{ latitude: state.position.lat, longitude: state.position.lon }}
@@ -422,7 +478,41 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         )}
       </MapView>
 
-      <Hud score={state.progress.junctions.size} edgesLabel={`${foundEdges}/${edges.length}`} interLabel={`${doneJunctions}/${junctions.length}`} />
+      <View style={[styles.haut, { top: insets.top + 10 }]}>
+        <ReleveBar trouves={foundEdges} total={edges.length} />
+        <BoutonRecentrer onPress={recenter} />
+      </View>
+
+      {objectif && (
+        <View style={[styles.objectifWrap, { bottom: TAB_BAR_BASE_HEIGHT + hauteurSocle + 10 }]}>
+          <ObjectifCard
+            branches={objectifBranches}
+            eyebrow={state.session ? 'En cours de relevé' : 'Prochain point'}
+            numero={state.progress.junctions.size + 1}
+            manque={objectifManque}
+            distance={objectif.distance}
+          />
+        </View>
+      )}
+
+      <View style={[styles.bas, { bottom: TAB_BAR_BASE_HEIGHT }]} onLayout={onLayoutSocle}>
+        {state.session ? (
+          <PanneauSession
+            duree={formatDuree(Date.now() - state.session.startedAt)}
+            km={sessionKm(state.session.track)}
+            gain={state.session.newEdges.size}
+            fil={fil}
+            onTerminer={() => actions.endSession()}
+          />
+        ) : (
+          <PanneauPret
+            marcheDetectee={state.marcheDetectee}
+            onImporterMarche={actions.importerMarcheDetectee}
+            onIgnorerMarche={actions.ignorerMarcheDetectee}
+            onDemarrer={actions.startSession}
+          />
+        )}
+      </View>
 
       <DebugPanel onSimulate={actions.simulateWalk} />
 
@@ -437,24 +527,50 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       )}
       {showLoadMonitor && <LoadMonitorPanel log={state.loadLog} />}
 
-      <View style={[styles.controls, { bottom: insets.bottom + TAB_BAR_BASE_HEIGHT + 14 }]}>
-        <TouchableOpacity
-          style={[styles.sessionBtn, state.session && styles.sessionBtnRecording]}
-          onPress={() => (state.session ? actions.endSession() : actions.startSession())}
-        >
-          <Text style={styles.sessionBtnText}>{state.session ? 'Terminer la session' : 'Démarrer une session'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.centerBtn} onPress={recenter}>
-          <Text style={styles.centerBtnText}>⌖</Text>
-        </TouchableOpacity>
-      </View>
-
       <Toast message={state.toast?.msg ?? null} />
+
+      {pointGagne && junctionPointGagne && state.graph && (
+        <PointGagneVoile
+          numero={pointGagne.numero}
+          nouvelles={pointGagne.nouvelles}
+          total={pointGagne.total}
+          branches={branchesForGlyph(state.graph, junctionPointGagne, state.progress.edges)}
+          totalPoints={state.progress.junctions.size}
+          totalTroncons={state.progress.edges.size}
+          kmReleves={state.progress.edgeMeters / 1000}
+          onContinuer={actions.dismissPointGagne}
+        />
+      )}
+
+      {state.sortieResume && <SessionSummary resume={state.sortieResume} onFermer={actions.dismissSortieResume} />}
     </View>
   );
 }
 
+// Distance parcourue pendant la session (compteur live du panneau, voir
+// PanneauSession) : longueur de la trace GPS brute, distincte des mètres
+// crédités dans la progression (qui ne comptent qu'une fois par tronçon,
+// jamais une revisite). L'écart entre les deux est justement ce que
+// SessionSummary explique en fin de sortie.
+function sessionKm(track: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < track.length; i++) total += haversine(track[i - 1], track[i]);
+  return total / 1000;
+}
+
 const styles = StyleSheet.create({
+  haut: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  objectifWrap: { position: 'absolute', left: 14, right: 14, zIndex: 9 },
+  bas: { position: 'absolute', left: 0, right: 0, zIndex: 10 },
+
   monitorToggle: {
     position: 'absolute',
     right: 12,
@@ -477,55 +593,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(15, 23, 42, 0.6)',
+    borderColor: 'rgba(251, 250, 253, 0.7)',
   },
   clusterBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   positionDot: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.position,
+    backgroundColor: COLORS.trace,
     borderWidth: 2.5,
     borderColor: '#fff',
   },
-  controls: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-  },
-  sessionBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 999,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  sessionBtnRecording: { backgroundColor: COLORS.recording, shadowColor: COLORS.recording },
-  sessionBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  centerBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  centerBtnText: { color: COLORS.text, fontSize: 22, lineHeight: 22 },
 });

@@ -6,7 +6,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import { progressColor } from '../logic/color';
+import { COLORS } from '../theme';
 
 const SIZE = 28;
 
@@ -23,25 +23,17 @@ export function CaptureWave({ done, animated }: { done: boolean; animated: boole
     return () => loop.stop();
   }, [animated, pulse]);
 
-  const color = progressColor(done ? 1 : 0);
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
   return (
     <View style={styles.wrap}>
-      {animated && <Animated.View style={[styles.ring, { borderColor: color, opacity, transform: [{ scale }] }]} />}
-      <View style={[styles.staticRing, { borderColor: color }]} />
-      <View
-        style={[
-          styles.dot,
-          {
-            backgroundColor: color,
-            width: done ? 13 : 9,
-            height: done ? 13 : 9,
-            borderRadius: done ? 6.5 : 4.5,
-          },
-        ]}
-      />
+      {animated && <Animated.View style={[styles.ring, { borderColor: COLORS.trace, opacity, transform: [{ scale }] }]} />}
+      {done ? (
+        <View style={styles.dotComplet} />
+      ) : (
+        <View style={styles.dotRestant} />
+      )}
     </View>
   );
 }
@@ -49,13 +41,20 @@ export function CaptureWave({ done, animated }: { done: boolean; animated: boole
 const styles = StyleSheet.create({
   wrap: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
   ring: { position: 'absolute', width: SIZE, height: SIZE, borderRadius: SIZE / 2, borderWidth: 1.5 },
-  staticRing: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1,
-    opacity: 0.5,
+  dotComplet: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: COLORS.trace,
+    borderWidth: 1.8,
+    borderColor: COLORS.traceFonce,
   },
-  dot: { borderWidth: 1.5, borderColor: '#0f172a' },
+  dotRestant: {
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.8,
+    borderColor: 'rgba(26, 27, 46, 0.45)',
+  },
 });
