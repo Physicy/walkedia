@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
+import { loadPrefs, savePrefs } from './src/logic/prefs';
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { StartScreen } from './src/screens/StartScreen';
 import { MapScreen } from './src/screens/MapScreen';
@@ -18,6 +20,20 @@ function AppContent() {
   const { state, actions } = walkedia;
   const auth = useAuth();
   const [tab, setTab] = useState<TabName>('adventure');
+
+  // Repère de première ouverture, persisté (prefs.ts) et pas gardé dans un
+  // ref : entre la fin de l'onboarding et la première carte il y a la
+  // connexion, la permission et le calcul de la zone, soit largement de quoi
+  // fermer l'app en chemin.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  useEffect(() => {
+    loadPrefs().then((p) => setOnboarded(p.onboarded));
+  }, []);
+
+  const finishOnboarding = () => {
+    setOnboarded(true);
+    savePrefs({ onboarded: true });
+  };
 
   // Connecte l'état d'auth (Supabase, indépendant du reste de l'app — voir
   // useAuth.ts) au hook de jeu : à la connexion, fusionne/synchronise la
@@ -46,10 +62,21 @@ function AppContent() {
     }
   }, [auth.user, state.ready, state.mapReady, actions]);
 
+  // L'onboarding passe avant la connexion : demander un compte à quelqu'un qui
+  // ne sait pas encore à quoi sert l'app est la meilleure façon de le perdre.
+  if (onboarded === false) {
+    return (
+      <View style={styles.fill}>
+        <OnboardingScreen onDone={finishOnboarding} />
+        <StatusBar style="light" />
+      </View>
+    );
+  }
+
   // Porte d'authentification : rien d'autre (carte, recherche, profil) ne
   // s'affiche tant qu'il n'y a pas de session Supabase. Passe avant l'état
   // de chargement de la progression locale, qui continue en tâche de fond.
-  if (auth.loading) {
+  if (onboarded === null || auth.loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={COLORS.accentCyan} />

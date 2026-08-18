@@ -11,6 +11,7 @@ export const COLORS = {
   accentGreen: '#4ade80',
   accentCyan: '#22d3ee',
   accentAmber: '#fbbf24',
+  accentViolet: '#6C5DF4',
   primary: '#4f46e5',
   recording: '#dc2626',
 
