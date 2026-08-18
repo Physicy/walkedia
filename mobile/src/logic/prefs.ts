@@ -1,15 +1,23 @@
 // Préférences locales, séparées de la progression (storage.ts) : ce sont des
 // repères d'interface qui n'ont pas à voyager avec le compte Supabase.
+//
+// Ils sont persistés plutôt que gardés en mémoire parce que le parcours de
+// première ouverture s'étale sur plusieurs étapes bloquantes (connexion,
+// permission système, premier calcul de zone), soit largement de quoi fermer
+// l'app en chemin et devoir tout resubir au retour.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'walkedia-prefs-v1';
 
 export interface Prefs {
+  // le parcours de première ouverture a été vu jusqu'au bout
   onboarded: boolean;
+  // le repère qui pointe le premier point à décrocher a été refermé
+  repereVu: boolean;
 }
 
-const DEFAULTS: Prefs = { onboarded: false };
+const DEFAULTS: Prefs = { onboarded: false, repereVu: false };
 
 export async function loadPrefs(): Promise<Prefs> {
   try {

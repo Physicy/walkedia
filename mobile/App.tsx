@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
+import { useAppFonts } from './src/fonts';
 import { loadPrefs, savePrefs } from './src/logic/prefs';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -19,6 +20,7 @@ function AppContent() {
   const walkedia = useWalkedia();
   const { state, actions } = walkedia;
   const auth = useAuth();
+  const policesPretes = useAppFonts();
   const [tab, setTab] = useState<TabName>('adventure');
 
   // Repère de première ouverture, persisté (prefs.ts) et pas gardé dans un
@@ -30,8 +32,16 @@ function AppContent() {
     loadPrefs().then((p) => setOnboarded(p.onboarded));
   }, []);
 
-  const finishOnboarding = () => {
+  // `autoriser` répond au bouton du dernier écran d'onboarding. La demande
+  // système n'est pas déclenchée ici : la connexion s'intercale encore avant la
+  // carte, et une boîte de permission posée derrière l'écran de connexion
+  // arriverait hors contexte. On retient seulement le choix, que la mise en
+  // route automatique ci-dessous consulte une fois la session ouverte.
+  // Refuser n'a rien de définitif : l'écran de démarrage garde son bouton.
+  const [positionDifferee, setPositionDifferee] = useState(false);
+  const finishOnboarding = (autoriser: boolean) => {
     setOnboarded(true);
+    setPositionDifferee(!autoriser);
     savePrefs({ onboarded: true });
   };
 
@@ -56,11 +66,12 @@ function AppContent() {
   // voir la porte d'authentification ci-dessous.
   const autoStarted = useRef(false);
   useEffect(() => {
+    if (positionDifferee) return;
     if (auth.user && state.ready && !state.mapReady && !autoStarted.current) {
       autoStarted.current = true;
       actions.requestLocationAndInit();
     }
-  }, [auth.user, state.ready, state.mapReady, actions]);
+  }, [auth.user, state.ready, state.mapReady, actions, positionDifferee]);
 
   // L'onboarding passe avant la connexion : demander un compte à quelqu'un qui
   // ne sait pas encore à quoi sert l'app est la meilleure façon de le perdre.
@@ -68,7 +79,7 @@ function AppContent() {
     return (
       <View style={styles.fill}>
         <OnboardingScreen onDone={finishOnboarding} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -76,11 +87,11 @@ function AppContent() {
   // Porte d'authentification : rien d'autre (carte, recherche, profil) ne
   // s'affiche tant qu'il n'y a pas de session Supabase. Passe avant l'état
   // de chargement de la progression locale, qui continue en tâche de fond.
-  if (onboarded === null || auth.loading) {
+  if (onboarded === null || !policesPretes || auth.loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={COLORS.accentCyan} />
-        <StatusBar style="light" />
+        <ActivityIndicator color={COLORS.trace} />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -89,7 +100,7 @@ function AppContent() {
     return (
       <View style={styles.fill}>
         <LoginScreen auth={auth} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -97,8 +108,8 @@ function AppContent() {
   if (!state.ready) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={COLORS.accentCyan} />
-        <StatusBar style="light" />
+        <ActivityIndicator color={COLORS.trace} />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -107,7 +118,7 @@ function AppContent() {
     return (
       <View style={styles.fill}>
         <StartScreen status={state.startStatus} onLocate={actions.requestLocationAndInit} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -129,7 +140,7 @@ function AppContent() {
         />
       )}
       <TabBar active={tab} onChange={setTab} />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </View>
   );
 }
