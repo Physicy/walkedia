@@ -1,148 +1,223 @@
-// Écran de connexion obligatoire affiché avant tout le reste de l'app (voir
-// App.tsx) : tant qu'il n'y a pas de session Supabase, ni la carte ni aucun
-// autre écran ne sont montés.
+// Connexion, devenue facultative.
+//
+// Elle était une porte : rien de l'app ne s'affichait sans session Supabase.
+// C'était à l'envers, parce que la progression a toujours vécu en local
+// (storage.ts) et que le compte ne fait que la transporter d'un téléphone à
+// l'autre. L'écran devient donc une proposition, avec une sortie explicite,
+// et se rouvre depuis les réglages.
+//
+// La connexion par lien e-mail n'est pas dans la maquette mais reste ici : elle
+// fonctionne, et c'est la seule voie pour qui ne veut ni Google ni Apple.
 
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { COLORS } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { COLORS, FONTS, RADIUS } from '../theme';
+import { Bouton, Corps } from '../components/ui';
+import { Icone } from '../components/Icones';
 import type { useAuth } from '../hooks/useAuth';
 
-export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
+export function LoginScreen({
+  auth,
+  onSkip,
+}: {
+  auth: ReturnType<typeof useAuth>;
+  onSkip: () => void;
+}) {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [parEmail, setParEmail] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
-  const run = async (fn: () => Promise<void>) => {
-    setError(null);
+  const lancer = async (fn: () => Promise<void>) => {
+    setErreur(null);
     try {
       await fn();
     } catch (e: any) {
-      setError(e?.message || 'Une erreur est survenue.');
+      setErreur(e?.message || 'Une erreur est survenue.');
     }
   };
 
   if (!auth.isConfigured) {
     return (
-      <View style={styles.wrap}>
-        <Text style={styles.title}>Walkedia</Text>
-        <Text style={styles.status}>
-          Compte non configuré — renseigne mobile/.env à partir de .env.example pour activer la connexion.
-        </Text>
+      <View style={[styles.wrap, { paddingTop: insets.top }]}>
+        <Entete onFermer={onSkip} />
+        <View style={styles.corps}>
+          <Text style={styles.titre}>Le compte n'est pas configuré.</Text>
+          <Corps>
+            Renseigne mobile/.env à partir de .env.example pour activer la connexion. En attendant,
+            tout le reste de l'app fonctionne : ton relevé est gardé sur cet appareil.
+          </Corps>
+          <View style={styles.actions}>
+            <Bouton onPress={onSkip}>Continuer sans compte</Bouton>
+          </View>
+        </View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.wrap}
+      style={[styles.wrap, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Text style={styles.title}>Walkedia</Text>
-      <Text style={styles.subtitle}>Connecte-toi pour continuer</Text>
-
-      {auth.emailSent ? (
-        <Text style={styles.status}>
-          Lien de connexion envoyé à {email.trim()}. Ouvre-le depuis ce téléphone pour continuer.
+      <Entete onFermer={onSkip} />
+      <ScrollView
+        contentContainerStyle={[styles.corps, { paddingBottom: insets.bottom + 26 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.titre}>
+          Garde ton relevé, <Text style={styles.titreAccent}>même en changeant de téléphone</Text>.
         </Text>
-      ) : (
-        <>
-          <TouchableOpacity style={styles.googleBtn} onPress={() => run(auth.signInWithGoogle)} disabled={auth.busy}>
-            <Text style={styles.btnText}>Continuer avec Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.appleBtn} onPress={() => run(auth.signInWithApple)} disabled={auth.busy}>
-            <Text style={styles.btnTextWhite}>Continuer avec Apple</Text>
-          </TouchableOpacity>
+        <Corps>
+          Sans compte, tout fonctionne, mais ton relevé vit uniquement sur cet appareil. Avec un
+          compte, il te suit et tu entres au classement.
+        </Corps>
 
-          <View style={styles.sep}>
-            <View style={styles.sepLine} />
-            <Text style={styles.sepText}>ou</Text>
-            <View style={styles.sepLine} />
+        {auth.emailSent ? (
+          <View style={styles.noteSys}>
+            <Icone nom="coche" size={16} color={COLORS.trace} />
+            <Text style={styles.noteSysTexte}>
+              Lien de connexion envoyé à {email.trim()}. Ouvre-le depuis ce téléphone.
+            </Text>
           </View>
+        ) : (
+          <View style={styles.actions}>
+            <Bouton
+              variante="sortie"
+              busy={auth.busy}
+              onPress={() => lancer(auth.signInWithGoogle)}
+              icone={<Text style={styles.marque}>G</Text>}
+            >
+              Continuer avec Google
+            </Bouton>
+            <Bouton
+              variante="sortie"
+              busy={auth.busy}
+              onPress={() => lancer(auth.signInWithApple)}
+              icone={<Text style={styles.marque}>A</Text>}
+            >
+              Continuer avec Apple
+            </Bouton>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Adresse e-mail"
-            placeholderTextColor={COLORS.textDim}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            editable={!auth.busy}
-          />
-          <TouchableOpacity
-            style={[styles.emailBtn, (!email.trim() || auth.busy) && styles.btnDisabled]}
-            onPress={() => run(() => auth.signInWithEmail(email))}
-            disabled={!email.trim() || auth.busy}
-          >
-            <Text style={styles.btnTextWhite}>Recevoir un lien de connexion</Text>
-          </TouchableOpacity>
-        </>
-      )}
+            {parEmail ? (
+              <View style={styles.bloqEmail}>
+                <TextInput
+                  style={styles.champ}
+                  placeholder="Adresse e-mail"
+                  placeholderTextColor={COLORS.encre3}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                  editable={!auth.busy}
+                />
+                <Bouton
+                  disabled={!email.trim()}
+                  busy={auth.busy}
+                  onPress={() => lancer(() => auth.signInWithEmail(email))}
+                >
+                  Recevoir un lien de connexion
+                </Bouton>
+              </View>
+            ) : (
+              <Pressable onPress={() => setParEmail(true)} style={styles.lienZone}>
+                <Text style={styles.lien}>Utiliser mon adresse e-mail</Text>
+              </Pressable>
+            )}
 
-      {auth.busy && <ActivityIndicator color={COLORS.accentCyan} style={styles.spinner} />}
-      {error && <Text style={styles.error}>{error}</Text>}
+            <Bouton variante="fantome" onPress={onSkip}>
+              Continuer sans compte
+            </Bouton>
+          </View>
+        )}
+
+        {erreur && <Text style={styles.erreur}>{erreur}</Text>}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+function Entete({ onFermer }: { onFermer: () => void }) {
+  return (
+    <View style={styles.entete}>
+      <Pressable style={styles.rond} onPress={onFermer} accessibilityRole="button" accessibilityLabel="Fermer">
+        <Icone nom="fermer" size={18} color={COLORS.encre} strokeWidth={1.9} />
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  title: { fontSize: 32, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
-  subtitle: { fontSize: 14, color: COLORS.textMuted, marginBottom: 28 },
-  googleBtn: {
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-  },
-  appleBtn: {
-    backgroundColor: '#000',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-    marginTop: 10,
-  },
-  sep: { flexDirection: 'row', alignItems: 'center', width: '100%', maxWidth: 340, marginVertical: 18, gap: 10 },
-  sepLine: { flex: 1, height: 1, backgroundColor: 'rgba(148,163,184,0.25)' },
-  sepText: { color: COLORS.textDim, fontSize: 12 },
-  input: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: 'rgba(148,163,184,0.08)',
-    borderColor: 'rgba(148,163,184,0.25)',
+  wrap: { flex: 1, backgroundColor: COLORS.papier },
+  entete: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 },
+  rond: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderRadius: 10,
+    borderColor: COLORS.ligneForte,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  corps: { paddingHorizontal: 24, flexGrow: 1, justifyContent: 'center' },
+  titre: {
+    fontFamily: FONTS.display,
+    fontSize: 30,
+    lineHeight: 32,
+    letterSpacing: -0.75,
+    color: COLORS.encre,
+    marginBottom: 12,
+  },
+  titreAccent: { color: COLORS.trace },
+
+  actions: { gap: 10, marginTop: 28 },
+  marque: { fontFamily: FONTS.texteBold, fontSize: 15, color: COLORS.encre },
+
+  bloqEmail: { gap: 10 },
+  champ: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLORS.ligneForte,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.m,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    color: COLORS.text,
-    fontSize: 15,
+    fontFamily: FONTS.texte,
+    fontSize: 14,
+    color: COLORS.encre,
   },
-  emailBtn: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-    marginTop: 10,
+  lienZone: { alignItems: 'center', paddingVertical: 6, minHeight: 44, justifyContent: 'center' },
+  lien: {
+    fontFamily: FONTS.texteSemi,
+    fontSize: 13,
+    color: COLORS.encre2,
+    textDecorationLine: 'underline',
   },
-  btnDisabled: { opacity: 0.5 },
-  btnText: { color: '#0f172a', fontSize: 15, fontWeight: '600' },
-  btnTextWhite: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  spinner: { marginTop: 16 },
-  status: { color: COLORS.accentAmber, fontSize: 14, textAlign: 'center', maxWidth: 340 },
-  error: { color: '#f87171', fontSize: 13, textAlign: 'center', maxWidth: 340, marginTop: 14 },
+
+  noteSys: {
+    flexDirection: 'row',
+    gap: 11,
+    padding: 13,
+    marginTop: 28,
+    backgroundColor: COLORS.tracePale,
+    borderRadius: RADIUS.m,
+  },
+  noteSysTexte: { flex: 1, fontFamily: FONTS.texte, fontSize: 12.5, lineHeight: 18, color: COLORS.encre2 },
+
+  erreur: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.alerte, textAlign: 'center', marginTop: 14 },
 });

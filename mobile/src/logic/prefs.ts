@@ -15,9 +15,13 @@ export interface Prefs {
   onboarded: boolean;
   // le repère qui pointe le premier point à décrocher a été refermé
   repereVu: boolean;
+  // la connexion a déjà été proposée une fois. Elle ne l'est plus d'elle-même
+  // ensuite : c'est une offre, pas une porte, et la reposer à chaque ouverture
+  // la transformerait en porte qu'on contourne.
+  connexionProposee: boolean;
 }
 
-const DEFAULTS: Prefs = { onboarded: false, repereVu: false };
+const DEFAULTS: Prefs = { onboarded: false, repereVu: false, connexionProposee: false };
 
 export async function loadPrefs(): Promise<Prefs> {
   try {

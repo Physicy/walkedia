@@ -1,28 +1,48 @@
+// Barre d'onglets : une plaque de rue en encre, la seule surface sombre de
+// l'app avec le voile de point gagné. Elle ancre le bas de l'écran pendant que
+// la carte, elle, est claire.
+//
+// « Recherche » devient « Classement » : c'est ce qu'on y trouve, et l'ancien
+// nom promettait une recherche qui n'existait pas à cet endroit.
+
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../theme';
+import { COLORS, FONTS } from '../theme';
+import { Icone, NomIcone } from './Icones';
 
 export type TabName = 'adventure' | 'search' | 'profile';
 
-const TABS: { name: TabName; icon: string; label: string }[] = [
-  { name: 'adventure', icon: '🗺️', label: 'Aventure' },
-  { name: 'search', icon: '🔍', label: 'Recherche' },
-  { name: 'profile', icon: '👤', label: 'Profil' },
+const TABS: { name: TabName; icone: NomIcone; label: string }[] = [
+  { name: 'adventure', icone: 'carte', label: 'Carte' },
+  { name: 'search', icone: 'classement', label: 'Classement' },
+  { name: 'profile', icone: 'profil', label: 'Profil' },
 ];
 
-export const TAB_BAR_BASE_HEIGHT = 54;
+export const TAB_BAR_BASE_HEIGHT = 76;
 
 export function TabBar({ active, onChange }: { active: TabName; onChange: (t: TabName) => void }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {TABS.map((t) => (
-        <TouchableOpacity key={t.name} style={styles.btn} onPress={() => onChange(t.name)} activeOpacity={0.7}>
-          <Text style={styles.icon}>{t.icon}</Text>
-          <Text style={[styles.label, active === t.name && styles.labelActive]}>{t.label}</Text>
-        </TouchableOpacity>
-      ))}
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      {TABS.map((t) => {
+        const actif = active === t.name;
+        return (
+          <Pressable
+            key={t.name}
+            style={styles.btn}
+            onPress={() => onChange(t.name)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: actif }}
+            accessibilityLabel={t.label}
+          >
+            <Icone nom={t.icone} size={21} color={actif ? COLORS.surface : 'rgba(232, 231, 238, 0.52)'} />
+            <Text style={[styles.label, actif && styles.labelActif]}>{t.label}</Text>
+            {/* le point violet : un point gagné, donc le seul emploi permis de l'accent ici */}
+            <View style={[styles.pastille, actif && styles.pastilleActive]} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -35,18 +55,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1700,
     flexDirection: 'row',
-    backgroundColor: 'rgba(15, 23, 42, 0.97)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.2)',
-    paddingTop: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.encre,
+    paddingTop: 11,
+    paddingHorizontal: 8,
   },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, gap: 2 },
-  icon: { fontSize: 20 },
-  label: { fontSize: 11, fontWeight: '600', color: COLORS.textMuted },
-  labelActive: { color: COLORS.accentCyan },
+  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 5, minHeight: 44 },
+  label: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 9,
+    letterSpacing: 0.81,
+    textTransform: 'uppercase',
+    color: 'rgba(232, 231, 238, 0.52)',
+  },
+  labelActif: { color: COLORS.surface },
+  pastille: { width: 4, height: 4, borderRadius: 2, marginTop: 1, backgroundColor: 'transparent' },
+  pastilleActive: { backgroundColor: COLORS.trace },
 });

@@ -28,9 +28,18 @@ function AppContent() {
   // connexion, la permission et le calcul de la zone, soit largement de quoi
   // fermer l'app en chemin.
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [connexionProposee, setConnexionProposee] = useState(true);
   useEffect(() => {
-    loadPrefs().then((p) => setOnboarded(p.onboarded));
+    loadPrefs().then((p) => {
+      setOnboarded(p.onboarded);
+      setConnexionProposee(p.connexionProposee);
+    });
   }, []);
+
+  const refuserConnexion = () => {
+    setConnexionProposee(true);
+    savePrefs({ connexionProposee: true });
+  };
 
   // `autoriser` répond au bouton du dernier écran d'onboarding. La demande
   // système n'est pas déclenchée ici : la connexion s'intercale encore avant la
@@ -60,18 +69,17 @@ function AppContent() {
 
   // Va directement à la carte à l'ouverture : dès que la progression est
   // chargée, on déclenche la géolocalisation sans attendre un appui sur un
-  // bouton. Le bouton de l'écran de démarrage reste affiché pendant le
-  // chargement et sert de nouvelle tentative manuelle en cas d'échec (refus
-  // de permission, position indisponible…). Ne démarre qu'une fois connecté :
-  // voir la porte d'authentification ci-dessous.
+  // bouton. L'écran de démarrage garde son bouton de nouvelle tentative en cas
+  // d'échec (refus de permission, position indisponible…). Ne dépend plus
+  // d'une session : la carte se relève très bien sans compte.
   const autoStarted = useRef(false);
   useEffect(() => {
-    if (positionDifferee) return;
-    if (auth.user && state.ready && !state.mapReady && !autoStarted.current) {
+    if (positionDifferee || onboarded !== true) return;
+    if (state.ready && !state.mapReady && !autoStarted.current) {
       autoStarted.current = true;
       actions.requestLocationAndInit();
     }
-  }, [auth.user, state.ready, state.mapReady, actions, positionDifferee]);
+  }, [state.ready, state.mapReady, actions, positionDifferee, onboarded]);
 
   // L'onboarding passe avant la connexion : demander un compte à quelqu'un qui
   // ne sait pas encore à quoi sert l'app est la meilleure façon de le perdre.
@@ -84,9 +92,11 @@ function AppContent() {
     );
   }
 
-  // Porte d'authentification : rien d'autre (carte, recherche, profil) ne
-  // s'affiche tant qu'il n'y a pas de session Supabase. Passe avant l'état
-  // de chargement de la progression locale, qui continue en tâche de fond.
+  // Attente des trois choses sans lesquelles le premier écran serait faux : les
+  // préférences (sait-on s'il faut l'onboarding ?), les polices (sinon le titre
+  // s'affiche en police système puis saute), et l'état de session (sinon la
+  // connexion est proposée à quelqu'un qui est déjà connecté). Le chargement de
+  // la progression locale, lui, continue en tâche de fond.
   if (onboarded === null || !policesPretes || auth.loading) {
     return (
       <View style={styles.loading}>
@@ -96,10 +106,14 @@ function AppContent() {
     );
   }
 
-  if (!auth.user) {
+  // La connexion est proposée une fois, juste après l'onboarding, et jamais
+  // imposée : la progression vit en local (storage.ts) et le compte ne fait
+  // que la transporter d'un téléphone à l'autre. Elle reste accessible ensuite
+  // depuis le profil.
+  if (!auth.user && !connexionProposee) {
     return (
       <View style={styles.fill}>
-        <LoginScreen auth={auth} />
+        <LoginScreen auth={auth} onSkip={refuserConnexion} />
         <StatusBar style="dark" />
       </View>
     );
