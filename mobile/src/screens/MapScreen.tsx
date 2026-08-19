@@ -7,6 +7,7 @@ import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
 import { ReleveBar, BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
 import { PointGagneVoile } from '../components/PointGagneVoile';
 import { SessionSummary } from '../components/SessionSummary';
+import { JunctionSheet } from '../components/JunctionSheet';
 import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
 import { LoadMonitorPanel } from '../components/LoadMonitorPanel';
@@ -15,7 +16,7 @@ import { TAB_BAR_BASE_HEIGHT } from '../components/TabBar';
 import { COLORS } from '../theme';
 import { heatColor, progressColor } from '../logic/color';
 import { haversine } from '../logic/geo';
-import { branchesForGlyph, orientationsManquantes, objectifLePlusProche } from '../logic/junctionInfo';
+import { branchesForGlyph, orientationsManquantes, objectifLePlusProche, pointNumber } from '../logic/junctionInfo';
 
 const UNDISCOVERED_STROKE = 'rgba(26, 27, 46, 0.22)';
 const DISCOVERED_STROKE = COLORS.trace;
@@ -151,6 +152,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // moindre changement de contenu. La carte d'objectif se cale juste au-dessus.
   const [hauteurSocle, setHauteurSocle] = useState(0);
   const onLayoutSocle = (e: LayoutChangeEvent) => setHauteurSocle(e.nativeEvent.layout.height);
+
+  // Fiche de carrefour, ouverte en touchant un point sur la carte. Seulement
+  // pour un carrefour dont la géométrie complète est en mémoire (state.graph) :
+  // un point venu de `discovered` seul (zone repliée depuis) n'a pas de
+  // requiredEdgeIds à afficher, la fiche n'aurait rien à montrer.
+  const [junctionOuvert, setJunctionOuvert] = useState<string | null>(null);
 
   // Fait vivre le compteur de durée du panneau de session (voir
   // PanneauSession) sans dépendre d'un nouveau fix GPS pour se rafraîchir —
@@ -453,6 +460,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={animated}
               zIndex={done ? 5 : 4}
+              onPress={() => setJunctionOuvert(j.id)}
             >
               <CaptureWave done={done} animated={animated} />
             </Marker>
@@ -543,6 +551,15 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       )}
 
       {state.sortieResume && <SessionSummary resume={state.sortieResume} onFermer={actions.dismissSortieResume} />}
+
+      {junctionOuvert && state.graph?.junctions.get(junctionOuvert) && (
+        <JunctionSheet
+          numero={pointNumber(state.progress, junctionOuvert)}
+          branches={branchesForGlyph(state.graph, state.graph.junctions.get(junctionOuvert)!, state.progress.edges)}
+          orientationsManquantes={orientationsManquantes(state.graph, state.graph.junctions.get(junctionOuvert)!, state.progress.edges)}
+          onFermer={() => setJunctionOuvert(null)}
+        />
+      )}
     </View>
   );
 }
