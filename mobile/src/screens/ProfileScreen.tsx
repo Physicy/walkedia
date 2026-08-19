@@ -1,10 +1,21 @@
+// Profil : le relevé d'abord, les réglages ailleurs (voir SettingsScreen.tsx).
+// L'ancien profil ouvrait sur un interrupteur de permission GPS avec quatre
+// lignes de texte gris, avant la moindre donnée de jeu — le premier bloc est
+// maintenant le total de points.
+//
+// Les sorties sont nommées par les points décrochés (« Points n° 3 et 4 »),
+// pas par un quartier : une session ne porte aucun quartier en mémoire, et en
+// inventer un serait fabriquer une donnée qui n'existe pas.
+
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { COLORS } from '../theme';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS, FONTS, RADIUS } from '../theme';
+import { Eyebrow, Mono, Titre } from '../components/ui';
+import { Icone } from '../components/Icones';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
 import type { NeighborhoodStat } from '../hooks/useWalkedia';
-import { AccountSection } from '../components/AccountSection';
 
 const DAY = 86400000;
 
@@ -20,8 +31,22 @@ function pointsBetween(progress: Progress, a: number, b: number) {
   return n;
 }
 
-function pointsSince(progress: Progress, t: number) {
-  return pointsBetween(progress, t, Infinity);
+// Numérote chaque sortie par les points qu'elle a fait tomber : un simple
+// cumul sur les sessions dans l'ordre, puisque la numérotation elle-même suit
+// l'ordre de complétion (voir junctionInfo.ts, pointNumber) et que les
+// sessions sont conservées triées par date de début.
+function nommerSorties(sessions: Progress['sessions']) {
+  let cumul = 0;
+  return sessions.map((s) => {
+    const debut = cumul + 1;
+    cumul += s.junctions;
+    let label: string;
+    if (s.junctions === 0) label = 'Aucun point';
+    else if (s.junctions === 1) label = `Point n° ${debut}`;
+    else if (s.junctions === 2) label = `Points n° ${debut} et ${cumul}`;
+    else label = `Points n° ${debut} à ${cumul}`;
+    return { ...s, label };
+  });
 }
 
 export function ProfileScreen({
@@ -29,21 +54,19 @@ export function ProfileScreen({
   auth,
   syncing,
   neighborhoods,
-  backgroundTrackingEnabled,
-  onToggleBackgroundTracking,
+  onOuvrirReglages,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
   neighborhoods: NeighborhoodStat[];
-  backgroundTrackingEnabled: boolean;
-  onToggleBackgroundTracking: (next: boolean) => void;
+  onOuvrirReglages: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+
   const stats = useMemo(() => {
     const today = startOfToday();
     const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
-    const now = new Date();
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
     const dayName = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
     const days: { label: string; pts: number }[] = [];
@@ -55,200 +78,200 @@ export function ProfileScreen({
       days.push({ label: dayName.format(new Date(start)).replace('.', ''), pts });
     }
 
-    const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' });
-    const recent = progress.sessions.slice(-5).reverse();
+    const dateFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    const sorties = nommerSorties(progress.sessions).slice(-6).reverse();
 
-    const untracked = progress.junctions.size - Object.keys(progress.completedAt).length;
+    const debuts = progress.sessions.map((s) => s.start);
+    const premiereActivite = debuts.length ? Math.min(...debuts) : null;
+    const depuisFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' });
 
     return {
       total: progress.junctions.size,
-      today: pointsSince(progress, today),
-      week: pointsSince(progress, monday),
-      month: pointsSince(progress, firstOfMonth),
+      today: pointsBetween(progress, today, Infinity),
+      week: pointsBetween(progress, monday, Infinity),
       edges: progress.edges.size,
       km: (progress.edgeMeters / 1000).toFixed(1),
       sessions: progress.sessions.length,
       days,
       max,
-      recent,
+      sorties,
       dateFmt,
-      untracked,
+      depuis: premiereActivite != null ? depuisFmt.format(new Date(premiereActivite)) : null,
     };
   }, [progress]);
 
+  const nom = auth.user?.user_metadata?.full_name || auth.user?.user_metadata?.name || auth.user?.email || null;
+
   return (
-    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      <Text style={styles.h2}>Profil</Text>
-
-      <AccountSection auth={auth} syncing={syncing} />
-
-      <View style={styles.bgTrackingRow}>
-        <View style={styles.bgTrackingText}>
-          <Text style={styles.bgTrackingLabel}>Détecter mes marches même app fermée</Text>
-          <Text style={styles.muted}>
-            Utilise ta position en arrière-plan (permission "Toujours") pour te proposer d'importer tes marches
-            au retour dans l'app. Désactivé par défaut.
-          </Text>
+    <View style={[styles.wrap, { paddingTop: insets.top }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.tete}>
+          <View style={styles.teteTexte}>
+            <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
+            <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
+          </View>
+          <Pressable style={styles.rond} onPress={onOuvrirReglages} accessibilityRole="button" accessibilityLabel="Réglages">
+            <Icone nom="reglages" size={18} color={COLORS.encre} strokeWidth={1.7} />
+          </Pressable>
         </View>
-        <Switch
-          value={backgroundTrackingEnabled}
-          onValueChange={onToggleBackgroundTracking}
-          trackColor={{ true: COLORS.primary }}
-        />
-      </View>
 
-      <View style={styles.bigScore}>
-        <Text style={styles.bigScoreValue}>{stats.total}</Text>
-        <Text style={styles.bigScoreLabel}>points au total</Text>
-      </View>
-
-      <View style={styles.statGrid}>
-        <StatCell value={stats.today} label="aujourd'hui" />
-        <StatCell value={stats.week} label="cette semaine" />
-        <StatCell value={stats.month} label="ce mois-ci" />
-      </View>
-
-      <Text style={styles.h3}>Points sur 7 jours</Text>
-      <View style={styles.chart}>
-        {stats.days.map((d, i) => {
-          const h = stats.max > 0 ? Math.max(6, Math.round((d.pts / stats.max) * 52)) : 6;
-          return (
-            <View key={i} style={styles.bar}>
-              <Text style={styles.barValue}>{d.pts || ''}</Text>
-              <View style={[styles.barFill, { height: h, backgroundColor: d.pts === 0 ? 'rgba(148,163,184,0.25)' : '#06b6d4' }]} />
-              <Text style={styles.barLabel}>{d.label}</Text>
-            </View>
-          );
-        })}
-      </View>
-
-      <View style={styles.statGrid}>
-        <StatCell value={stats.edges} label="tronçons découverts" />
-        <StatCell value={stats.km} label="km découverts" />
-        <StatCell value={stats.sessions} label="sessions" />
-      </View>
-
-      <Text style={styles.h3}>Quartiers</Text>
-      {neighborhoods.length === 0 ? (
-        <Text style={styles.emptyList}>
-          Aucun quartier cartographié dans les zones chargées pour l'instant.
-        </Text>
-      ) : (
-        neighborhoods.map((n) => (
-          <View key={n.id} style={styles.neighborhoodRow}>
-            <Text style={styles.neighborhoodName} numberOfLines={1}>
-              {n.name || 'Quartier sans nom'}
-            </Text>
-            <Text style={[styles.neighborhoodPct, n.unlocked && styles.neighborhoodUnlocked]}>
-              {n.unlocked ? 'Débloqué 🔓' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+        <View style={styles.total}>
+          <Mono style={styles.totalN}>{stats.total}</Mono>
+          <View style={styles.totalTexte}>
+            <Text style={styles.totalLabel}>carrefours complétés</Text>
+            <Text style={styles.totalDetail}>
+              {stats.week} cette semaine, {stats.today} aujourd'hui
             </Text>
           </View>
-        ))
-      )}
+        </View>
+        {syncing && <Text style={styles.syncing}>Synchronisation…</Text>}
 
-      <Text style={styles.h3}>Dernières sessions</Text>
-      {stats.recent.length === 0 ? (
-        <Text style={styles.emptyList}>Aucune session pour l'instant</Text>
-      ) : (
-        stats.recent.map((s, i) => {
-          const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
-          const label = s.imported ? `${stats.dateFmt.format(new Date(s.start))} (importée)` : stats.dateFmt.format(new Date(s.start));
-          return (
-            <View key={i} style={styles.sessionRow}>
-              <Text style={styles.sessionCell}>{label}</Text>
-              <Text style={styles.sessionCell}>{mins} min</Text>
-              <Text style={styles.sessionCell}>{s.edges} tronçon(s)</Text>
-              <Text style={[styles.sessionCell, styles.sessionPts]}>+{s.junctions} pt(s)</Text>
+        <Eyebrow style={styles.sectionTitre}>Sept derniers jours</Eyebrow>
+        <View style={styles.barres}>
+          {stats.days.map((d, i) => {
+            const h = stats.max > 0 ? Math.max(3, Math.round((d.pts / stats.max) * 52)) : 3;
+            return (
+              <View key={i} style={styles.colonne}>
+                <Mono style={styles.barreValeur}>{d.pts || ''}</Mono>
+                <View style={[styles.barre, { height: h }, d.pts > 0 && styles.barrePleine]} />
+                <Text style={styles.barreJour}>{d.label}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.grille}>
+          <View style={styles.case}>
+            <Mono style={styles.caseValeur}>{stats.edges}</Mono>
+            <Text style={styles.caseLabel}>tronçons relevés</Text>
+          </View>
+          <View style={styles.case}>
+            <Mono style={styles.caseValeur}>{stats.km}</Mono>
+            <Text style={styles.caseLabel}>km découverts</Text>
+          </View>
+          <View style={[styles.case, styles.caseFin]}>
+            <Mono style={styles.caseValeur}>{stats.sessions}</Mono>
+            <Text style={styles.caseLabel}>sessions</Text>
+          </View>
+        </View>
+
+        <Eyebrow style={styles.sectionTitre}>Dernières sorties</Eyebrow>
+        {stats.sorties.length === 0 ? (
+          <Text style={styles.vide}>Aucune sortie pour l'instant.</Text>
+        ) : (
+          stats.sorties.map((s, i) => (
+            <View key={i} style={styles.sortie}>
+              <View style={[styles.puce, s.junctions > 0 && styles.puceGain]} />
+              <View style={styles.sortieTexte}>
+                <Text style={styles.sortieTitre}>{s.label}</Text>
+                <Text style={styles.sortieDetail}>
+                  {stats.dateFmt.format(new Date(s.start)).replace('.', '')}
+                  {s.km != null ? ` · ${s.km.toFixed(1)} km` : ''}
+                  {s.imported ? ' · importée' : ''}
+                </Text>
+              </View>
+              <Mono style={[styles.sortiePts, s.junctions === 0 && styles.sortiePtsNul]}>
+                {s.junctions > 0 ? `+${s.junctions} pt${s.junctions > 1 ? 's' : ''}` : `${s.edges} tronçons`}
+              </Mono>
             </View>
-          );
-        })
-      )}
+          ))
+        )}
 
-      {stats.untracked > 0 && (
-        <Text style={styles.muted}>
-          {stats.untracked} point(s) acquis avant le suivi temporel : comptés dans le total uniquement.
-        </Text>
-      )}
-    </ScrollView>
-  );
-}
-
-function StatCell({ value, label }: { value: number | string; label: string }) {
-  return (
-    <View style={styles.statCell}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+        {neighborhoods.length > 0 && (
+          <>
+            <Eyebrow style={styles.sectionTitre}>Quartiers</Eyebrow>
+            {neighborhoods.map((n) => (
+              <View key={n.id} style={styles.quartier}>
+                <Text style={styles.quartierNom} numberOfLines={1}>
+                  {n.name || 'Quartier sans nom'}
+                </Text>
+                <Text style={[styles.quartierPct, n.unlocked && styles.quartierDebloque]}>
+                  {n.unlocked ? 'Débloqué' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.bg },
-  content: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 100 },
-  h2: { fontSize: 21, fontWeight: '700', color: COLORS.text, marginBottom: 10 },
-  h3: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    fontWeight: '600',
+  wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.papier },
+
+  tete: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 20, paddingTop: 18 },
+  teteTexte: { flex: 1 },
+  eyebrow: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 9.5,
+    letterSpacing: 1.14,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 18,
-    marginBottom: 8,
+    color: COLORS.encre3,
+    marginBottom: 6,
   },
-  bgTrackingRow: {
+  nom: { fontSize: 24 },
+  rond: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.ligneForte,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  total: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 20, marginTop: 14 },
+  totalN: { fontFamily: FONTS.display, fontSize: 60, lineHeight: 60, color: COLORS.trace, letterSpacing: -1.2 },
+  totalTexte: { flex: 1 },
+  totalLabel: { fontFamily: FONTS.texteSemi, fontSize: 14.5, color: COLORS.encre },
+  totalDetail: { fontFamily: FONTS.texte, fontSize: 12.5, color: COLORS.encre2, marginTop: 2 },
+  syncing: { fontFamily: FONTS.texte, fontSize: 11.5, color: COLORS.encre3, paddingHorizontal: 20, marginTop: 6 },
+
+  sectionTitre: { paddingHorizontal: 20, marginTop: 24, marginBottom: 4 },
+
+  barres: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 72, paddingHorizontal: 20, marginTop: 12 },
+  colonne: { flex: 1, alignItems: 'center', gap: 7 },
+  barre: { width: 14, backgroundColor: COLORS.ligne, borderRadius: 3, minHeight: 3 },
+  barrePleine: { backgroundColor: COLORS.trace },
+  barreValeur: { fontSize: 10, fontFamily: FONTS.monoSemi, color: COLORS.trace, height: 13 },
+  barreJour: { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.encre3 },
+
+  grille: { flexDirection: 'row', borderTopWidth: 1, borderColor: COLORS.ligne, marginTop: 20, marginHorizontal: 20 },
+  case: { flex: 1, paddingVertical: 15, paddingHorizontal: 4, borderRightWidth: 1, borderColor: COLORS.ligne },
+  caseFin: { borderRightWidth: 0 },
+  caseValeur: { fontSize: 19, fontFamily: FONTS.monoSemi, color: COLORS.encre, letterSpacing: -0.4 },
+  caseLabel: { fontFamily: FONTS.texte, fontSize: 11, color: COLORS.encre2, marginTop: 2 },
+
+  vide: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, paddingHorizontal: 20, paddingVertical: 10 },
+  sortie: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(148,163,184,0.08)',
-    borderColor: 'rgba(148,163,184,0.15)',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
+    gap: 13,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderColor: COLORS.ligne,
   },
-  bgTrackingText: { flex: 1, gap: 4 },
-  bgTrackingLabel: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
-  bigScore: { alignItems: 'center', marginVertical: 12 },
-  bigScoreValue: { fontSize: 48, fontWeight: '800', color: COLORS.accentGreen, lineHeight: 52 },
-  bigScoreLabel: { color: COLORS.textMuted, marginTop: 2 },
-  statGrid: { flexDirection: 'row', gap: 8, marginVertical: 10 },
-  statCell: {
-    flex: 1,
-    backgroundColor: 'rgba(148,163,184,0.08)',
-    borderColor: 'rgba(148,163,184,0.15)',
-    borderWidth: 1,
-    borderRadius: 12,
+  puce: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: COLORS.ligneForte },
+  puceGain: { backgroundColor: COLORS.trace },
+  sortieTexte: { flex: 1 },
+  sortieTitre: { fontFamily: FONTS.texteSemi, fontSize: 13.5, color: COLORS.encre },
+  sortieDetail: { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.encre3, marginTop: 2 },
+  sortiePts: { fontSize: 12, color: COLORS.trace },
+  sortiePtsNul: { color: COLORS.encre3 },
+
+  quartier: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
     paddingVertical: 10,
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderColor: COLORS.ligne,
   },
-  statValue: { fontSize: 19, fontWeight: '700', color: COLORS.text },
-  statLabel: { fontSize: 11, color: COLORS.textMuted, textAlign: 'center' },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 90, paddingTop: 4 },
-  bar: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 4 },
-  barValue: { fontSize: 11, fontWeight: '600', color: COLORS.text },
-  barFill: { width: '100%', borderRadius: 5, minHeight: 2 },
-  barLabel: { fontSize: 10, color: COLORS.textMuted },
-  sessionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148,163,184,0.12)',
-  },
-  neighborhoodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148,163,184,0.12)',
-  },
-  neighborhoodName: { fontSize: 13, color: '#cbd5e1', flexShrink: 1 },
-  neighborhoodPct: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
-  neighborhoodUnlocked: { color: COLORS.accentGreen },
-  sessionCell: { fontSize: 13, color: '#cbd5e1' },
-  sessionPts: { color: COLORS.accentGreen, fontWeight: '600' },
-  emptyList: { color: COLORS.textDim, textAlign: 'center', paddingVertical: 10 },
-  muted: { color: COLORS.textDim, fontSize: 12, marginTop: 10 },
+  quartierNom: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, flexShrink: 1 },
+  quartierPct: { fontFamily: FONTS.monoMedium, fontSize: 12, color: COLORS.encre2 },
+  quartierDebloque: { color: COLORS.trace },
 });

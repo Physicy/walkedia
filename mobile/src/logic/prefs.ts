@@ -19,9 +19,13 @@ export interface Prefs {
   // ensuite : c'est une offre, pas une porte, et la reposer à chaque ouverture
   // la transformerait en porte qu'on contourne.
   connexionProposee: boolean;
+  // coupe la session automatiquement au-dessus de 20 km/h (voir useWalkedia.ts,
+  // SPEED_LIMIT_KMH) — activé par défaut, réglable depuis Réglages pour qui
+  // marche vite en descente et se fait couper à tort.
+  arretAutoVitesse: boolean;
 }
 
-const DEFAULTS: Prefs = { onboarded: false, repereVu: false, connexionProposee: false };
+const DEFAULTS: Prefs = { onboarded: false, repereVu: false, connexionProposee: false, arretAutoVitesse: true };
 
 export async function loadPrefs(): Promise<Prefs> {
   try {

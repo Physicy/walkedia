@@ -15,6 +15,7 @@ import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine, lineLength } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
+import { loadPrefs, savePrefs } from '../logic/prefs';
 import * as discovered from '../logic/discovered';
 import type { Discovered } from '../logic/discovered';
 import { supabase } from '../lib/supabase';
@@ -134,6 +135,20 @@ export interface MarcheDetectee {
   startedAt: number;
 }
 
+// Résumé de la fusion à la connexion (voir syncOnSignIn) : la partie la plus
+// rassurante du backend — union des deux relevés, rien n'est écrasé — mais
+// invisible tant qu'elle n'a pas son propre écran. `communes` se déduit par
+// inclusion-exclusion (local + compte - total) plutôt que d'être compté à
+// part : le calcul est fait une fois, ici, sur les tailles avant/après fusion.
+// Montré seulement quand les deux côtés avaient déjà quelque chose à fusionner
+// — sinon ce n'est pas une fusion, juste une première synchronisation.
+export interface FusionResume {
+  local: number;
+  compte: number;
+  total: number;
+  communes: number;
+}
+
 // Journal des tentatives de chargement de zone (voir logLoad) : pour le
 // panneau de monitoring dev (LoadMonitorPanel.tsx), afin de voir exactement
 // pourquoi un chargement a été rapide, lent, ou n'a rien fait.
@@ -194,6 +209,8 @@ interface WalkediaState {
   syncing: boolean;
   loadLog: LoadLogEntry[];
   backgroundTrackingEnabled: boolean; // réglage opt-in, voir ProfileScreen.tsx
+  arretAutoVitesse: boolean; // réglage opt-out, voir SettingsScreen.tsx
+  fusionResume: FusionResume | null;
 }
 
 function freshState(): WalkediaState {
@@ -227,6 +244,8 @@ function freshState(): WalkediaState {
     syncing: false,
     loadLog: [],
     backgroundTrackingEnabled: false,
+    arretAutoVitesse: true,
+    fusionResume: null,
   };
 }
 
@@ -386,6 +405,10 @@ export function useWalkedia() {
       state.backgroundTrackingEnabled = active;
       rerender();
     });
+    loadPrefs().then((p) => {
+      state.arretAutoVitesse = p.arretAutoVitesse;
+      rerender();
+    });
     return () => {
       if (watchSub.current) watchSub.current.remove();
     };
@@ -447,10 +470,12 @@ export function useWalkedia() {
       state.syncing = true;
       rerender();
       try {
+        const localBefore = state.progress.edges.size;
         const { data, error } = await supabase.from('progress').select('*').eq('user_id', userId).maybeSingle();
         if (error) throw error;
         if (data) {
-          for (const id of data.edges || []) state.progress.edges.add(id);
+          const remoteEdges: string[] = data.edges || [];
+          for (const id of remoteEdges) state.progress.edges.add(id);
           for (const id of data.junctions || []) state.progress.junctions.add(id);
           for (const [jid, at] of Object.entries<number>(data.completed_at || {})) {
             const local = state.progress.completedAt[jid];
@@ -459,6 +484,10 @@ export function useWalkedia() {
           state.progress.edgeMeters = Math.max(state.progress.edgeMeters, data.edge_meters || 0);
           for (const [eid, count] of Object.entries<number>(data.edge_visits || {})) {
             state.progress.edgeVisits[eid] = Math.max(state.progress.edgeVisits[eid] || 0, count);
+          }
+          if (localBefore > 0 && remoteEdges.length > 0) {
+            const total = state.progress.edges.size;
+            state.fusionResume = { local: localBefore, compte: remoteEdges.length, total, communes: localBefore + remoteEdges.length - total };
           }
         }
         const { data: remoteSessions } = await supabase.from('sessions').select('*').eq('user_id', userId);
@@ -844,6 +873,7 @@ export function useWalkedia() {
         edges: newEdges.size,
         junctions: newInter.size,
         imported: true,
+        km: lineLength(fixes.map((f) => [f.lat, f.lon])) / 1000,
       });
       await persist();
       rerender();
@@ -946,7 +976,7 @@ export function useWalkedia() {
       const prev = accuracy != null && accuracy > MAX_ACCURACY ? null : state.lastFix;
 
       const speedKmh = estimateSpeedKmh(prev, cur, speed);
-      if (speedKmh != null && speedKmh > SPEED_LIMIT_KMH) {
+      if (state.arretAutoVitesse && speedKmh != null && speedKmh > SPEED_LIMIT_KMH) {
         state.speedStreak++;
         if (state.speedStreak >= SPEED_STREAK_LIMIT) {
           state.speedStreak = 0;
@@ -1037,7 +1067,8 @@ export function useWalkedia() {
       state.lastFix = null;
       state.idleMovement = null;
 
-      state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size });
+      const km = lineLength(track) / 1000;
+      state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size, km });
       persist();
       // Fin de session : on n'attend pas le prochain cycle différé pour écrire
       // la géométrie découverte — c'est typiquement le moment où l'app va être
@@ -1047,7 +1078,7 @@ export function useWalkedia() {
       state.sortieResume = {
         edges: newEdges.size,
         junctions: newInter.size,
-        km: lineLength(track) / 1000,
+        km,
         minutes: Math.round((Date.now() - startedAt) / 60000),
         raisonVitesse: vitesseKmh ?? null,
       };
@@ -1249,6 +1280,36 @@ export function useWalkedia() {
     rerender();
   }, [state, rerender]);
 
+  const dismissFusionResume = useCallback(() => {
+    state.fusionResume = null;
+    rerender();
+  }, [state, rerender]);
+
+  const setArretAutoVitesse = useCallback(
+    (next: boolean) => {
+      state.arretAutoVitesse = next;
+      savePrefs({ arretAutoVitesse: next });
+      rerender();
+    },
+    [state, rerender]
+  );
+
+  // Efface la progression — rues, points, sessions — sur l'appareil et sur le
+  // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
+  // porte la confirmation) : ne touche ni les préférences ni la session
+  // Supabase elle-même, seulement le relevé.
+  const wipeProgress = useCallback(async () => {
+    state.progress = { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] };
+    state.discovered = discovered.fresh();
+    await storage.save(state.progress);
+    await discovered.save(state.discovered);
+    if (state.userId) {
+      await supabase.from('progress').delete().eq('user_id', state.userId);
+      await supabase.from('sessions').delete().eq('user_id', state.userId);
+    }
+    rerender();
+  }, [state, rerender]);
+
   return {
     state,
     actions: {
@@ -1257,6 +1318,7 @@ export function useWalkedia() {
       endSession,
       dismissPointGagne,
       dismissSortieResume,
+      dismissFusionResume,
       importerMarcheDetectee,
       ignorerMarcheDetectee,
       simulateWalk,
@@ -1267,6 +1329,8 @@ export function useWalkedia() {
       signOutLocally,
       enableBackgroundTracking,
       disableBackgroundTracking,
+      setArretAutoVitesse,
+      wipeProgress,
     },
   };
 }

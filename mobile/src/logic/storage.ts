@@ -16,6 +16,13 @@ export interface Session {
   edges: number;
   junctions: number;
   imported?: boolean;
+  // Distance parcourue (km), calculée depuis la trace GPS brute au moment où
+  // la session se termine — voir endSession dans useWalkedia.ts. Absente sur
+  // les sessions enregistrées avant ce champ, ou reçues d'un autre appareil
+  // via la synchronisation (la table distante ne la porte pas) : optionnelle
+  // plutôt que 0, pour ne pas laisser croire à une sortie sans un mètre de
+  // marche.
+  km?: number;
 }
 
 export interface Progress {

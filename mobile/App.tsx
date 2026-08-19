@@ -13,6 +13,8 @@ import { StartScreen } from './src/screens/StartScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { FusionVoile } from './src/components/FusionVoile';
 import { TabBar, TabName } from './src/components/TabBar';
 import { COLORS } from './src/theme';
 
@@ -22,6 +24,7 @@ function AppContent() {
   const auth = useAuth();
   const policesPretes = useAppFonts();
   const [tab, setTab] = useState<TabName>('adventure');
+  const [reglagesOuverts, setReglagesOuverts] = useState(false);
 
   // Repère de première ouverture, persisté (prefs.ts) et pas gardé dans un
   // ref : entre la fin de l'onboarding et la première carte il y a la
@@ -123,6 +126,7 @@ function AppContent() {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={COLORS.trace} />
+        {state.fusionResume && <FusionVoile resume={state.fusionResume} onFermer={actions.dismissFusionResume} />}
         <StatusBar style="dark" />
       </View>
     );
@@ -132,6 +136,7 @@ function AppContent() {
     return (
       <View style={styles.fill}>
         <StartScreen status={state.startStatus} onLocate={actions.requestLocationAndInit} />
+        {state.fusionResume && <FusionVoile resume={state.fusionResume} onFermer={actions.dismissFusionResume} />}
         <StatusBar style="dark" />
       </View>
     );
@@ -147,13 +152,26 @@ function AppContent() {
           auth={auth}
           syncing={state.syncing}
           neighborhoods={neighborhoodStats(state)}
+          onOuvrirReglages={() => setReglagesOuverts(true)}
+        />
+      )}
+      <TabBar active={tab} onChange={setTab} />
+
+      {reglagesOuverts && (
+        <SettingsScreen
+          auth={auth}
           backgroundTrackingEnabled={state.backgroundTrackingEnabled}
           onToggleBackgroundTracking={(next) =>
             next ? actions.enableBackgroundTracking() : actions.disableBackgroundTracking()
           }
+          arretAutoVitesse={state.arretAutoVitesse}
+          onToggleArretAutoVitesse={actions.setArretAutoVitesse}
+          onWipeProgress={actions.wipeProgress}
+          onFermer={() => setReglagesOuverts(false)}
         />
       )}
-      <TabBar active={tab} onChange={setTab} />
+
+      {state.fusionResume && <FusionVoile resume={state.fusionResume} onFermer={actions.dismissFusionResume} />}
       <StatusBar style="dark" />
     </View>
   );

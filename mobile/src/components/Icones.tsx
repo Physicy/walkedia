@@ -19,7 +19,9 @@ export type NomIcone =
   | 'bouclier'
   | 'horloge'
   | 'fermer'
-  | 'retour';
+  | 'retour'
+  | 'reglages'
+  | 'ami';
 
 export function Icone({
   nom,
@@ -100,6 +102,22 @@ export function Icone({
         <>
           <Circle cx={12} cy={12} r={9} {...c} />
           <Path d="M12 7v5l3 2" {...c} />
+        </>
+      )}
+      {nom === 'reglages' && (
+        <>
+          <Circle cx={12} cy={12} r={3.2} {...c} />
+          <Path
+            d="M12 3.5v2.6M12 17.9v2.6M20.5 12h-2.6M6.1 12H3.5M17.66 6.34l-1.84 1.84M8.18 15.82l-1.84 1.84M17.66 17.66l-1.84-1.84M8.18 8.18L6.34 6.34"
+            {...c}
+          />
+        </>
+      )}
+      {nom === 'ami' && (
+        <>
+          <Circle cx={9} cy={8.5} r={3.2} {...c} />
+          <Path d="M3.5 20v-.8a5.2 5.2 0 0 1 5.2-5.2h.6a5.2 5.2 0 0 1 5.2 5.2v.8" {...c} />
+          <Path d="M18 8v5M15.5 10.5h5" {...c} />
         </>
       )}
     </Svg>
