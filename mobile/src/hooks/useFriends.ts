@@ -9,6 +9,10 @@ import { supabase } from '../lib/supabase';
 export interface FriendProfile {
   id: string;
   display_name: string | null;
+  // Date d'acceptation de la demande — seulement pour un ami confirmé (voir
+  // `responded_at`, supabase/migrations/0001_init.sql). Absente pour un
+  // résultat de recherche ou une demande en attente.
+  since?: string;
 }
 
 export interface FriendRequest {
@@ -33,7 +37,7 @@ export function useFriends(userId: string | null) {
     try {
       const { data: rows, error } = await supabase
         .from('friendships')
-        .select('id, requester_id, addressee_id, status')
+        .select('id, requester_id, addressee_id, status, responded_at')
         .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
       if (error) throw error;
 
@@ -50,7 +54,7 @@ export function useFriends(userId: string | null) {
       for (const r of rows || []) {
         const otherId = r.requester_id === userId ? r.addressee_id : r.requester_id;
         const profile = profilesById[otherId] || { id: otherId, display_name: null };
-        if (r.status === 'accepted') friendsList.push(profile);
+        if (r.status === 'accepted') friendsList.push({ ...profile, since: r.responded_at ?? undefined });
         else if (r.status === 'pending' && r.addressee_id === userId) inList.push({ id: r.id, profile });
         else if (r.status === 'pending' && r.requester_id === userId) outList.push({ id: r.id, profile });
       }

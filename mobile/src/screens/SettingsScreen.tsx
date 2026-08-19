@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS } from '../theme';
-import { Eyebrow, Mono } from '../components/ui';
+import { Eyebrow, Jeton, Mono } from '../components/ui';
 import { Icone } from '../components/Icones';
 import type { useAuth } from '../hooks/useAuth';
 
@@ -119,9 +119,7 @@ export function SettingsScreen({
         <Section titre="Compte">
           {auth.user ? (
             <View style={styles.compte}>
-              <View style={styles.jeton}>
-                <Text style={styles.jetonTexte}>{(nom || '?').slice(0, 2).toUpperCase()}</Text>
-              </View>
+              <Jeton nom={nom} size={34} />
               <View style={styles.compteTexte}>
                 <Text style={styles.compteNom} numberOfLines={1}>
                   {nom || 'Compte connecté'}
@@ -196,15 +194,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.ligne,
   },
-  jeton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.encre,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  jetonTexte: { fontFamily: FONTS.monoSemi, fontSize: 12, color: COLORS.surface },
   compteTexte: { flex: 1 },
   compteNom: { fontFamily: FONTS.texteSemi, fontSize: 14, color: COLORS.encre },
   pasDeCompte: {

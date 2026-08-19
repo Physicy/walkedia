@@ -88,6 +88,24 @@ export function Bouton({
   );
 }
 
+// Initiales d'un joueur à partir de son nom affiché — jamais de photo (le
+// serveur n'en sert pas), donc un jeton textuel partout où un avatar
+// apparaîtrait : classement, amis, profil d'un autre joueur, compte.
+export function initiales(nom: string | null | undefined): string {
+  const mots = (nom || '').trim().split(/\s+/).filter(Boolean);
+  if (mots.length === 0) return '?';
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase();
+}
+
+export function Jeton({ nom, size = 34 }: { nom: string | null | undefined; size?: number }) {
+  return (
+    <View style={[styles.jeton, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[styles.jetonTexte, { fontSize: size * 0.36 }]}>{initiales(nom)}</Text>
+    </View>
+  );
+}
+
 // Jauge fine du relevé : une seule ligne, là où l'ancien HUD empilait deux
 // fractions dont le dénominateur bougeait avec les déplacements.
 export function Jauge({ ratio }: { ratio: number }) {
@@ -150,4 +168,7 @@ const styles = StyleSheet.create({
 
   jauge: { height: 3, backgroundColor: COLORS.ligne, borderRadius: 2, overflow: 'hidden' },
   jaugeFill: { height: '100%', backgroundColor: COLORS.trace, borderRadius: 2 },
+
+  jeton: { backgroundColor: COLORS.encre, alignItems: 'center', justifyContent: 'center' },
+  jetonTexte: { fontFamily: FONTS.monoSemi, color: COLORS.surface },
 });
