@@ -28,6 +28,9 @@ export interface Prefs {
   // déjà validés et le tracé de la session en cours. Un hex, pas un index de
   // palette : reste valide même si la palette change plus tard.
   traceColor: string;
+  // avatar choisi (voir logic/avatars.ts) — null tant que rien n'est
+  // sélectionné, le profil retombe alors sur les initiales (Jeton, ui.tsx).
+  avatarId: string | null;
 }
 
 const DEFAULTS: Prefs = {
@@ -36,6 +39,7 @@ const DEFAULTS: Prefs = {
   connexionProposee: false,
   arretAutoVitesse: true,
   traceColor: '#6C5DF4',
+  avatarId: null,
 };
 
 export async function loadPrefs(): Promise<Prefs> {

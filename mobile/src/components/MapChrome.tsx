@@ -13,7 +13,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS, RADIUS } from '../theme';
-import { Bouton, Jauge, Mono } from './ui';
+import { Bouton, Mono } from './ui';
 import { Icone } from './Icones';
 import { Carrefour, Branche } from './Carrefour';
 
@@ -28,19 +28,6 @@ function formatEcoule(ms: number): string {
 
 function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
-}
-
-export function ReleveBar({ trouves, total, couleur }: { trouves: number; total: number; couleur: string }) {
-  const ratio = total > 0 ? trouves / total : 0;
-  return (
-    <View style={styles.releve}>
-      <View style={styles.releveTete}>
-        <Mono style={styles.releveNombre}>{trouves} tronçons</Mono>
-        <Text style={styles.releveSur}>sur {total}</Text>
-      </View>
-      <Jauge ratio={ratio} couleur={couleur} />
-    </View>
-  );
 }
 
 export function BoutonRecentrer({ onPress }: { onPress: () => void }) {
@@ -176,24 +163,6 @@ export function PanneauSession({
 }
 
 const styles = StyleSheet.create({
-  releve: {
-    flex: 1,
-    backgroundColor: 'rgba(251, 250, 253, 0.94)',
-    borderWidth: 1,
-    borderColor: COLORS.ligne,
-    borderRadius: RADIUS.m,
-    padding: 13,
-  },
-  releveTete: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 },
-  releveNombre: { fontSize: 13, fontFamily: FONTS.monoSemi, letterSpacing: -0.26 },
-  releveSur: {
-    fontFamily: FONTS.mono,
-    fontSize: 9,
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-    color: COLORS.encre3,
-  },
-
   outil: {
     width: 40,
     height: 40,

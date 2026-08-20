@@ -8,12 +8,13 @@
 // inventer un serait fabriquer une donnée qui n'existe pas.
 
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
-import { Eyebrow, Jeton, Mono, Titre } from '../components/ui';
+import { Avatar, Eyebrow, Mono, Titre } from '../components/ui';
 import { Icone } from '../components/Icones';
 import { tabBarHeight } from '../components/TabBar';
+import { AVATARS, AVATAR_IDS } from '../logic/avatars';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
 import type { NeighborhoodStat } from '../hooks/useWalkedia';
@@ -58,6 +59,8 @@ export function ProfileScreen({
   onOuvrirReglages,
   traceColor,
   onChoisirCouleur,
+  avatarId,
+  onChoisirAvatar,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
@@ -66,6 +69,8 @@ export function ProfileScreen({
   onOuvrirReglages: () => void;
   traceColor: string;
   onChoisirCouleur: (hex: string) => void;
+  avatarId: string | null;
+  onChoisirAvatar: (id: string | null) => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -115,7 +120,7 @@ export function ProfileScreen({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.tete}>
-          <Jeton nom={nom} size={44} />
+          <Avatar avatarId={avatarId} nom={nom} size={44} />
           <View style={styles.teteTexte}>
             <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
             <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
@@ -224,7 +229,34 @@ export function ProfileScreen({
             );
           })}
         </View>
-        <Text style={styles.avatarNote}>Avatar personnalisable à venir.</Text>
+        <Eyebrow style={styles.sectionTitre}>Ton avatar</Eyebrow>
+        <Text style={styles.couleurTexte}>Remplace aussi le repère de ta position sur la carte.</Text>
+        <View style={styles.avatars}>
+          <Pressable
+            onPress={() => onChoisirAvatar(null)}
+            style={[styles.pastilleAvatar, !avatarId && styles.pastilleAvatarChoisie]}
+            accessibilityRole="button"
+            accessibilityLabel="Aucun avatar (initiales)"
+            accessibilityState={{ selected: !avatarId }}
+          >
+            <Text style={styles.avatarAucunTexte}>{(nom || '?').slice(0, 1).toUpperCase()}</Text>
+          </Pressable>
+          {AVATAR_IDS.map((id) => {
+            const choisi = id === avatarId;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => onChoisirAvatar(id)}
+                style={[styles.pastilleAvatar, choisi && styles.pastilleAvatarChoisie]}
+                accessibilityRole="button"
+                accessibilityLabel={`Choisir cet avatar`}
+                accessibilityState={{ selected: choisi }}
+              >
+                <Image source={AVATARS[id]} style={styles.avatarImage} resizeMode="cover" />
+              </Pressable>
+            );
+          })}
+        </View>
       </ScrollView>
     </View>
   );
@@ -328,12 +360,20 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   pastilleCouleurChoisie: { borderColor: COLORS.encre },
-  avatarNote: {
-    fontFamily: FONTS.mono,
-    fontSize: 10,
-    color: COLORS.encre3,
-    paddingHorizontal: 20,
-    marginTop: 16,
-    letterSpacing: 0.3,
+
+  avatars: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 20, marginTop: 14, paddingBottom: 6 },
+  pastilleAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  pastilleAvatarChoisie: { borderColor: COLORS.trace },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarAucunTexte: { fontFamily: FONTS.monoSemi, fontSize: 16, color: COLORS.encre3 },
 });

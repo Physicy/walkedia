@@ -155,6 +155,8 @@ function AppContent() {
           onOuvrirReglages={() => setReglagesOuverts(true)}
           traceColor={state.traceColor}
           onChoisirCouleur={actions.setTraceColor}
+          avatarId={state.avatarId}
+          onChoisirAvatar={actions.setAvatar}
         />
       )}
       <TabBar active={tab} onChange={setTab} />

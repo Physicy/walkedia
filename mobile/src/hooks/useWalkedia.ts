@@ -211,6 +211,7 @@ interface WalkediaState {
   backgroundTrackingEnabled: boolean; // réglage opt-in, voir ProfileScreen.tsx
   arretAutoVitesse: boolean; // réglage opt-out, voir SettingsScreen.tsx
   traceColor: string; // accent choisi par le joueur, voir logic/prefs.ts
+  avatarId: string | null; // voir logic/avatars.ts
   fusionResume: FusionResume | null;
 }
 
@@ -247,6 +248,7 @@ function freshState(): WalkediaState {
     backgroundTrackingEnabled: false,
     arretAutoVitesse: true,
     traceColor: '#6C5DF4',
+    avatarId: null,
     fusionResume: null,
   };
 }
@@ -410,6 +412,7 @@ export function useWalkedia() {
     loadPrefs().then((p) => {
       state.arretAutoVitesse = p.arretAutoVitesse;
       state.traceColor = p.traceColor;
+      state.avatarId = p.avatarId;
       rerender();
     });
     return () => {
@@ -488,8 +491,15 @@ export function useWalkedia() {
           for (const [eid, count] of Object.entries<number>(data.edge_visits || {})) {
             state.progress.edgeVisits[eid] = Math.max(state.progress.edgeVisits[eid] || 0, count);
           }
-          if (localBefore > 0 && remoteEdges.length > 0) {
-            const total = state.progress.edges.size;
+          // `syncOnSignIn` s'exécute à chaque démarrage tant qu'une session
+          // persiste (voir App.tsx, la ref démarre à null à chaque lancement
+          // JS), pas seulement à la toute première connexion. Une fois les
+          // deux côtés fusionnés une fois, les lancements suivants retombent
+          // sur le même total (`total === localBefore`) : rien de nouveau,
+          // donc pas de fusion à montrer — c'est exactement le cas qui
+          // produisait un écran "31 + 31 = 31" à chaque ouverture.
+          const total = state.progress.edges.size;
+          if (localBefore > 0 && total > localBefore) {
             state.fusionResume = { local: localBefore, compte: remoteEdges.length, total, communes: localBefore + remoteEdges.length - total };
           }
         }
@@ -513,6 +523,20 @@ export function useWalkedia() {
           }
           state.progress.sessions.sort((a, b) => a.start - b.start);
         }
+
+        // Avatar : le compte fait foi une fois connecté (c'est justement le
+        // moment où on rapatrie son état). Si le compte n'en a pas encore
+        // mais que l'appareil en a déjà choisi un, on le pousse plutôt que de
+        // l'effacer — sinon choisir un avatar avant la toute première
+        // connexion serait perdu au premier sync.
+        const { data: profil } = await supabase.from('profiles').select('avatar_url').eq('id', userId).maybeSingle();
+        if (profil?.avatar_url) {
+          state.avatarId = profil.avatar_url;
+          savePrefs({ avatarId: profil.avatar_url });
+        } else if (state.avatarId) {
+          supabase.from('profiles').update({ avatar_url: state.avatarId }).eq('id', userId).then(() => {});
+        }
+
         await storage.save(state.progress);
         await pushProgress();
         toast('Progression synchronisée ✅');
@@ -1306,6 +1330,24 @@ export function useWalkedia() {
     [state, rerender]
   );
 
+  // Persiste sur l'appareil comme les autres préférences, et pousse vers
+  // `profiles.avatar_url` s'il y a un compte — la seule colonne de la table
+  // qui s'y prête (voir supabase/migrations/0001_init.sql) : ce n'est pas une
+  // URL au sens strict, juste l'id local (voir logic/avatars.ts), les
+  // avatars étant embarqués dans l'app plutôt qu'hébergés. Fire-and-forget
+  // comme pushProgress : un échec ne doit pas bloquer le choix local.
+  const setAvatar = useCallback(
+    (id: string | null) => {
+      state.avatarId = id;
+      savePrefs({ avatarId: id });
+      rerender();
+      if (state.userId) {
+        supabase.from('profiles').update({ avatar_url: id }).eq('id', state.userId).then(() => {});
+      }
+    },
+    [state, rerender]
+  );
+
   // Efface la progression — rues, points, sessions — sur l'appareil et sur le
   // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
   // porte la confirmation) : ne touche ni les préférences ni la session
@@ -1343,6 +1385,7 @@ export function useWalkedia() {
       disableBackgroundTracking,
       setArretAutoVitesse,
       setTraceColor,
+      setAvatar,
       wipeProgress,
     },
   };

@@ -7,6 +7,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { COLORS, FONTS, RADIUS } from '../theme';
+import { AVATARS } from '../logic/avatars';
 
 export function Titre({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {
   return <Text style={[styles.titre, style]}>{children}</Text>;
@@ -106,14 +108,26 @@ export function Jeton({ nom, size = 34 }: { nom: string | null | undefined; size
   );
 }
 
-// Jauge fine du relevé : une seule ligne, là où l'ancien HUD empilait deux
-// fractions dont le dénominateur bougeait avec les déplacements.
-export function Jauge({ ratio, couleur = COLORS.trace }: { ratio: number; couleur?: string }) {
-  const p = Math.max(0.005, Math.min(1, ratio));
+// Avatar choisi (voir logic/avatars.ts) si l'id en correspond bien un ;
+// retombe sur les initiales (Jeton) sinon — pas d'avatar choisi, ou un autre
+// joueur qui n'en a pas encore pris un.
+export function Avatar({
+  avatarId,
+  nom,
+  size = 34,
+}: {
+  avatarId: string | null | undefined;
+  nom: string | null | undefined;
+  size?: number;
+}) {
+  const source = avatarId ? AVATARS[avatarId] : undefined;
+  if (!source) return <Jeton nom={nom} size={size} />;
   return (
-    <View style={styles.jauge}>
-      <View style={[styles.jaugeFill, { width: `${p * 100}%`, backgroundColor: couleur }]} />
-    </View>
+    <Image
+      source={source}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      resizeMode="cover"
+    />
   );
 }
 
@@ -166,8 +180,6 @@ const styles = StyleSheet.create({
   btnTexteFantome: { fontFamily: FONTS.texteMedium, color: COLORS.encre2 },
   btnTexteSortie: { color: COLORS.encre },
 
-  jauge: { height: 3, backgroundColor: COLORS.ligne, borderRadius: 2, overflow: 'hidden' },
-  jaugeFill: { height: '100%', backgroundColor: COLORS.trace, borderRadius: 2 },
 
   jeton: { backgroundColor: COLORS.encre, alignItems: 'center', justifyContent: 'center' },
   jetonTexte: { fontFamily: FONTS.monoSemi, color: COLORS.surface },

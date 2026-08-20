@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Circle, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
 
 import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
-import { ReleveBar, BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
+import { BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
 import { PointGagneVoile } from '../components/PointGagneVoile';
 import { SessionSummary } from '../components/SessionSummary';
 import { JunctionSheet } from '../components/JunctionSheet';
@@ -17,6 +17,7 @@ import { COLORS } from '../theme';
 import { heatColor, progressColor, nuancesTrace, rgbaTrace } from '../logic/color';
 import { haversine } from '../logic/geo';
 import { branchesForGlyph, orientationsManquantes, objectifLePlusProche, pointNumber } from '../logic/junctionInfo';
+import { AVATARS } from '../logic/avatars';
 
 const UNDISCOVERED_STROKE = 'rgba(26, 27, 46, 0.22)';
 
@@ -335,9 +336,6 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
   const [centerLat, centerLon] = state.center;
 
-  let foundEdges = 0;
-  for (const e of edges) if (edgeIsFound(state, e.id)) foundEdges++;
-
   const recenter = () => {
     const target = actions.recenter();
     if (target && mapRef.current) {
@@ -502,14 +500,19 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={false}
             >
-              <View style={[styles.positionDot, { backgroundColor: state.traceColor }]} />
+              {state.avatarId && AVATARS[state.avatarId] ? (
+                <View style={[styles.positionAvatarWrap, { borderColor: state.traceColor }]}>
+                  <Image source={AVATARS[state.avatarId]} style={styles.positionAvatar} resizeMode="cover" />
+                </View>
+              ) : (
+                <View style={[styles.positionDot, { backgroundColor: state.traceColor }]} />
+              )}
             </Marker>
           </>
         )}
       </MapView>
 
       <View style={[styles.haut, { top: insets.top + 10 }]}>
-        <ReleveBar trouves={foundEdges} total={edges.length} couleur={state.traceColor} />
         <BoutonRecentrer onPress={recenter} />
       </View>
 
@@ -602,12 +605,8 @@ function sessionKm(track: [number, number][]): number {
 const styles = StyleSheet.create({
   haut: {
     position: 'absolute',
-    left: 14,
     right: 14,
     zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
   },
   objectifWrap: { position: 'absolute', left: 14, right: 14, zIndex: 9 },
   bas: { position: 'absolute', left: 0, right: 0, zIndex: 10 },
@@ -644,4 +643,13 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: '#fff',
   },
+  positionAvatarWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2.5,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  positionAvatar: { width: '100%', height: '100%' },
 });
