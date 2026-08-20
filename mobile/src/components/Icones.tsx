@@ -21,7 +21,8 @@ export type NomIcone =
   | 'fermer'
   | 'retour'
   | 'reglages'
-  | 'ami';
+  | 'ami'
+  | 'crayon';
 
 export function Icone({
   nom,
@@ -119,6 +120,9 @@ export function Icone({
           <Path d="M3.5 20v-.8a5.2 5.2 0 0 1 5.2-5.2h.6a5.2 5.2 0 0 1 5.2 5.2v.8" {...c} />
           <Path d="M18 8v5M15.5 10.5h5" {...c} />
         </>
+      )}
+      {nom === 'crayon' && (
+        <Path d="M4 20l1-4.2L15.5 5.3a1.5 1.5 0 0 1 2.1 0l1.1 1.1a1.5 1.5 0 0 1 0 2.1L8.2 19 4 20z" {...c} />
       )}
     </Svg>
   );

@@ -70,10 +70,6 @@ export function ObjectifCard({
   );
 }
 
-function Poignee() {
-  return <View style={styles.poignee} />;
-}
-
 export function PanneauPret({
   marcheDetectee,
   onImporterMarche,
@@ -86,8 +82,7 @@ export function PanneauPret({
   onDemarrer: () => void;
 }) {
   return (
-    <View style={styles.socle}>
-      <Poignee />
+    <View style={styles.pretWrap}>
       {marcheDetectee && (
         <View style={styles.marcheRow}>
           <Icone nom="position" size={18} color={COLORS.encre} strokeWidth={1.7} />
@@ -103,7 +98,7 @@ export function PanneauPret({
           </Pressable>
         </View>
       )}
-      <Bouton onPress={onDemarrer} icone={<Icone nom="lecture" size={17} color={COLORS.surface} />}>
+      <Bouton onPress={onDemarrer} icone={<Icone nom="lecture" size={17} color={COLORS.surface} />} style={styles.boutonFlottant}>
         Démarrer une session
       </Bouton>
     </View>
@@ -131,7 +126,6 @@ export function PanneauSession({
 }) {
   return (
     <View style={styles.socle}>
-      <Poignee />
       <View style={styles.compteurs}>
         <View style={styles.compteur}>
           <Mono style={styles.compteurValeur}>{duree}</Mono>
@@ -198,20 +192,48 @@ const styles = StyleSheet.create({
   objectifManqueAccent: { fontFamily: FONTS.texteSemi, color: COLORS.encre },
   objectifDistance: { fontSize: 13, color: COLORS.encre },
 
+  // Carte flottante : ombre plutôt qu'un trait gris, pour qu'elle se pose sur
+  // la carte au lieu d'y être scotchée par un bord dur. Coins tous arrondis
+  // et marge de chaque côté (voir MapScreen.tsx, styles.bas) : un panneau qui
+  // flotte, pas une feuille collée au bas de l'écran.
   socle: {
     backgroundColor: COLORS.surface,
-    borderTopLeftRadius: RADIUS.l,
-    borderTopRightRadius: RADIUS.l,
-    borderWidth: 1,
-    borderColor: COLORS.ligne,
-    borderBottomWidth: 0,
+    borderRadius: RADIUS.l,
     padding: 18,
-    paddingTop: 10,
     gap: 12,
+    shadowColor: COLORS.encre,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 8,
   },
-  poignee: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.ligneForte, alignSelf: 'center', marginBottom: 4 },
 
-  marcheRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  // État "prêt" : pas de carte autour du bouton, il flotte seul (voir
+  // PanneauPret) — l'envelopper dans un second rectangle blanc au-dessus
+  // d'un bouton déjà plein le rendait redondant.
+  pretWrap: { gap: 10 },
+  boutonFlottant: {
+    shadowColor: COLORS.encre,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+
+  marcheRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(251, 250, 253, 0.96)',
+    borderRadius: RADIUS.m,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    shadowColor: COLORS.encre,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
   marcheTexte: { flex: 1, fontFamily: FONTS.texte, fontSize: 12.5, lineHeight: 17, color: COLORS.encre2 },
   marcheTexteGras: { fontFamily: FONTS.texteSemi, color: COLORS.encre },
   lien: {

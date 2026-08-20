@@ -7,7 +7,7 @@
 // pas par un quartier : une session ne porte aucun quartier en mémoire, et en
 // inventer un serait fabriquer une donnée qui n'existe pas.
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
@@ -111,23 +111,38 @@ export function ProfileScreen({
   }, [progress]);
 
   const nom = auth.user?.user_metadata?.full_name || auth.user?.user_metadata?.name || auth.user?.email || null;
+  const [personnaliserOuvert, setPersonnaliserOuvert] = useState(false);
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
+      <Pressable
+        style={styles.rond}
+        onPress={onOuvrirReglages}
+        accessibilityRole="button"
+        accessibilityLabel="Réglages"
+      >
+        <Icone nom="reglages" size={18} color={COLORS.encre} strokeWidth={1.7} />
+      </Pressable>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 26 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.tete}>
-          <Avatar avatarId={avatarId} nom={nom} size={44} />
-          <View style={styles.teteTexte}>
-            <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
-            <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
-          </View>
-          <Pressable style={styles.rond} onPress={onOuvrirReglages} accessibilityRole="button" accessibilityLabel="Réglages">
-            <Icone nom="reglages" size={18} color={COLORS.encre} strokeWidth={1.7} />
+          <Pressable
+            onPress={() => setPersonnaliserOuvert(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Changer d'avatar ou de couleur"
+            style={styles.avatarBouton}
+          >
+            <Avatar avatarId={avatarId} nom={nom} size={96} />
+            <View style={[styles.avatarBadge, { backgroundColor: traceColor }]}>
+              <Icone nom="crayon" size={13} color="#fff" strokeWidth={2} />
+            </View>
           </Pressable>
+          <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
+          <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
         </View>
 
         <View style={styles.total}>
@@ -207,8 +222,49 @@ export function ProfileScreen({
             ))}
           </>
         )}
+      </ScrollView>
 
-        <Eyebrow style={styles.sectionTitre}>Ta couleur</Eyebrow>
+      {personnaliserOuvert && (
+        <PersonnalisationSheet
+          nom={nom}
+          traceColor={traceColor}
+          onChoisirCouleur={onChoisirCouleur}
+          avatarId={avatarId}
+          onChoisirAvatar={onChoisirAvatar}
+          onFermer={() => setPersonnaliserOuvert(false)}
+        />
+      )}
+    </View>
+  );
+}
+
+// Fiche de personnalisation : couleur et avatar au même endroit, ouverte en
+// touchant l'avatar plutôt que posée en permanence dans le profil — les deux
+// se choisissent une fois puis se retouchent rarement, ça n'a pas besoin
+// d'occuper la moitié de l'écran à chaque visite.
+function PersonnalisationSheet({
+  nom,
+  traceColor,
+  onChoisirCouleur,
+  avatarId,
+  onChoisirAvatar,
+  onFermer,
+}: {
+  nom: string | null;
+  traceColor: string;
+  onChoisirCouleur: (hex: string) => void;
+  avatarId: string | null;
+  onChoisirAvatar: (id: string | null) => void;
+  onFermer: () => void;
+}) {
+  return (
+    <Pressable style={styles.voile} onPress={onFermer}>
+      <Pressable style={styles.feuille} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.poignee} />
+        <Titre style={styles.feuilleTitre}>Personnaliser</Titre>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+        <Eyebrow style={styles.sectionTitreFeuille}>Ta couleur</Eyebrow>
         <Text style={styles.couleurTexte}>
           Remplace le violet pour le halo autour des carrefours, les points déjà validés et le tracé de ta session.
         </Text>
@@ -229,7 +285,8 @@ export function ProfileScreen({
             );
           })}
         </View>
-        <Eyebrow style={styles.sectionTitre}>Ton avatar</Eyebrow>
+
+        <Eyebrow style={styles.sectionTitreFeuille}>Ton avatar</Eyebrow>
         <Text style={styles.couleurTexte}>Remplace aussi le repère de ta position sur la carte.</Text>
         <View style={styles.avatars}>
           <Pressable
@@ -249,7 +306,7 @@ export function ProfileScreen({
                 onPress={() => onChoisirAvatar(id)}
                 style={[styles.pastilleAvatar, choisi && styles.pastilleAvatarChoisie]}
                 accessibilityRole="button"
-                accessibilityLabel={`Choisir cet avatar`}
+                accessibilityLabel="Choisir cet avatar"
                 accessibilityState={{ selected: choisi }}
               >
                 <Image source={AVATARS[id]} style={styles.avatarImage} resizeMode="cover" />
@@ -257,8 +314,9 @@ export function ProfileScreen({
             );
           })}
         </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -266,8 +324,20 @@ const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.papier },
   scroll: { flex: 1 },
 
-  tete: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 20, paddingTop: 18 },
-  teteTexte: { flex: 1 },
+  tete: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 26 },
+  avatarBouton: { marginBottom: 14 },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: COLORS.papier,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   eyebrow: {
     fontFamily: FONTS.monoMedium,
     fontSize: 9.5,
@@ -275,9 +345,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: COLORS.encre3,
     marginBottom: 6,
+    textAlign: 'center',
   },
-  nom: { fontSize: 24 },
+  nom: { fontSize: 24, textAlign: 'center' },
   rond: {
+    position: 'absolute',
+    top: 18,
+    right: 20,
+    zIndex: 20,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -346,10 +421,9 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     color: COLORS.encre2,
-    paddingHorizontal: 20,
     marginTop: 2,
   },
-  couleurs: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 14 },
+  couleurs: { flexDirection: 'row', gap: 12, marginTop: 14 },
   pastilleCouleur: {
     width: 36,
     height: 36,
@@ -361,7 +435,7 @@ const styles = StyleSheet.create({
   },
   pastilleCouleurChoisie: { borderColor: COLORS.encre },
 
-  avatars: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 20, marginTop: 14, paddingBottom: 6 },
+  avatars: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14, paddingBottom: 6 },
   pastilleAvatar: {
     width: 48,
     height: 48,
@@ -376,4 +450,17 @@ const styles = StyleSheet.create({
   pastilleAvatarChoisie: { borderColor: COLORS.trace },
   avatarImage: { width: '100%', height: '100%' },
   avatarAucunTexte: { fontFamily: FONTS.monoSemi, fontSize: 16, color: COLORS.encre3 },
+
+  voile: { ...StyleSheet.absoluteFillObject, zIndex: 2000, backgroundColor: 'rgba(26, 27, 46, 0.35)', justifyContent: 'flex-end' },
+  feuille: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.l,
+    borderTopRightRadius: RADIUS.l,
+    padding: 22,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  poignee: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.ligneForte, alignSelf: 'center', marginBottom: 16 },
+  feuilleTitre: { fontSize: 21, textAlign: 'center', marginBottom: 4 },
+  sectionTitreFeuille: { marginTop: 22, marginBottom: 4 },
 });

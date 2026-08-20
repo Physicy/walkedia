@@ -517,7 +517,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       </View>
 
       {objectif && state.progress.junctions.size < SEUIL_DEBUTANT && (
-        <View style={[styles.objectifWrap, { bottom: tabBarHeight(insets.bottom) + hauteurSocle + 10 }]}>
+        <View style={[styles.objectifWrap, { bottom: tabBarHeight(insets.bottom) + 12 + hauteurSocle + 10 }]}>
           <ObjectifCard
             branches={objectifBranches}
             eyebrow={state.session ? 'En cours de relevé' : 'Prochain point'}
@@ -529,7 +529,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         </View>
       )}
 
-      <View style={[styles.bas, { bottom: tabBarHeight(insets.bottom) }]} onLayout={onLayoutSocle}>
+      <View style={[styles.bas, { bottom: tabBarHeight(insets.bottom) + 12 }]} onLayout={onLayoutSocle}>
         {state.session ? (
           <PanneauSession
             duree={formatDuree(Date.now() - state.session.startedAt)}
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   objectifWrap: { position: 'absolute', left: 14, right: 14, zIndex: 9 },
-  bas: { position: 'absolute', left: 0, right: 0, zIndex: 10 },
+  bas: { position: 'absolute', left: 14, right: 14, zIndex: 10 },
 
   monitorToggle: {
     position: 'absolute',
