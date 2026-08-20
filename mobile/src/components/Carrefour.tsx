@@ -10,6 +10,7 @@
 import React from 'react';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { COLORS } from '../theme';
+import { nuancesTrace } from '../logic/color';
 
 // [angle en degrés (0 = est, sens trigonométrique), marchée ?]
 export type Branche = [number, boolean];
@@ -18,15 +19,21 @@ export function Carrefour({
   size,
   branches,
   style,
+  couleur = COLORS.trace,
 }: {
   size: number;
   branches: Branche[];
   style?: any;
+  // Accent du joueur (voir logic/prefs.ts, traceColor) : ce que ce glyphe
+  // dessine EST "de la géométrie parcourue ou un point gagné", exactement ce
+  // que la couleur personnalisée est censée teinter.
+  couleur?: string;
 }) {
   const c = size / 2;
   const rayon = size * 0.44;
   const rue = Math.max(4, size * 0.115);
   const complet = branches.length > 0 && branches.every((b) => b[1]);
+  const nuances = nuancesTrace(couleur);
 
   const bout = (angle: number) => {
     const rad = (angle * Math.PI) / 180;
@@ -42,7 +49,7 @@ export function Carrefour({
           <React.Fragment key={i}>
             <Path d={d} stroke="#DAD8E4" strokeWidth={rue} strokeLinecap="round" fill="none" />
             {b[1] && (
-              <Path d={d} stroke={COLORS.trace} strokeWidth={rue} strokeLinecap="round" fill="none" />
+              <Path d={d} stroke={couleur} strokeWidth={rue} strokeLinecap="round" fill="none" />
             )}
             {!b[1] && size >= 40 && (
               <Path
@@ -63,8 +70,8 @@ export function Carrefour({
           cx={c}
           cy={c}
           r={rue * 0.88}
-          fill={COLORS.trace}
-          stroke={COLORS.traceFonce}
+          fill={couleur}
+          stroke={nuances.fonce}
           strokeWidth={Math.max(1.2, rue * 0.13)}
         />
       ) : (

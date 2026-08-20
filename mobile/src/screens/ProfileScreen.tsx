@@ -10,9 +10,10 @@
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS, RADIUS } from '../theme';
-import { Eyebrow, Mono, Titre } from '../components/ui';
+import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
+import { Eyebrow, Jeton, Mono, Titre } from '../components/ui';
 import { Icone } from '../components/Icones';
+import { tabBarHeight } from '../components/TabBar';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
 import type { NeighborhoodStat } from '../hooks/useWalkedia';
@@ -55,12 +56,16 @@ export function ProfileScreen({
   syncing,
   neighborhoods,
   onOuvrirReglages,
+  traceColor,
+  onChoisirCouleur,
 }: {
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
   neighborhoods: NeighborhoodStat[];
   onOuvrirReglages: () => void;
+  traceColor: string;
+  onChoisirCouleur: (hex: string) => void;
 }) {
   const insets = useSafeAreaInsets();
 
@@ -104,8 +109,13 @@ export function ProfileScreen({
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 26 }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.tete}>
+          <Jeton nom={nom} size={44} />
           <View style={styles.teteTexte}>
             <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
             <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
@@ -192,6 +202,29 @@ export function ProfileScreen({
             ))}
           </>
         )}
+
+        <Eyebrow style={styles.sectionTitre}>Ta couleur</Eyebrow>
+        <Text style={styles.couleurTexte}>
+          Remplace le violet pour le halo autour des carrefours, les points déjà validés et le tracé de ta session.
+        </Text>
+        <View style={styles.couleurs}>
+          {TRACE_PALETTE.map((hex) => {
+            const choisie = hex.toLowerCase() === traceColor.toLowerCase();
+            return (
+              <Pressable
+                key={hex}
+                onPress={() => onChoisirCouleur(hex)}
+                style={[styles.pastilleCouleur, { backgroundColor: hex }, choisie && styles.pastilleCouleurChoisie]}
+                accessibilityRole="button"
+                accessibilityLabel={`Choisir ${hex}`}
+                accessibilityState={{ selected: choisie }}
+              >
+                {choisie && <Icone nom="coche" size={16} color="#fff" strokeWidth={2.6} />}
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.avatarNote}>Avatar personnalisable à venir.</Text>
       </ScrollView>
     </View>
   );
@@ -199,6 +232,7 @@ export function ProfileScreen({
 
 const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.papier },
+  scroll: { flex: 1 },
 
   tete: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 20, paddingTop: 18 },
   teteTexte: { flex: 1 },
@@ -274,4 +308,32 @@ const styles = StyleSheet.create({
   quartierNom: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, flexShrink: 1 },
   quartierPct: { fontFamily: FONTS.monoMedium, fontSize: 12, color: COLORS.encre2 },
   quartierDebloque: { color: COLORS.trace },
+
+  couleurTexte: {
+    fontFamily: FONTS.texte,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: COLORS.encre2,
+    paddingHorizontal: 20,
+    marginTop: 2,
+  },
+  couleurs: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 14 },
+  pastilleCouleur: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  pastilleCouleurChoisie: { borderColor: COLORS.encre },
+  avatarNote: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    color: COLORS.encre3,
+    paddingHorizontal: 20,
+    marginTop: 16,
+    letterSpacing: 0.3,
+  },
 });

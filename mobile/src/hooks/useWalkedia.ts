@@ -210,6 +210,7 @@ interface WalkediaState {
   loadLog: LoadLogEntry[];
   backgroundTrackingEnabled: boolean; // réglage opt-in, voir ProfileScreen.tsx
   arretAutoVitesse: boolean; // réglage opt-out, voir SettingsScreen.tsx
+  traceColor: string; // accent choisi par le joueur, voir logic/prefs.ts
   fusionResume: FusionResume | null;
 }
 
@@ -245,6 +246,7 @@ function freshState(): WalkediaState {
     loadLog: [],
     backgroundTrackingEnabled: false,
     arretAutoVitesse: true,
+    traceColor: '#6C5DF4',
     fusionResume: null,
   };
 }
@@ -407,6 +409,7 @@ export function useWalkedia() {
     });
     loadPrefs().then((p) => {
       state.arretAutoVitesse = p.arretAutoVitesse;
+      state.traceColor = p.traceColor;
       rerender();
     });
     return () => {
@@ -1294,6 +1297,15 @@ export function useWalkedia() {
     [state, rerender]
   );
 
+  const setTraceColor = useCallback(
+    (hex: string) => {
+      state.traceColor = hex;
+      savePrefs({ traceColor: hex });
+      rerender();
+    },
+    [state, rerender]
+  );
+
   // Efface la progression — rues, points, sessions — sur l'appareil et sur le
   // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
   // porte la confirmation) : ne touche ni les préférences ni la session
@@ -1330,6 +1342,7 @@ export function useWalkedia() {
       enableBackgroundTracking,
       disableBackgroundTracking,
       setArretAutoVitesse,
+      setTraceColor,
       wipeProgress,
     },
   };

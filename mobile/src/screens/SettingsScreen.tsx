@@ -100,7 +100,7 @@ export function SettingsScreen({
         <Text style={styles.titre}>Réglages</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
         <Section titre="Marche">
           <Reglage
             titre="Détecter mes marches hors de l'app"
@@ -158,6 +158,7 @@ export function SettingsScreen({
 
 const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1900, backgroundColor: COLORS.papier },
+  scroll: { flex: 1 },
   tete: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 },
   rond: {
     width: 38,

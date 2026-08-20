@@ -94,7 +94,7 @@ function SegBtn({ label, active, onPress }: { label: string; active: boolean; on
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  segments: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 4 },
+  segments: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 18 },
   seg: {
     flex: 1,
     paddingVertical: 9,

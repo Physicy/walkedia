@@ -30,7 +30,7 @@ function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
-export function ReleveBar({ trouves, total }: { trouves: number; total: number }) {
+export function ReleveBar({ trouves, total, couleur }: { trouves: number; total: number; couleur: string }) {
   const ratio = total > 0 ? trouves / total : 0;
   return (
     <View style={styles.releve}>
@@ -38,7 +38,7 @@ export function ReleveBar({ trouves, total }: { trouves: number; total: number }
         <Mono style={styles.releveNombre}>{trouves} tronçons</Mono>
         <Text style={styles.releveSur}>sur {total}</Text>
       </View>
-      <Jauge ratio={ratio} />
+      <Jauge ratio={ratio} couleur={couleur} />
     </View>
   );
 }
@@ -57,16 +57,18 @@ export function ObjectifCard({
   numero,
   manque,
   distance,
+  couleur,
 }: {
   branches: Branche[];
   eyebrow: string;
   numero: number | null;
   manque: string[];
   distance: number;
+  couleur: string;
 }) {
   return (
     <View style={styles.objectif}>
-      <Carrefour size={44} branches={branches} />
+      <Carrefour size={44} branches={branches} couleur={couleur} />
       <View style={styles.objectifTexte}>
         <Text style={styles.objectifEyebrow}>{eyebrow}</Text>
         <Text style={styles.objectifTitre}>{numero != null ? `Point n° ${numero}` : 'Prochain point'}</Text>

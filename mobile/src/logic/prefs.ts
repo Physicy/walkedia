@@ -23,9 +23,20 @@ export interface Prefs {
   // SPEED_LIMIT_KMH) — activé par défaut, réglable depuis Réglages pour qui
   // marche vite en descente et se fait couper à tort.
   arretAutoVitesse: boolean;
+  // couleur d'accent choisie par le joueur (voir theme.ts, TRACE_PALETTE) :
+  // remplace le violet fixe pour le halo autour des carrefours, les points
+  // déjà validés et le tracé de la session en cours. Un hex, pas un index de
+  // palette : reste valide même si la palette change plus tard.
+  traceColor: string;
 }
 
-const DEFAULTS: Prefs = { onboarded: false, repereVu: false, connexionProposee: false, arretAutoVitesse: true };
+const DEFAULTS: Prefs = {
+  onboarded: false,
+  repereVu: false,
+  connexionProposee: false,
+  arretAutoVitesse: true,
+  traceColor: '#6C5DF4',
+};
 
 export async function loadPrefs(): Promise<Prefs> {
   try {

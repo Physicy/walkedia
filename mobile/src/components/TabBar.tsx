@@ -19,12 +19,24 @@ const TABS: { name: TabName; icone: NomIcone; label: string }[] = [
   { name: 'profile', icone: 'profil', label: 'Profil' },
 ];
 
-export const TAB_BAR_BASE_HEIGHT = 76;
+// Hauteur réelle de la barre, pour que les écrans qui posent quelque chose
+// juste au-dessus (le socle de MapScreen, notamment) ne se fassent pas manger
+// par elle. `76` supposait un bas d'écran sans encoche (paddingBottom replié
+// sur le plancher de 10) ; sur un iPhone à indicateur d'accueil,
+// insets.bottom (~34) dépasse ce plancher et la barre est donc plus haute que
+// prévu — d'où le calcul explicite plutôt qu'une constante figée.
+const PADDING_TOP = 11;
+const CONTENU = 55; // icône + libellé + pastille + marges verticales du bouton
+const PADDING_BOTTOM_PLANCHER = 10;
+
+export function tabBarHeight(insetsBottom: number): number {
+  return PADDING_TOP + CONTENU + Math.max(insetsBottom, PADDING_BOTTOM_PLANCHER);
+}
 
 export function TabBar({ active, onChange }: { active: TabName; onChange: (t: TabName) => void }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, PADDING_BOTTOM_PLANCHER) }]}>
       {TABS.map((t) => {
         const actif = active === t.name;
         return (
@@ -57,7 +69,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: COLORS.encre,
-    paddingTop: 11,
+    paddingTop: PADDING_TOP,
     paddingHorizontal: 8,
   },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 5, minHeight: 44 },

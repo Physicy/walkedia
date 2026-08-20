@@ -64,6 +64,20 @@ export const COLORS = {
 // Rayons du système.
 export const RADIUS = { s: 10, m: 16, l: 22 };
 
+// Couleurs de trace sélectionnables (voir logic/prefs.ts, traceColor) : le
+// violet reste le premier choix / la couleur par défaut, les autres teintes
+// choisies pour rester lisibles aussi bien en trait sur `papier` qu'en fond
+// de pastille sur `encre`, et suffisamment éloignées d'`alerte` (#BE4B3C)
+// pour ne jamais se confondre avec un état d'erreur.
+export const TRACE_PALETTE = [
+  '#6C5DF4', // violet (défaut)
+  '#2563EB', // bleu
+  '#0D9488', // sarcelle
+  '#4D8C2B', // vert
+  '#E2711D', // orange
+  '#C0388B', // rose
+];
+
 // Familles chargées au démarrage (voir useAppFonts).
 //
 // Le design appelle Archivo avec un axe de largeur (`wdth` 112 à 125). Les

@@ -19,6 +19,7 @@ export function PointGagneVoile({
   totalTroncons,
   kmReleves,
   onContinuer,
+  couleur,
 }: {
   numero: number;
   nouvelles: number;
@@ -28,6 +29,7 @@ export function PointGagneVoile({
   totalTroncons: number;
   kmReleves: number;
   onContinuer: () => void;
+  couleur: string;
 }) {
   const apparition = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -41,7 +43,7 @@ export function PointGagneVoile({
 
   return (
     <Animated.View style={[styles.voile, { opacity: apparition }]}>
-      <Carrefour size={112} branches={branches} />
+      <Carrefour size={112} branches={branches} couleur={couleur} />
       <Text style={styles.eyebrow}>Carrefour complété</Text>
       <Text style={styles.titre}>Point n° {numero}</Text>
       <Text style={styles.texte}>{phrase}</Text>

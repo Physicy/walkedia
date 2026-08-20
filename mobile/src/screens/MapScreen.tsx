@@ -12,15 +12,13 @@ import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
 import { LoadMonitorPanel } from '../components/LoadMonitorPanel';
 import { CaptureWave } from '../components/CaptureWave';
-import { TAB_BAR_BASE_HEIGHT } from '../components/TabBar';
+import { tabBarHeight } from '../components/TabBar';
 import { COLORS } from '../theme';
-import { heatColor, progressColor } from '../logic/color';
+import { heatColor, progressColor, nuancesTrace, rgbaTrace } from '../logic/color';
 import { haversine } from '../logic/geo';
 import { branchesForGlyph, orientationsManquantes, objectifLePlusProche, pointNumber } from '../logic/junctionInfo';
 
 const UNDISCOVERED_STROKE = 'rgba(26, 27, 46, 0.22)';
-const DISCOVERED_STROKE = COLORS.trace;
-const TRACK_STROKE = COLORS.traceClair;
 
 function toLatLng([lat, lon]: [number, number]) {
   return { latitude: lat, longitude: lon };
@@ -138,6 +136,16 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const mapRef = useRef<MapView>(null);
   const insets = useSafeAreaInsets();
 
+  // Accent choisi par le joueur (voir logic/prefs.ts, traceColor) : remplace
+  // le violet fixe pour tout ce qui est "géométrie parcourue ou point gagné"
+  // sur la carte elle-même — le halo autour d'un carrefour, un tronçon déjà
+  // découvert, le tracé de la session en cours. La géométrie pas encore
+  // marchée (gris) et le chrome (boutons, onglets) restent en encre, hors
+  // scope de cette personnalisation.
+  const nuances = nuancesTrace(state.traceColor);
+  const DISCOVERED_STROKE = state.traceColor;
+  const TRACK_STROKE = nuances.clair;
+
   // `region` reflète la zone réellement affichée par la carte native (mise à
   // jour par onRegionChangeComplete, y compris son premier appel juste après
   // le montage) ; tant qu'elle n'est pas connue, rien n'est filtré. Les
@@ -217,7 +225,13 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
     const viewBBox = regionBBox(region);
 
     // Tronçons : cutoff propre, plus serré que celui des carrefours (voir
-    // constantes plus haut).
+    // constantes plus haut) — mais seulement pour ce qui n'est PAS encore
+    // parcouru. Le tracé personnel (la trace violette) reste visible à
+    // n'importe quel dézoom : c'est un historique, pas une aide au jeu en
+    // cours, et le faire disparaître en dézoomant serait perdre de vue ce
+    // qu'on a déjà exploré. `edgeIsFound` reste bon marché (lookup dans deux
+    // Sets), donc filtrer par viewport suffit à garder un nombre raisonnable
+    // de traits même dézoomé.
     let edgesInView: any[] = [];
     if (region.latitudeDelta <= MAX_EDGE_RENDER_LATITUDE_DELTA) {
       edgesInView = edges.filter((e: any) => bboxIntersects(coordsBBox(e.coords), viewBBox));
@@ -227,6 +241,9 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         for (const e of edgesInView) (edgeIsFound(state, e.id) ? found : rest).push(e);
         edgesInView = found.length >= MAX_RENDERED_EDGES ? found.slice(0, MAX_RENDERED_EDGES) : found.concat(rest.slice(0, MAX_RENDERED_EDGES - found.length));
       }
+    } else {
+      edgesInView = edges.filter((e: any) => edgeIsFound(state, e.id) && bboxIntersects(coordsBBox(e.coords), viewBBox));
+      if (edgesInView.length > MAX_RENDERED_EDGES) edgesInView = edgesInView.slice(0, MAX_RENDERED_EDGES);
     }
 
     // Carrefours : rien au-delà de l'échelle "plusieurs villes" (règle 3),
@@ -366,6 +383,11 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // (ou du centre chargé, avant tout fix GPS), recalculé à chaque rendu — bon
   // marché (une passe sur les carrefours déjà en mémoire, voir
   // junctionInfo.ts), et toujours à jour sans état séparé à invalider.
+  // La carte d'objectif ne sert qu'au tout début : une fois que le joueur a
+  // décroché quelques points, il sait reconnaître un carrefour incomplet sur
+  // la carte lui-même (le glyphe le montre déjà) — la carte devient alors une
+  // redite plutôt qu'une aide.
+  const SEUIL_DEBUTANT = 3;
   const objectifPos: [number, number] = pos ? [pos.lat, pos.lon] : [centerLat, centerLon];
   const objectif = state.graph ? objectifLePlusProche(state.graph, state.progress.junctions, objectifPos) : null;
   const objectifBranches = objectif ? branchesForGlyph(state.graph!, objectif.junction, state.progress.edges) : [];
@@ -462,7 +484,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
               zIndex={done ? 5 : 4}
               onPress={() => setJunctionOuvert(j.id)}
             >
-              <CaptureWave done={done} animated={animated} />
+              <CaptureWave done={done} animated={animated} couleur={state.traceColor} />
             </Marker>
           );
         })}
@@ -472,38 +494,39 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
             <Circle
               center={{ latitude: state.position.lat, longitude: state.position.lon }}
               radius={state.position.accuracy || 0}
-              strokeColor="rgba(108, 93, 244, 0.28)"
-              fillColor="rgba(108, 93, 244, 0.08)"
+              strokeColor={rgbaTrace(state.traceColor, 0.28)}
+              fillColor={rgbaTrace(state.traceColor, 0.08)}
             />
             <Marker
               coordinate={{ latitude: state.position.lat, longitude: state.position.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={false}
             >
-              <View style={styles.positionDot} />
+              <View style={[styles.positionDot, { backgroundColor: state.traceColor }]} />
             </Marker>
           </>
         )}
       </MapView>
 
       <View style={[styles.haut, { top: insets.top + 10 }]}>
-        <ReleveBar trouves={foundEdges} total={edges.length} />
+        <ReleveBar trouves={foundEdges} total={edges.length} couleur={state.traceColor} />
         <BoutonRecentrer onPress={recenter} />
       </View>
 
-      {objectif && (
-        <View style={[styles.objectifWrap, { bottom: TAB_BAR_BASE_HEIGHT + hauteurSocle + 10 }]}>
+      {objectif && state.progress.junctions.size < SEUIL_DEBUTANT && (
+        <View style={[styles.objectifWrap, { bottom: tabBarHeight(insets.bottom) + hauteurSocle + 10 }]}>
           <ObjectifCard
             branches={objectifBranches}
             eyebrow={state.session ? 'En cours de relevé' : 'Prochain point'}
             numero={state.progress.junctions.size + 1}
             manque={objectifManque}
             distance={objectif.distance}
+            couleur={state.traceColor}
           />
         </View>
       )}
 
-      <View style={[styles.bas, { bottom: TAB_BAR_BASE_HEIGHT }]} onLayout={onLayoutSocle}>
+      <View style={[styles.bas, { bottom: tabBarHeight(insets.bottom) }]} onLayout={onLayoutSocle}>
         {state.session ? (
           <PanneauSession
             duree={formatDuree(Date.now() - state.session.startedAt)}
@@ -547,6 +570,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           totalTroncons={state.progress.edges.size}
           kmReleves={state.progress.edgeMeters / 1000}
           onContinuer={actions.dismissPointGagne}
+          couleur={state.traceColor}
         />
       )}
 
@@ -556,8 +580,8 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         <JunctionSheet
           numero={pointNumber(state.progress, junctionOuvert)}
           branches={branchesForGlyph(state.graph, state.graph.junctions.get(junctionOuvert)!, state.progress.edges)}
-          orientationsManquantes={orientationsManquantes(state.graph, state.graph.junctions.get(junctionOuvert)!, state.progress.edges)}
           onFermer={() => setJunctionOuvert(null)}
+          couleur={state.traceColor}
         />
       )}
     </View>
@@ -617,7 +641,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: COLORS.trace,
     borderWidth: 2.5,
     borderColor: '#fff',
   },

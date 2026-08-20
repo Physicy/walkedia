@@ -48,3 +48,47 @@ export function progressColor(ratio: number): string {
   const [r, g, b] = mix(WAVE_GRAY, WAVE_VIOLET, Math.max(0, Math.min(1, ratio)));
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 }
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+const NOIR: [number, number, number] = [26, 27, 46]; // COLORS.encre, pour foncer
+const BLANC: [number, number, number] = [251, 250, 253]; // COLORS.surface, pour éclaircir
+
+// Dérive les trois nuances qu'un accent de trace a besoin (foncée pour la
+// bordure d'un point complet, claire pour une trace en surimpression sur
+// fond sombre, pâle pour un fond de bandeau) depuis une seule couleur choisie
+// par le joueur — le système n'avait qu'une seule couleur de trace en dur
+// (theme.ts), ces trois-là étaient calées à la main sur elle.
+export interface NuancesTrace {
+  base: string;
+  fonce: string;
+  clair: string;
+  pale: string; // rgba, pour un fond
+}
+
+// Pour un besoin ponctuel (halo de précision GPS, fond de bandeau à une
+// opacité précise) plutôt que d'ajouter un champ à NuancesTrace par usage.
+export function rgbaTrace(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function nuancesTrace(hex: string): NuancesTrace {
+  const rgb = hexToRgb(hex);
+  const foncePct = mix(rgb, NOIR, 0.28);
+  const clairPct = mix(rgb, BLANC, 0.35);
+  return {
+    base: hex,
+    fonce: rgbToHex(foncePct),
+    clair: rgbToHex(clairPct),
+    pale: `rgba(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])}, 0.13)`,
+  };
+}

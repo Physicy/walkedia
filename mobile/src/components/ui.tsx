@@ -108,11 +108,11 @@ export function Jeton({ nom, size = 34 }: { nom: string | null | undefined; size
 
 // Jauge fine du relevé : une seule ligne, là où l'ancien HUD empilait deux
 // fractions dont le dénominateur bougeait avec les déplacements.
-export function Jauge({ ratio }: { ratio: number }) {
+export function Jauge({ ratio, couleur = COLORS.trace }: { ratio: number; couleur?: string }) {
   const p = Math.max(0.005, Math.min(1, ratio));
   return (
     <View style={styles.jauge}>
-      <View style={[styles.jaugeFill, { width: `${p * 100}%` }]} />
+      <View style={[styles.jaugeFill, { width: `${p * 100}%`, backgroundColor: couleur }]} />
     </View>
   );
 }

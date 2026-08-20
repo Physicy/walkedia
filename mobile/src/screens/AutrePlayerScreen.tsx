@@ -36,7 +36,7 @@ export function AutrePlayerScreen({
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
         <View style={styles.jpTete}>
           <Jeton nom={joueur.display_name} size={52} />
           <Titre style={styles.nom}>{joueur.display_name || 'Joueur'}</Titre>
@@ -75,6 +75,7 @@ export function AutrePlayerScreen({
 
 const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1900, backgroundColor: COLORS.papier },
+  scroll: { flex: 1 },
   tete: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 },
   rond: {
     width: 38,

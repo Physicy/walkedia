@@ -153,6 +153,8 @@ function AppContent() {
           syncing={state.syncing}
           neighborhoods={neighborhoodStats(state)}
           onOuvrirReglages={() => setReglagesOuverts(true)}
+          traceColor={state.traceColor}
+          onChoisirCouleur={actions.setTraceColor}
         />
       )}
       <TabBar active={tab} onChange={setTab} />
