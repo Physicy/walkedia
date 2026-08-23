@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import { useLeaderboard } from '../hooks/useLeaderboard';
 import type { FriendProfile } from '../hooks/useFriends';
 
 export function LeaderboardScreen({ userId, friends }: { userId: string; friends: FriendProfile[] }) {
+  const { t } = useTranslation();
   const [scope, setScope] = useState<'all' | 'friends'>('all');
   const friendIds = scope === 'friends' ? friends.map((f) => f.id).concat(userId) : null;
   const { rows, loading } = useLeaderboard(friendIds);
@@ -12,25 +14,23 @@ export function LeaderboardScreen({ userId, friends }: { userId: string; friends
   return (
     <View style={styles.wrap}>
       <View style={styles.scopeRow}>
-        <ScopeBtn label="Tous les joueurs" active={scope === 'all'} onPress={() => setScope('all')} />
-        <ScopeBtn label="Amis" active={scope === 'friends'} onPress={() => setScope('friends')} />
+        <ScopeBtn label={t('leaderboard.allPlayers')} active={scope === 'all'} onPress={() => setScope('all')} />
+        <ScopeBtn label={t('leaderboard.friendsScope')} active={scope === 'friends'} onPress={() => setScope('friends')} />
       </View>
 
       {loading ? (
         <ActivityIndicator color={COLORS.accentCyan} style={{ marginTop: 30 }} />
       ) : rows.length === 0 ? (
-        <Text style={styles.empty}>
-          {scope === 'friends' ? "Ajoute des amis pour voir leur classement." : 'Personne pour le moment.'}
-        </Text>
+        <Text style={styles.empty}>{scope === 'friends' ? t('leaderboard.addFriendsPrompt') : t('leaderboard.noOneYet')}</Text>
       ) : (
         rows.map((r, i) => (
           <View key={r.user_id} style={[styles.row, r.user_id === userId && styles.rowSelf]}>
             <Text style={styles.rank}>{i + 1}</Text>
             <Text style={styles.name} numberOfLines={1}>
-              {r.display_name || 'Joueur'}
-              {r.user_id === userId ? ' (toi)' : ''}
+              {r.display_name || t('leaderboard.defaultPlayerName')}
+              {r.user_id === userId ? t('leaderboard.youSuffix') : ''}
             </Text>
-            <Text style={styles.pts}>{r.junction_count} pt(s)</Text>
+            <Text style={styles.pts}>{t('leaderboard.pointsCount', { count: r.junction_count })}</Text>
           </View>
         ))
       )}

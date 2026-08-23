@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Yritä uudelleen"
+  },
+  "start": {
+    "loadingNetwork": "Ladataan kävelyverkostoa…",
+    "searchingPosition": "Etsitään sijaintiasi…",
+    "permissionDenied": "Sijaintioikeus evätty. Salli Walkedialle sijainti puhelimen asetuksista ja käynnistä sovellus uudelleen.",
+    "timeout": "Sijainnin haku aikakatkaistiin. Yritä uudelleen (ensimmäinen GPS-signaali voi olla hidas sisätiloissa).",
+    "positionUnavailable": "Sijainti ei ole käytettävissä. Tarkista, että puhelimen sijaintipalvelu on käytössä, ja yritä uudelleen mieluiten ulkona.",
+    "zoneLoadFailed": "Aluetta ei voitu ladata: {{message}}",
+    "slowServersHint": "Julkiset OpenStreetMap-palvelimet voivat olla hitaita — tämä voi kestää jopa minuutin."
+  },
+  "account": {
+    "notConfigured": "Tiliä ei ole määritetty — täytä mobile/.env tiedoston .env.example pohjalta ottaaksesi kirjautumisen käyttöön.",
+    "continueGoogle": "Jatka Googlella",
+    "continueApple": "Jatka Applella",
+    "connectedAs": "Kirjautuneena: {{name}}",
+    "defaultName": "Tili",
+    "signOut": "Kirjaudu ulos",
+    "syncing": "Synkronoidaan…"
+  },
+  "login": {
+    "subtitle": "Kirjaudu sisään jatkaaksesi",
+    "magicLinkSent": "Kirjautumislinkki lähetetty osoitteeseen {{email}}. Avaa se tästä puhelimesta jatkaaksesi.",
+    "or": "tai",
+    "emailPlaceholder": "Sähköpostiosoite",
+    "sendMagicLink": "Saa kirjautumislinkki",
+    "genericError": "Tapahtui virhe."
+  },
+  "profile": {
+    "title": "Profiili",
+    "backgroundTrackingLabel": "Tunnista kävelyni myös sovelluksen ollessa suljettuna",
+    "backgroundTrackingDesc": "Käyttää sijaintiasi taustalla (lupa \"Aina\") ehdottaakseen kävelyjesi tuontia, kun palaat sovellukseen. Pois päältä oletuksena.",
+    "totalPoints": "pistettä yhteensä",
+    "today": "tänään",
+    "thisWeek": "tällä viikolla",
+    "thisMonth": "tässä kuussa",
+    "pointsOver7Days": "Pisteet viimeisen 7 päivän ajalta",
+    "segmentsDiscovered": "löydettyä osuutta",
+    "kmDiscovered": "löydettyä km",
+    "sessionsLabel": "istuntoa",
+    "neighborhoods": "Kaupunginosat",
+    "noNeighborhoods": "Ladatuilla alueilla ei ole vielä kartoitettuja kaupunginosia.",
+    "unnamedNeighborhood": "Nimetön kaupunginosa",
+    "unlocked": "Avattu 🔓",
+    "lastSessions": "Viimeisimmät istunnot",
+    "noSessions": "Ei vielä istuntoja",
+    "sessionImportedLabel": "{{date}} (tuotu)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} osuutta",
+    "pointCountLabel": "+{{count}} p.",
+    "untrackedNote": "{{count}} pistettä ansaittu ennen ajanseurannan alkua: lasketaan vain kokonaissummaan.",
+    "language": "Kieli",
+    "chooseLanguage": "Valitse kieli",
+    "restartForRtl": "Sulje ja avaa sovellus uudelleen, jotta ulkoasu mukautuu täysin tähän kieleen."
+  },
+  "search": {
+    "title": "Haku",
+    "loginPrompt": "Kirjaudu sisään (Profiili-välilehti) nähdäksesi ranking-listan ja hallitaksesi ystäviäsi.",
+    "leaderboardTab": "Ranking-lista",
+    "friendsTab": "Ystävät"
+  },
+  "leaderboard": {
+    "allPlayers": "Kaikki pelaajat",
+    "friendsScope": "Ystävät",
+    "noOneYet": "Ei vielä ketään.",
+    "addFriendsPrompt": "Lisää ystäviä nähdäksesi heidän sijoituksensa.",
+    "defaultPlayerName": "Pelaaja",
+    "youSuffix": " (sinä)",
+    "pointsCount": "{{count}} p."
+  },
+  "friends": {
+    "searchPlaceholder": "Etsi pelaajaa käyttäjänimellä…",
+    "searching": "Etsitään…",
+    "noPlayerFound": "Pelaajaa ei löytynyt.",
+    "alreadyFriend": "Jo ystäviä",
+    "pending": "Odottaa",
+    "add": "Lisää",
+    "incomingRequests": "Saapuneet pyynnöt",
+    "accept": "Hyväksy",
+    "decline": "Hylkää",
+    "friendsCount": "Ystävät ({{count}})",
+    "noFriendsYet": "Ei vielä ystäviä — etsi käyttäjänimeä yllä."
+  },
+  "map": {
+    "endSession": "Lopeta istunto",
+    "startSession": "Aloita istunto",
+    "hudPts": "p.",
+    "hudSegments": "osuutta",
+    "hudIntersections": "risteystä"
+  },
+  "tabbar": {
+    "adventure": "Seikkailu",
+    "search": "Haku",
+    "profile": "Profiili"
+  },
+  "toast": {
+    "syncSuccess": "Edistyminen synkronoitu ✅",
+    "syncFailed": "Synkronointi epäonnistui: {{message}}",
+    "junctionsCompleted": "+{{count}} risteys suoritettu!",
+    "tooZoomedOut": "Liian kaukana loitonnettu uusien alueiden lataamiseen.",
+    "loadingInProgress": "Ladataan jo…",
+    "retryIn": "Uusi alue: yritä uudelleen {{seconds}} s kuluttua…",
+    "alreadyCovered": "Tämä alue on jo katettu.",
+    "newZoneLoaded": "Uusi alue ladattu 🗺️",
+    "zoneExpandFailed": "Aluetta ei voitu laajentaa: {{message}}",
+    "extraZonesLoaded": "{{count}} lisäaluetta ladattu 🗺️",
+    "walkImported": "Kävely tuotu: {{edges}} uutta osuutta, {{junctions}} risteystä suoritettu.",
+    "backgroundTrackingEnabled": "Kävelyjen tunnistus taustalla käytössä.",
+    "autoSessionStarted": "Istunto käynnistyi automaattisesti — mukavaa kävelyä!",
+    "sessionStoppedSpeed": "Istunto pysäytetty: liian suuri nopeus ({{speed}} km/h) kävelylle.",
+    "junctionCompleted": "Risteys suoritettu! +1 piste 🎉",
+    "zoneNotLoadedYet": "Aluetta ei ole vielä ladattu — istunto alkaa heti, kun verkosto on saatavilla.",
+    "sessionStarted": "Istunto käynnistetty — mukavia tutkimusretkiä!",
+    "sessionEnded": "Istunto päättyi ({{minutes}} min): {{edges}} uutta osuutta, {{junctions}} risteystä suoritettu.",
+    "notEnoughNetwork": "Ladattua verkostoa ei ole tarpeeksi simulointiin.",
+    "zoneUnavailable": "Alue ei ole käytettävissä: {{message}}",
+    "segmentsInZone": "{{edges}} osuutta · {{junctions}} risteystä alueella"
+  },
+  "alert": {
+    "walkDetectedTitle": "Kävely havaittu",
+    "walkDetectedBody": "Kävely havaittiin sovelluksen ollessa suljettuna (~{{minutes}} min, {{distance}} m).\nTuodaanko tämä reitti historiaasi?",
+    "ignore": "Ohita",
+    "importAction": "Tuo"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Kirjautumis-URL ei ole saatavilla.",
+    "connectionInterrupted": "Kirjautuminen keskeytyi.",
+    "invalidConnectionResponse": "Virheellinen kirjautumisvastaus.",
+    "timeoutSlowServers": "aikakatkaisu (aluetta ei ole koskaan laskettu ja OSM-palvelimet ovat hitaita)",
+    "serverUnreachable": "palvelinta ei tavoiteta"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Ota ensin käyttöön sijainti etualalla.",
+    "alwaysPermissionDenied": "Sijaintilupa \"Aina\" evättiin.",
+    "notifBody": "Kävelyjen tunnistus taustalla on käytössä"
+  }
+}

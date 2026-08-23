@@ -13,10 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import type { useAuth } from '../hooks/useAuth';
 
 export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
     try {
       await fn();
     } catch (e: any) {
-      setError(e?.message || 'Une erreur est survenue.');
+      setError(e?.message || t('login.genericError'));
     }
   };
 
@@ -33,9 +35,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
     return (
       <View style={styles.wrap}>
         <Text style={styles.title}>Walkedia</Text>
-        <Text style={styles.status}>
-          Compte non configuré — renseigne mobile/.env à partir de .env.example pour activer la connexion.
-        </Text>
+        <Text style={styles.status}>{t('account.notConfigured')}</Text>
       </View>
     );
   }
@@ -46,30 +46,28 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Text style={styles.title}>Walkedia</Text>
-      <Text style={styles.subtitle}>Connecte-toi pour continuer</Text>
+      <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
 
       {auth.emailSent ? (
-        <Text style={styles.status}>
-          Lien de connexion envoyé à {email.trim()}. Ouvre-le depuis ce téléphone pour continuer.
-        </Text>
+        <Text style={styles.status}>{t('login.magicLinkSent', { email: email.trim() })}</Text>
       ) : (
         <>
           <TouchableOpacity style={styles.googleBtn} onPress={() => run(auth.signInWithGoogle)} disabled={auth.busy}>
-            <Text style={styles.btnText}>Continuer avec Google</Text>
+            <Text style={styles.btnText}>{t('account.continueGoogle')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.appleBtn} onPress={() => run(auth.signInWithApple)} disabled={auth.busy}>
-            <Text style={styles.btnTextWhite}>Continuer avec Apple</Text>
+            <Text style={styles.btnTextWhite}>{t('account.continueApple')}</Text>
           </TouchableOpacity>
 
           <View style={styles.sep}>
             <View style={styles.sepLine} />
-            <Text style={styles.sepText}>ou</Text>
+            <Text style={styles.sepText}>{t('login.or')}</Text>
             <View style={styles.sepLine} />
           </View>
 
           <TextInput
             style={styles.input}
-            placeholder="Adresse e-mail"
+            placeholder={t('login.emailPlaceholder')}
             placeholderTextColor={COLORS.textDim}
             autoCapitalize="none"
             autoCorrect={false}
@@ -83,7 +81,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
             onPress={() => run(() => auth.signInWithEmail(email))}
             disabled={!email.trim() || auth.busy}
           >
-            <Text style={styles.btnTextWhite}>Recevoir un lien de connexion</Text>
+            <Text style={styles.btnTextWhite}>{t('login.sendMagicLink')}</Text>
           </TouchableOpacity>
         </>
       )}

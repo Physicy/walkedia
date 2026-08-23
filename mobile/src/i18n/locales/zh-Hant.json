@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "重試"
+  },
+  "start": {
+    "loadingNetwork": "正在載入步行網絡…",
+    "searchingPosition": "正在搜尋你的位置…",
+    "permissionDenied": "位置存取遭拒。請在手機設定中允許 Walkedia 存取位置，然後重新啟動應用程式。",
+    "timeout": "取得位置逾時。請再試一次（首次 GPS 定位在室內可能較慢）。",
+    "positionUnavailable": "位置無法取得。請確認手機的定位功能已開啟，並儘量在戶外重試。",
+    "zoneLoadFailed": "無法載入該區域：{{message}}",
+    "slowServersHint": "公開的 OpenStreetMap 伺服器可能較慢——這可能需要長達一分鐘。"
+  },
+  "account": {
+    "notConfigured": "帳戶尚未設定——請依照 .env.example 填寫 mobile/.env 以啟用登入。",
+    "continueGoogle": "使用 Google 繼續",
+    "continueApple": "使用 Apple 繼續",
+    "connectedAs": "已登入：{{name}}",
+    "defaultName": "帳戶",
+    "signOut": "登出",
+    "syncing": "正在同步…"
+  },
+  "login": {
+    "subtitle": "登入以繼續",
+    "magicLinkSent": "登入連結已傳送至 {{email}}。請在此手機上開啟以繼續。",
+    "or": "或",
+    "emailPlaceholder": "電子郵件地址",
+    "sendMagicLink": "取得登入連結",
+    "genericError": "發生錯誤。"
+  },
+  "profile": {
+    "title": "個人資料",
+    "backgroundTrackingLabel": "即使應用程式關閉也偵測我的步行",
+    "backgroundTrackingDesc": "在背景使用你的位置（「永遠」權限），在你返回應用程式時建議匯入你的步行紀錄。預設為關閉。",
+    "totalPoints": "總積分",
+    "today": "今天",
+    "thisWeek": "本週",
+    "thisMonth": "本月",
+    "pointsOver7Days": "近 7 天積分",
+    "segmentsDiscovered": "已發現路段",
+    "kmDiscovered": "已發現公里數",
+    "sessionsLabel": "次紀錄",
+    "neighborhoods": "街區",
+    "noNeighborhoods": "已載入的區域中尚無標記的街區。",
+    "unnamedNeighborhood": "未命名街區",
+    "unlocked": "已解鎖 🔓",
+    "lastSessions": "最近的紀錄",
+    "noSessions": "目前尚無紀錄",
+    "sessionImportedLabel": "{{date}}（已匯入）",
+    "minutesLabel": "{{count}} 分鐘",
+    "segmentCountLabel": "{{count}} 個路段",
+    "pointCountLabel": "+{{count}} 分",
+    "untrackedNote": "{{count}} 個積分於時間追蹤開始前取得：僅計入總數。",
+    "language": "語言",
+    "chooseLanguage": "選擇語言",
+    "restartForRtl": "請關閉並重新開啟應用程式，讓版面完全配合此語言。"
+  },
+  "search": {
+    "title": "搜尋",
+    "loginPrompt": "登入（個人資料分頁）以查看排行榜並管理好友。",
+    "leaderboardTab": "排行榜",
+    "friendsTab": "好友"
+  },
+  "leaderboard": {
+    "allPlayers": "所有玩家",
+    "friendsScope": "好友",
+    "noOneYet": "目前尚無人。",
+    "addFriendsPrompt": "新增好友以查看他們的排名。",
+    "defaultPlayerName": "玩家",
+    "youSuffix": "（你）",
+    "pointsCount": "{{count}} 分"
+  },
+  "friends": {
+    "searchPlaceholder": "以使用者名稱搜尋玩家…",
+    "searching": "搜尋中…",
+    "noPlayerFound": "找不到玩家。",
+    "alreadyFriend": "已是好友",
+    "pending": "待處理",
+    "add": "新增",
+    "incomingRequests": "收到的邀請",
+    "accept": "接受",
+    "decline": "拒絕",
+    "friendsCount": "好友（{{count}}）",
+    "noFriendsYet": "目前尚無好友——在上方搜尋使用者名稱。"
+  },
+  "map": {
+    "endSession": "結束紀錄",
+    "startSession": "開始紀錄",
+    "hudPts": "分",
+    "hudSegments": "路段",
+    "hudIntersections": "路口"
+  },
+  "tabbar": {
+    "adventure": "探險",
+    "search": "搜尋",
+    "profile": "我的"
+  },
+  "toast": {
+    "syncSuccess": "進度已同步 ✅",
+    "syncFailed": "同步失敗：{{message}}",
+    "junctionsCompleted": "已完成 {{count}} 個路口！",
+    "tooZoomedOut": "縮放層級過小，無法載入新區域。",
+    "loadingInProgress": "已在載入中…",
+    "retryIn": "新區域：{{seconds}} 秒後重試…",
+    "alreadyCovered": "此區域已被涵蓋。",
+    "newZoneLoaded": "已載入新區域 🗺️",
+    "zoneExpandFailed": "無法擴展區域：{{message}}",
+    "extraZonesLoaded": "已載入 {{count}} 個額外區域 🗺️",
+    "walkImported": "步行紀錄已匯入：{{edges}} 個新路段，{{junctions}} 個路口已完成。",
+    "backgroundTrackingEnabled": "背景步行偵測已啟用。",
+    "autoSessionStarted": "紀錄已自動開始——祝你散步愉快！",
+    "sessionStoppedSpeed": "紀錄已停止：速度過快（{{speed}} 公里/小時），不符合步行。",
+    "junctionCompleted": "路口已完成！+1 分 🎉",
+    "zoneNotLoadedYet": "區域尚未載入——網路就緒後紀錄將立即開始。",
+    "sessionStarted": "紀錄已開始——探索愉快！",
+    "sessionEnded": "紀錄已結束（{{minutes}} 分鐘）：{{edges}} 個新路段，{{junctions}} 個路口已完成。",
+    "notEnoughNetwork": "已載入的網絡不足，無法模擬。",
+    "zoneUnavailable": "區域無法使用：{{message}}",
+    "segmentsInZone": "此區域內有 {{edges}} 個路段 · {{junctions}} 個路口"
+  },
+  "alert": {
+    "walkDetectedTitle": "偵測到步行",
+    "walkDetectedBody": "在應用程式關閉期間偵測到一次步行（約 {{minutes}} 分鐘，{{distance}} 公尺）。\n是否要將此行程匯入你的歷史紀錄？",
+    "ignore": "忽略",
+    "importAction": "匯入"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "登入連結無法使用。",
+    "connectionInterrupted": "登入已中斷。",
+    "invalidConnectionResponse": "登入回應無效。",
+    "timeoutSlowServers": "逾時（此區域從未計算過，且 OSM 伺服器較慢）",
+    "serverUnreachable": "無法連線至伺服器"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "請先啟用前景定位。",
+    "alwaysPermissionDenied": "「永遠」定位權限遭拒。",
+    "notifBody": "背景步行偵測已啟用"
+  }
+}

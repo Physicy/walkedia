@@ -16,6 +16,7 @@ import { Linking } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
+import { useTranslation } from 'react-i18next';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -37,6 +38,7 @@ function parseFragmentParams(url: string): Record<string, string> {
 }
 
 export function useAuth() {
+  const { t } = useTranslation();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -85,16 +87,16 @@ export function useAuth() {
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
-      if (!data?.url) throw new Error('URL de connexion indisponible.');
+      if (!data?.url) throw new Error(t('errors.connectionUrlUnavailable'));
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'cancel' || result.type === 'dismiss') return;
-      if (result.type !== 'success' || !result.url) throw new Error('Connexion interrompue.');
+      if (result.type !== 'success' || !result.url) throw new Error(t('errors.connectionInterrupted'));
 
       const params = parseFragmentParams(result.url);
       if (params.error) throw new Error(params.error_description || params.error);
       if (!params.access_token || !params.refresh_token) {
-        throw new Error('Réponse de connexion invalide.');
+        throw new Error(t('errors.invalidConnectionResponse'));
       }
 
       const { error: sessionError } = await supabase.auth.setSession({
@@ -105,7 +107,7 @@ export function useAuth() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   const signInWithEmail = useCallback(async (email: string) => {
     setBusy(true);

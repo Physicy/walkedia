@@ -10,10 +10,19 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 
-export function StartScreen({ status, onLocate }: { status: string; onLocate: () => void }) {
-  const isError = /refusé|indisponible|dépassé/.test(status);
+export function StartScreen({
+  status,
+  isError,
+  onLocate,
+}: {
+  status: string;
+  isError: boolean;
+  onLocate: () => void;
+}) {
+  const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef(Date.now());
 
@@ -31,7 +40,7 @@ export function StartScreen({ status, onLocate }: { status: string; onLocate: ()
         <>
           <Text style={styles.status}>{status}</Text>
           <TouchableOpacity style={styles.button} onPress={onLocate}>
-            <Text style={styles.buttonText}>Réessayer</Text>
+            <Text style={styles.buttonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </>
       ) : (
@@ -43,11 +52,7 @@ export function StartScreen({ status, onLocate }: { status: string; onLocate: ()
               {elapsed >= 5 ? ` (${elapsed}s)` : ''}
             </Text>
           )}
-          {elapsed >= 15 && (
-            <Text style={styles.hint}>
-              Les serveurs OpenStreetMap publics peuvent être lents — ça peut prendre jusqu'à une minute.
-            </Text>
-          )}
+          {elapsed >= 15 && <Text style={styles.hint}>{t('start.slowServersHint')}</Text>}
         </>
       )}
     </View>

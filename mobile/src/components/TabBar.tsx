@@ -1,26 +1,28 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 
 export type TabName = 'adventure' | 'search' | 'profile';
 
-const TABS: { name: TabName; icon: string; label: string }[] = [
-  { name: 'adventure', icon: '🗺️', label: 'Aventure' },
-  { name: 'search', icon: '🔍', label: 'Recherche' },
-  { name: 'profile', icon: '👤', label: 'Profil' },
+const TABS: { name: TabName; icon: string; labelKey: string }[] = [
+  { name: 'adventure', icon: '🗺️', labelKey: 'tabbar.adventure' },
+  { name: 'search', icon: '🔍', labelKey: 'tabbar.search' },
+  { name: 'profile', icon: '👤', labelKey: 'tabbar.profile' },
 ];
 
 export const TAB_BAR_BASE_HEIGHT = 54;
 
 export function TabBar({ active, onChange }: { active: TabName; onChange: (t: TabName) => void }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {TABS.map((t) => (
-        <TouchableOpacity key={t.name} style={styles.btn} onPress={() => onChange(t.name)} activeOpacity={0.7}>
-          <Text style={styles.icon}>{t.icon}</Text>
-          <Text style={[styles.label, active === t.name && styles.labelActive]}>{t.label}</Text>
+      {TABS.map((tab) => (
+        <TouchableOpacity key={tab.name} style={styles.btn} onPress={() => onChange(tab.name)} activeOpacity={0.7}>
+          <Text style={styles.icon}>{tab.icon}</Text>
+          <Text style={[styles.label, active === tab.name && styles.labelActive]}>{t(tab.labelKey)}</Text>
         </TouchableOpacity>
       ))}
     </View>

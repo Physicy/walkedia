@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import type { useFriends, FriendProfile } from '../hooks/useFriends';
 
 export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
+  const { t } = useTranslation();
   const { friends, incoming, outgoing, searchUsers, sendRequest, respond } = api;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FriendProfile[]>([]);
@@ -30,7 +32,7 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
     <ScrollView style={styles.wrap} keyboardShouldPersistTaps="handled">
       <TextInput
         style={styles.input}
-        placeholder="Chercher un joueur par pseudo…"
+        placeholder={t('friends.searchPlaceholder')}
         placeholderTextColor={COLORS.textDim}
         value={query}
         onChangeText={runSearch}
@@ -39,20 +41,20 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
       {query.trim().length > 0 && (
         <View style={styles.section}>
           {searching ? (
-            <Text style={styles.muted}>Recherche…</Text>
+            <Text style={styles.muted}>{t('friends.searching')}</Text>
           ) : results.length === 0 ? (
-            <Text style={styles.muted}>Aucun joueur trouvé.</Text>
+            <Text style={styles.muted}>{t('friends.noPlayerFound')}</Text>
           ) : (
             results.map((r) => (
               <View key={r.id} style={styles.row}>
-                <Text style={styles.name}>{r.display_name || 'Joueur'}</Text>
+                <Text style={styles.name}>{r.display_name || t('leaderboard.defaultPlayerName')}</Text>
                 {friendIds.has(r.id) ? (
-                  <Text style={styles.muted}>Déjà ami</Text>
+                  <Text style={styles.muted}>{t('friends.alreadyFriend')}</Text>
                 ) : outgoingIds.has(r.id) ? (
-                  <Text style={styles.muted}>En attente</Text>
+                  <Text style={styles.muted}>{t('friends.pending')}</Text>
                 ) : (
                   <TouchableOpacity style={styles.smallBtn} onPress={() => sendRequest(r.id)}>
-                    <Text style={styles.smallBtnText}>Ajouter</Text>
+                    <Text style={styles.smallBtnText}>{t('friends.add')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -63,16 +65,16 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
 
       {incoming.length > 0 && (
         <>
-          <Text style={styles.h3}>Demandes reçues</Text>
+          <Text style={styles.h3}>{t('friends.incomingRequests')}</Text>
           {incoming.map((r) => (
             <View key={r.id} style={styles.row}>
-              <Text style={styles.name}>{r.profile.display_name || 'Joueur'}</Text>
+              <Text style={styles.name}>{r.profile.display_name || t('leaderboard.defaultPlayerName')}</Text>
               <View style={styles.rowActions}>
                 <TouchableOpacity style={styles.smallBtn} onPress={() => respond(r.id, true)}>
-                  <Text style={styles.smallBtnText}>Accepter</Text>
+                  <Text style={styles.smallBtnText}>{t('friends.accept')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.smallBtnGhost} onPress={() => respond(r.id, false)}>
-                  <Text style={styles.smallBtnGhostText}>Refuser</Text>
+                  <Text style={styles.smallBtnGhostText}>{t('friends.decline')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -80,13 +82,13 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
         </>
       )}
 
-      <Text style={styles.h3}>Amis ({friends.length})</Text>
+      <Text style={styles.h3}>{t('friends.friendsCount', { count: friends.length })}</Text>
       {friends.length === 0 ? (
-        <Text style={styles.muted}>Pas encore d'ami — cherche un pseudo ci-dessus.</Text>
+        <Text style={styles.muted}>{t('friends.noFriendsYet')}</Text>
       ) : (
         friends.map((f) => (
           <View key={f.id} style={styles.row}>
-            <Text style={styles.name}>{f.display_name || 'Joueur'}</Text>
+            <Text style={styles.name}>{f.display_name || t('leaderboard.defaultPlayerName')}</Text>
           </View>
         ))
       )}

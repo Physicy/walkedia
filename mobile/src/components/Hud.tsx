@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 
 export function Hud({
@@ -13,18 +14,19 @@ export function Hud({
   interLabel: string;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <View style={[styles.row, { top: insets.top + 8 }]} pointerEvents="none">
       <View style={styles.scoreBox}>
         <Text style={styles.scoreValue}>{score}</Text>
-        <Text style={styles.scoreLabel}>pts</Text>
+        <Text style={styles.scoreLabel}>{t('map.hudPts')}</Text>
       </View>
       <View style={styles.statsBox}>
         <Text style={styles.statLine}>
-          <Text style={styles.statValue}>{edgesLabel}</Text> tronçons
+          <Text style={styles.statValue}>{edgesLabel}</Text> {t('map.hudSegments')}
         </Text>
         <Text style={styles.statLine}>
-          <Text style={styles.statValue}>{interLabel}</Text> intersections
+          <Text style={styles.statValue}>{interLabel}</Text> {t('map.hudIntersections')}
         </Text>
       </View>
     </View>

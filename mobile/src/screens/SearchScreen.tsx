@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import { useFriends } from '../hooks/useFriends';
 import { LeaderboardScreen } from './LeaderboardScreen';
@@ -11,22 +12,21 @@ import { FriendsScreen } from './FriendsScreen';
 type Mode = 'leaderboard' | 'friends';
 
 export function SearchScreen({ userId }: { userId: string | null }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>('leaderboard');
   const friendsApi = useFriends(userId);
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Recherche</Text>
+      <Text style={styles.title}>{t('search.title')}</Text>
 
       {!userId ? (
-        <Text style={styles.placeholder}>
-          Connecte-toi (onglet Profil) pour voir le classement et gérer tes amis.
-        </Text>
+        <Text style={styles.placeholder}>{t('search.loginPrompt')}</Text>
       ) : (
         <>
           <View style={styles.tabs}>
-            <ModeBtn label="Classement" active={mode === 'leaderboard'} onPress={() => setMode('leaderboard')} />
-            <ModeBtn label="Amis" active={mode === 'friends'} onPress={() => setMode('friends')} />
+            <ModeBtn label={t('search.leaderboardTab')} active={mode === 'leaderboard'} onPress={() => setMode('leaderboard')} />
+            <ModeBtn label={t('search.friendsTab')} active={mode === 'friends'} onPress={() => setMode('friends')} />
           </View>
           {mode === 'leaderboard' ? (
             <LeaderboardScreen userId={userId} friends={friendsApi.friends} />

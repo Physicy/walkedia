@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "फिर से कोशिश करें"
+  },
+  "start": {
+    "loadingNetwork": "पैदल चलने वाला नेटवर्क लोड हो रहा है…",
+    "searchingPosition": "आपकी स्थिति खोजी जा रही है…",
+    "permissionDenied": "स्थान की पहुंच अस्वीकृत कर दी गई। फ़ोन की सेटिंग में Walkedia को स्थान की अनुमति दें, फिर ऐप को फिर से शुरू करें।",
+    "timeout": "स्थान प्राप्त करने में समय समाप्त हो गया। फिर से कोशिश करें (घर के अंदर पहला GPS सिग्नल धीमा हो सकता है)।",
+    "positionUnavailable": "स्थान उपलब्ध नहीं है। जांचें कि फ़ोन की लोकेशन चालू है और फिर से कोशिश करें, अधिमानतः बाहर।",
+    "zoneLoadFailed": "क्षेत्र लोड नहीं हो सका: {{message}}",
+    "slowServersHint": "सार्वजनिक OpenStreetMap सर्वर धीमे हो सकते हैं — इसमें एक मिनट तक लग सकता है।"
+  },
+  "account": {
+    "notConfigured": "खाता कॉन्फ़िगर नहीं है — लॉगिन सक्षम करने के लिए .env.example के आधार पर mobile/.env भरें।",
+    "continueGoogle": "Google से जारी रखें",
+    "continueApple": "Apple से जारी रखें",
+    "connectedAs": "लॉग इन: {{name}}",
+    "defaultName": "खाता",
+    "signOut": "लॉग आउट करें",
+    "syncing": "सिंक हो रहा है…"
+  },
+  "login": {
+    "subtitle": "जारी रखने के लिए लॉग इन करें",
+    "magicLinkSent": "लॉगिन लिंक {{email}} पर भेजा गया। जारी रखने के लिए इसे इस फ़ोन से खोलें।",
+    "or": "या",
+    "emailPlaceholder": "ईमेल पता",
+    "sendMagicLink": "लॉगिन लिंक प्राप्त करें",
+    "genericError": "एक त्रुटि हुई।"
+  },
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "backgroundTrackingLabel": "ऐप बंद होने पर भी मेरी सैर का पता लगाएं",
+    "backgroundTrackingDesc": "ऐप में वापस आने पर आपकी सैर आयात करने का सुझाव देने के लिए बैकग्राउंड में आपके स्थान (\"हमेशा\" अनुमति) का उपयोग करता है। डिफ़ॉल्ट रूप से बंद।",
+    "totalPoints": "कुल अंक",
+    "today": "आज",
+    "thisWeek": "इस सप्ताह",
+    "thisMonth": "इस महीने",
+    "pointsOver7Days": "पिछले 7 दिनों के अंक",
+    "segmentsDiscovered": "खोजे गए खंड",
+    "kmDiscovered": "खोजे गए किमी",
+    "sessionsLabel": "सत्र",
+    "neighborhoods": "मोहल्ले",
+    "noNeighborhoods": "लोड किए गए क्षेत्रों में अभी तक कोई मैप किया गया मोहल्ला नहीं है।",
+    "unnamedNeighborhood": "अनाम मोहल्ला",
+    "unlocked": "अनलॉक किया गया 🔓",
+    "lastSessions": "हाल के सत्र",
+    "noSessions": "अभी तक कोई सत्र नहीं",
+    "sessionImportedLabel": "{{date}} (आयातित)",
+    "minutesLabel": "{{count}} मिनट",
+    "segmentCountLabel": "{{count}} खंड",
+    "pointCountLabel": "+{{count}} अंक",
+    "untrackedNote": "समय ट्रैकिंग शुरू होने से पहले अर्जित {{count}} अंक: केवल कुल में गिने जाते हैं।",
+    "language": "भाषा",
+    "chooseLanguage": "भाषा चुनें",
+    "restartForRtl": "लेआउट को इस भाषा के अनुरूप पूरी तरह से ढालने के लिए ऐप को बंद करके फिर से खोलें।"
+  },
+  "search": {
+    "title": "खोजें",
+    "loginPrompt": "लीडरबोर्ड देखने और अपने दोस्तों को प्रबंधित करने के लिए लॉग इन करें (प्रोफ़ाइल टैब)।",
+    "leaderboardTab": "लीडरबोर्ड",
+    "friendsTab": "दोस्त"
+  },
+  "leaderboard": {
+    "allPlayers": "सभी खिलाड़ी",
+    "friendsScope": "दोस्त",
+    "noOneYet": "अभी तक कोई नहीं।",
+    "addFriendsPrompt": "उनकी रैंकिंग देखने के लिए दोस्त जोड़ें।",
+    "defaultPlayerName": "खिलाड़ी",
+    "youSuffix": " (आप)",
+    "pointsCount": "{{count}} अंक"
+  },
+  "friends": {
+    "searchPlaceholder": "उपयोगकर्ता नाम से खिलाड़ी खोजें…",
+    "searching": "खोजा जा रहा है…",
+    "noPlayerFound": "कोई खिलाड़ी नहीं मिला।",
+    "alreadyFriend": "पहले से ही दोस्त",
+    "pending": "लंबित",
+    "add": "जोड़ें",
+    "incomingRequests": "प्राप्त अनुरोध",
+    "accept": "स्वीकार करें",
+    "decline": "अस्वीकार करें",
+    "friendsCount": "दोस्त ({{count}})",
+    "noFriendsYet": "अभी तक कोई दोस्त नहीं — ऊपर एक उपयोगकर्ता नाम खोजें।"
+  },
+  "map": {
+    "endSession": "सत्र समाप्त करें",
+    "startSession": "सत्र शुरू करें",
+    "hudPts": "अंक",
+    "hudSegments": "खंड",
+    "hudIntersections": "चौराहे"
+  },
+  "tabbar": {
+    "adventure": "साहसिक",
+    "search": "खोजें",
+    "profile": "प्रोफ़ाइल"
+  },
+  "toast": {
+    "syncSuccess": "प्रगति सिंक की गई ✅",
+    "syncFailed": "सिंक विफल: {{message}}",
+    "junctionsCompleted": "+{{count}} चौराहा पूरा हुआ!",
+    "tooZoomedOut": "नए क्षेत्र लोड करने के लिए बहुत ज़्यादा ज़ूम आउट है।",
+    "loadingInProgress": "पहले से लोड हो रहा है…",
+    "retryIn": "नया क्षेत्र: {{seconds}} सेकंड में फिर से कोशिश करें…",
+    "alreadyCovered": "यह क्षेत्र पहले से कवर हो चुका है।",
+    "newZoneLoaded": "नया क्षेत्र लोड हुआ 🗺️",
+    "zoneExpandFailed": "क्षेत्र का विस्तार नहीं हो सका: {{message}}",
+    "extraZonesLoaded": "{{count}} अतिरिक्त क्षेत्र लोड हुए 🗺️",
+    "walkImported": "सैर आयात की गई: {{edges}} नए खंड, {{junctions}} चौराहे पूरे हुए।",
+    "backgroundTrackingEnabled": "बैकग्राउंड सैर पहचान सक्षम की गई।",
+    "autoSessionStarted": "सत्र स्वचालित रूप से शुरू हुआ — शुभ सैर!",
+    "sessionStoppedSpeed": "सत्र रोका गया: पैदल चलने के लिए गति बहुत तेज़ है ({{speed}} किमी/घं)।",
+    "junctionCompleted": "चौराहा पूरा हुआ! +1 अंक 🎉",
+    "zoneNotLoadedYet": "क्षेत्र अभी लोड नहीं हुआ है — नेटवर्क उपलब्ध होते ही सत्र शुरू होगा।",
+    "sessionStarted": "सत्र शुरू हुआ — शुभ अन्वेषण!",
+    "sessionEnded": "सत्र समाप्त हुआ ({{minutes}} मिनट): {{edges}} नए खंड, {{junctions}} चौराहे पूरे हुए।",
+    "notEnoughNetwork": "सिमुलेट करने के लिए पर्याप्त लोड किया गया नेटवर्क नहीं है।",
+    "zoneUnavailable": "क्षेत्र अनुपलब्ध: {{message}}",
+    "segmentsInZone": "क्षेत्र में {{edges}} खंड · {{junctions}} चौराहे"
+  },
+  "alert": {
+    "walkDetectedTitle": "सैर का पता चला",
+    "walkDetectedBody": "ऐप बंद होने के दौरान एक सैर का पता चला (~{{minutes}} मिनट, {{distance}} मी)।\nक्या इस मार्ग को अपने इतिहास में आयात करें?",
+    "ignore": "अनदेखा करें",
+    "importAction": "आयात करें"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "लॉगिन URL उपलब्ध नहीं है।",
+    "connectionInterrupted": "लॉगिन बाधित हुआ।",
+    "invalidConnectionResponse": "अमान्य लॉगिन प्रतिक्रिया।",
+    "timeoutSlowServers": "समय समाप्त (क्षेत्र की कभी गणना नहीं हुई और OSM सर्वर धीमे हैं)",
+    "serverUnreachable": "सर्वर तक नहीं पहुंचा जा सका"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "पहले फ़ोरग्राउंड स्थान सक्षम करें।",
+    "alwaysPermissionDenied": "स्थान की \"हमेशा\" अनुमति अस्वीकृत कर दी गई।",
+    "notifBody": "बैकग्राउंड सैर पहचान सक्रिय है"
+  }
+}

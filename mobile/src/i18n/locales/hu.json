@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Újrapróbálás"
+  },
+  "start": {
+    "loadingNetwork": "Gyalogos hálózat betöltése…",
+    "searchingPosition": "Pozíciód keresése…",
+    "permissionDenied": "A helyhozzáférés megtagadva. Engedélyezd a Walkedia számára a helymeghatározást a telefon beállításaiban, majd indítsd újra az alkalmazást.",
+    "timeout": "Időtúllépés a pozíció lekérésekor. Próbáld újra (az első GPS-jel lassú lehet zárt térben).",
+    "positionUnavailable": "A pozíció nem érhető el. Ellenőrizd, hogy be van-e kapcsolva a helymeghatározás a telefonon, és próbáld újra, lehetőleg kültéren.",
+    "zoneLoadFailed": "Nem sikerült betölteni a területet: {{message}}",
+    "slowServersHint": "A nyilvános OpenStreetMap-szerverek lassúak lehetnek — ez akár egy percig is eltarthat."
+  },
+  "account": {
+    "notConfigured": "A fiók nincs beállítva — töltsd ki a mobile/.env fájlt a .env.example alapján a bejelentkezés aktiválásához.",
+    "continueGoogle": "Folytatás Google-lel",
+    "continueApple": "Folytatás Apple-lel",
+    "connectedAs": "Bejelentkezve: {{name}}",
+    "defaultName": "Fiók",
+    "signOut": "Kijelentkezés",
+    "syncing": "Szinkronizálás…"
+  },
+  "login": {
+    "subtitle": "Jelentkezz be a folytatáshoz",
+    "magicLinkSent": "Bejelentkezési link elküldve ide: {{email}}. Nyisd meg erről a telefonról a folytatáshoz.",
+    "or": "vagy",
+    "emailPlaceholder": "E-mail cím",
+    "sendMagicLink": "Bejelentkezési link kérése",
+    "genericError": "Hiba történt."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Sétáim érzékelése akkor is, ha az alkalmazás zárva van",
+    "backgroundTrackingDesc": "A háttérben használja a helyzetedet (\"Mindig\" engedély), hogy felajánlja a séták importálását, amikor visszatérsz az alkalmazásba. Alapértelmezés szerint ki van kapcsolva.",
+    "totalPoints": "pont összesen",
+    "today": "ma",
+    "thisWeek": "ezen a héten",
+    "thisMonth": "ebben a hónapban",
+    "pointsOver7Days": "Pontok az elmúlt 7 napban",
+    "segmentsDiscovered": "felfedezett szakasz",
+    "kmDiscovered": "felfedezett km",
+    "sessionsLabel": "munkamenet",
+    "neighborhoods": "Városrészek",
+    "noNeighborhoods": "A betöltött területeken még nincsenek feltérképezett városrészek.",
+    "unnamedNeighborhood": "Névtelen városrész",
+    "unlocked": "Feloldva 🔓",
+    "lastSessions": "Legutóbbi munkamenetek",
+    "noSessions": "Még nincs munkamenet",
+    "sessionImportedLabel": "{{date}} (importálva)",
+    "minutesLabel": "{{count}} perc",
+    "segmentCountLabel": "{{count}} szakasz",
+    "pointCountLabel": "+{{count}} pont",
+    "untrackedNote": "{{count}} pont az időkövetés indulása előtt szerezve: csak az összesítésben számít.",
+    "language": "Nyelv",
+    "chooseLanguage": "Nyelv kiválasztása",
+    "restartForRtl": "Zárd be, majd nyisd meg újra az alkalmazást, hogy az elrendezés teljesen alkalmazkodjon ehhez a nyelvhez."
+  },
+  "search": {
+    "title": "Keresés",
+    "loginPrompt": "Jelentkezz be (Profil fül) a ranglista megtekintéséhez és a barátaid kezeléséhez.",
+    "leaderboardTab": "Ranglista",
+    "friendsTab": "Barátok"
+  },
+  "leaderboard": {
+    "allPlayers": "Összes játékos",
+    "friendsScope": "Barátok",
+    "noOneYet": "Még senki.",
+    "addFriendsPrompt": "Adj hozzá barátokat a ranglistájuk megtekintéséhez.",
+    "defaultPlayerName": "Játékos",
+    "youSuffix": " (te)",
+    "pointsCount": "{{count}} pont"
+  },
+  "friends": {
+    "searchPlaceholder": "Játékos keresése felhasználónév alapján…",
+    "searching": "Keresés…",
+    "noPlayerFound": "Nem található játékos.",
+    "alreadyFriend": "Már barátok vagytok",
+    "pending": "Függőben",
+    "add": "Hozzáadás",
+    "incomingRequests": "Beérkezett kérések",
+    "accept": "Elfogadás",
+    "decline": "Elutasítás",
+    "friendsCount": "Barátok ({{count}})",
+    "noFriendsYet": "Még nincs barátod — keress egy felhasználónevet fent."
+  },
+  "map": {
+    "endSession": "Munkamenet befejezése",
+    "startSession": "Munkamenet indítása",
+    "hudPts": "pont",
+    "hudSegments": "szakasz",
+    "hudIntersections": "kereszteződés"
+  },
+  "tabbar": {
+    "adventure": "Kaland",
+    "search": "Keresés",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Az előrehaladás szinkronizálva ✅",
+    "syncFailed": "A szinkronizálás sikertelen: {{message}}",
+    "junctionsCompleted": "+{{count}} kereszteződés teljesítve!",
+    "tooZoomedOut": "Túl kicsinyített nézet az új területek betöltéséhez.",
+    "loadingInProgress": "Már folyamatban van a betöltés…",
+    "retryIn": "Új terület: próbáld újra {{seconds}} másodperc múlva…",
+    "alreadyCovered": "Ez a terület már le van fedve.",
+    "newZoneLoaded": "Új terület betöltve 🗺️",
+    "zoneExpandFailed": "Nem sikerült kibővíteni a területet: {{message}}",
+    "extraZonesLoaded": "{{count}} további terület betöltve 🗺️",
+    "walkImported": "Séta importálva: {{edges}} új szakasz, {{junctions}} kereszteződés teljesítve.",
+    "backgroundTrackingEnabled": "Séták háttérbeli érzékelése bekapcsolva.",
+    "autoSessionStarted": "A munkamenet automatikusan elindult — jó sétát!",
+    "sessionStoppedSpeed": "A munkamenet leállt: túl nagy sebesség ({{speed}} km/h) sétához.",
+    "junctionCompleted": "Kereszteződés teljesítve! +1 pont 🎉",
+    "zoneNotLoadedYet": "A terület még nincs betöltve — a munkamenet azonnal elindul, amint a hálózat elérhető.",
+    "sessionStarted": "Munkamenet elindítva — jó felfedezést!",
+    "sessionEnded": "Munkamenet befejezve ({{minutes}} perc): {{edges}} új szakasz, {{junctions}} kereszteződés teljesítve.",
+    "notEnoughNetwork": "Nincs elég betöltött hálózat a szimulációhoz.",
+    "zoneUnavailable": "A terület nem érhető el: {{message}}",
+    "segmentsInZone": "{{edges}} szakasz · {{junctions}} kereszteződés a területen"
+  },
+  "alert": {
+    "walkDetectedTitle": "Séta érzékelve",
+    "walkDetectedBody": "Séta érzékelve, amíg az alkalmazás zárva volt (~{{minutes}} perc, {{distance}} m).\nImportálod ezt az útvonalat az előzményeidbe?",
+    "ignore": "Mellőzés",
+    "importAction": "Importálás"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "A bejelentkezési URL nem érhető el.",
+    "connectionInterrupted": "A bejelentkezés megszakadt.",
+    "invalidConnectionResponse": "Érvénytelen bejelentkezési válasz.",
+    "timeoutSlowServers": "időtúllépés (a terület még sosem lett kiszámítva, és az OSM-szerverek lassúak)",
+    "serverUnreachable": "a szerver nem elérhető"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Először kapcsold be az előtérbeli helymeghatározást.",
+    "alwaysPermissionDenied": "A \"Mindig\" helymeghatározási engedély megtagadva.",
+    "notifBody": "Séták háttérbeli érzékelése aktív"
+  }
+}

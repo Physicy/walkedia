@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Erneut versuchen"
+  },
+  "start": {
+    "loadingNetwork": "Fußwegenetz wird geladen…",
+    "searchingPosition": "Position wird gesucht…",
+    "permissionDenied": "Standortzugriff verweigert. Erlaube Walkedia den Standortzugriff in den Telefoneinstellungen und starte die App neu.",
+    "timeout": "Zeitüberschreitung beim Abrufen der Position. Versuche es erneut (der erste GPS-Fix kann drinnen langsam sein).",
+    "positionUnavailable": "Position nicht verfügbar. Prüfe, ob die Standortdienste aktiviert sind, und versuche es erneut, idealerweise im Freien.",
+    "zoneLoadFailed": "Gebiet konnte nicht geladen werden: {{message}}",
+    "slowServersHint": "Öffentliche OpenStreetMap-Server können langsam sein – das kann bis zu einer Minute dauern."
+  },
+  "account": {
+    "notConfigured": "Konto nicht konfiguriert – trage mobile/.env ausgehend von .env.example ein, um die Anmeldung zu aktivieren.",
+    "continueGoogle": "Weiter mit Google",
+    "continueApple": "Weiter mit Apple",
+    "connectedAs": "Angemeldet: {{name}}",
+    "defaultName": "Konto",
+    "signOut": "Abmelden",
+    "syncing": "Synchronisierung…"
+  },
+  "login": {
+    "subtitle": "Melde dich an, um fortzufahren",
+    "magicLinkSent": "Anmeldelink an {{email}} gesendet. Öffne ihn auf diesem Telefon, um fortzufahren.",
+    "or": "oder",
+    "emailPlaceholder": "E-Mail-Adresse",
+    "sendMagicLink": "Anmeldelink erhalten",
+    "genericError": "Ein Fehler ist aufgetreten."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Meine Spaziergänge auch bei geschlossener App erkennen",
+    "backgroundTrackingDesc": "Nutzt deinen Standort im Hintergrund (Berechtigung \"Immer\"), um dir beim Zurückkehren in die App das Importieren deiner Spaziergänge vorzuschlagen. Standardmäßig deaktiviert.",
+    "totalPoints": "Punkte insgesamt",
+    "today": "heute",
+    "thisWeek": "diese Woche",
+    "thisMonth": "diesen Monat",
+    "pointsOver7Days": "Punkte der letzten 7 Tage",
+    "segmentsDiscovered": "entdeckte Wegabschnitte",
+    "kmDiscovered": "entdeckte km",
+    "sessionsLabel": "Sitzungen",
+    "neighborhoods": "Viertel",
+    "noNeighborhoods": "In den geladenen Gebieten sind noch keine Viertel kartiert.",
+    "unnamedNeighborhood": "Viertel ohne Namen",
+    "unlocked": "Freigeschaltet 🔓",
+    "lastSessions": "Letzte Sitzungen",
+    "noSessions": "Noch keine Sitzung",
+    "sessionImportedLabel": "{{date}} (importiert)",
+    "minutesLabel": "{{count}} Min.",
+    "segmentCountLabel": "{{count}} Wegabschnitt(e)",
+    "pointCountLabel": "+{{count}} Pkt.",
+    "untrackedNote": "{{count}} Punkt(e) vor Beginn der Zeiterfassung erzielt: nur in der Gesamtsumme enthalten.",
+    "language": "Sprache",
+    "chooseLanguage": "Sprache wählen",
+    "restartForRtl": "Schließe die App und öffne sie erneut, damit sich das Layout vollständig an diese Sprache anpasst."
+  },
+  "search": {
+    "title": "Suche",
+    "loginPrompt": "Melde dich an (Tab Profil), um die Bestenliste zu sehen und deine Freunde zu verwalten.",
+    "leaderboardTab": "Bestenliste",
+    "friendsTab": "Freunde"
+  },
+  "leaderboard": {
+    "allPlayers": "Alle Spieler",
+    "friendsScope": "Freunde",
+    "noOneYet": "Noch niemand.",
+    "addFriendsPrompt": "Füge Freunde hinzu, um ihre Platzierung zu sehen.",
+    "defaultPlayerName": "Spieler",
+    "youSuffix": " (du)",
+    "pointsCount": "{{count}} Pkt."
+  },
+  "friends": {
+    "searchPlaceholder": "Spieler nach Benutzernamen suchen…",
+    "searching": "Suche…",
+    "noPlayerFound": "Kein Spieler gefunden.",
+    "alreadyFriend": "Bereits befreundet",
+    "pending": "Ausstehend",
+    "add": "Hinzufügen",
+    "incomingRequests": "Erhaltene Anfragen",
+    "accept": "Annehmen",
+    "decline": "Ablehnen",
+    "friendsCount": "Freunde ({{count}})",
+    "noFriendsYet": "Noch keine Freunde – suche oben nach einem Benutzernamen."
+  },
+  "map": {
+    "endSession": "Sitzung beenden",
+    "startSession": "Sitzung starten",
+    "hudPts": "Pkt.",
+    "hudSegments": "Wegabschnitte",
+    "hudIntersections": "Kreuzungen"
+  },
+  "tabbar": {
+    "adventure": "Abenteuer",
+    "search": "Suche",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Fortschritt synchronisiert ✅",
+    "syncFailed": "Synchronisierung fehlgeschlagen: {{message}}",
+    "junctionsCompleted": "+{{count}} Kreuzung(en) abgeschlossen!",
+    "tooZoomedOut": "Zu weit herausgezoomt, um neue Gebiete zu laden.",
+    "loadingInProgress": "Wird bereits geladen…",
+    "retryIn": "Neues Gebiet: erneuter Versuch in {{seconds}}s…",
+    "alreadyCovered": "Dieses Gebiet ist bereits abgedeckt.",
+    "newZoneLoaded": "Neues Gebiet geladen 🗺️",
+    "zoneExpandFailed": "Gebiet konnte nicht erweitert werden: {{message}}",
+    "extraZonesLoaded": "{{count}} zusätzliche(s) Gebiet(e) geladen 🗺️",
+    "walkImported": "Spaziergang importiert: {{edges}} neue(r) Wegabschnitt(e), {{junctions}} Kreuzung(en) abgeschlossen.",
+    "backgroundTrackingEnabled": "Hintergrunderkennung von Spaziergängen aktiviert.",
+    "autoSessionStarted": "Sitzung automatisch gestartet — guten Spaziergang!",
+    "sessionStoppedSpeed": "Sitzung gestoppt: zu schnell ({{speed}} km/h) für einen Spaziergang.",
+    "junctionCompleted": "Kreuzung abgeschlossen! +1 Punkt 🎉",
+    "zoneNotLoadedYet": "Gebiet noch nicht geladen — die Sitzung startet, sobald das Netz verfügbar ist.",
+    "sessionStarted": "Sitzung gestartet — viel Spaß beim Erkunden!",
+    "sessionEnded": "Sitzung beendet ({{minutes}} Min.): {{edges}} neue(r) Wegabschnitt(e), {{junctions}} Kreuzung(en) abgeschlossen.",
+    "notEnoughNetwork": "Nicht genug geladenes Netz zum Simulieren.",
+    "zoneUnavailable": "Gebiet nicht verfügbar: {{message}}",
+    "segmentsInZone": "{{edges}} Wegabschnitte · {{junctions}} Kreuzungen im Gebiet"
+  },
+  "alert": {
+    "walkDetectedTitle": "Spaziergang erkannt",
+    "walkDetectedBody": "Ein Spaziergang wurde erkannt, während die App geschlossen war (~{{minutes}} Min., {{distance}} m).\nDiesen Weg in deinen Verlauf importieren?",
+    "ignore": "Ignorieren",
+    "importAction": "Importieren"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Anmelde-URL nicht verfügbar.",
+    "connectionInterrupted": "Anmeldung unterbrochen.",
+    "invalidConnectionResponse": "Ungültige Anmeldeantwort.",
+    "timeoutSlowServers": "Zeitüberschreitung (Gebiet noch nie berechnet und OSM-Server langsam)",
+    "serverUnreachable": "Server nicht erreichbar"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Aktiviere zuerst die Standortermittlung im Vordergrund.",
+    "alwaysPermissionDenied": "Standortberechtigung \"Immer\" verweigert.",
+    "notifBody": "Hintergrunderkennung von Spaziergängen aktiv"
+  }
+}

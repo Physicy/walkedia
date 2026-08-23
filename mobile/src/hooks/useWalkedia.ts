@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
+import { useTranslation } from 'react-i18next';
 
 import { fetchRegion } from '../logic/region';
 import { emptyGraph, mergeGraph } from '../logic/regionGraph';
@@ -148,6 +149,10 @@ interface WalkediaState {
   ready: boolean; // progrès chargé depuis AsyncStorage
   mapReady: boolean; // graphe initial chargé
   startStatus: string;
+  // Séparé du texte lui-même (qui est maintenant traduit, donc son contenu
+  // ne peut plus servir à deviner s'il s'agit d'une erreur — voir
+  // StartScreen.tsx, qui utilisait auparavant une regex sur le français).
+  startStatusError: boolean;
   userId: string | null; // compte Supabase connecté, null si hors-ligne/déconnecté
   syncing: boolean;
   loadLog: LoadLogEntry[];
@@ -178,6 +183,7 @@ function freshState(): WalkediaState {
     ready: false,
     mapReady: false,
     startStatus: '',
+    startStatusError: false,
     userId: null,
     syncing: false,
     loadLog: [],
@@ -268,6 +274,10 @@ export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
 // ---------------------------------------------------------------------- hook
 
 export function useWalkedia() {
+  // Nommé `translate` plutôt que le `t` habituel de react-i18next : onFix
+  // plus bas prend un paramètre `t` (timestamp, comme tout le reste du
+  // fichier) qui masquerait sinon la fonction de traduction dans sa portée.
+  const { t: translate } = useTranslation();
   const stateRef = useRef<WalkediaState>(freshState());
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((t) => t + 1), []);
@@ -438,15 +448,15 @@ export function useWalkedia() {
         }
         await storage.save(state.progress);
         await pushProgress();
-        toast('Progression synchronisée ✅');
+        toast(translate('toast.syncSuccess'));
       } catch (err: any) {
-        toast('Synchronisation impossible : ' + err.message);
+        toast(translate('toast.syncFailed', { message: err.message }));
       } finally {
         state.syncing = false;
         rerender();
       }
     },
-    [state, pushProgress, rerender, toast]
+    [state, pushProgress, rerender, toast, translate]
   );
 
   const signOutLocally = useCallback(() => {
@@ -567,11 +577,11 @@ export function useWalkedia() {
       }
       if (gained > 0 || pruned > 0) {
         persist();
-        if (announce && gained > 0) toast(`+${gained} carrefour(s) complété(s) !`);
+        if (announce && gained > 0) toast(translate('toast.junctionsCompleted', { count: gained }));
       }
       return gained;
     },
-    [state, checkJunction, persist, toast]
+    [state, checkJunction, persist, toast, translate]
   );
 
   // `announceSkip` : quand l'appel vient d'une action explicite de
@@ -592,26 +602,26 @@ export function useWalkedia() {
       const trigger = opts.trigger ?? 'gps';
       if (opts.latitudeDelta != null && opts.latitudeDelta > MAX_EXPAND_LATITUDE_DELTA) {
         logLoad({ trigger, outcome: 'skip-too-zoomed-out', detail: `${(opts.latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
-        if (opts.announceSkip) toast('Trop dézoomé pour charger de nouvelles zones.');
+        if (opts.announceSkip) toast(translate('toast.tooZoomedOut'));
         return;
       }
       const [lat, lon] = snapToGrid(rawLat, rawLon, RADIUS);
       const now = Date.now();
       if (state.expanding) {
         logLoad({ trigger, outcome: 'skip-in-progress' });
-        if (opts.announceSkip) toast('Chargement déjà en cours…');
+        if (opts.announceSkip) toast(translate('toast.loadingInProgress'));
         return;
       }
       const wait = EXPAND_COOLDOWN - (now - state.lastExpandTry);
       if (wait > 0) {
         logLoad({ trigger, outcome: 'skip-cooldown', detail: `encore ${Math.ceil(wait / 1000)}s` });
-        if (opts.announceSkip) toast(`Nouvelle zone : réessaie dans ${Math.ceil(wait / 1000)}s…`);
+        if (opts.announceSkip) toast(translate('toast.retryIn', { seconds: Math.ceil(wait / 1000) }));
         return;
       }
       const dist = distToNearestCenter(state, lat, lon);
       if (dist <= RADIUS - EXPAND_MARGIN) {
         logLoad({ trigger, outcome: 'skip-covered', detail: `${Math.round(dist)} m du centre le plus proche` });
-        if (opts.announceSkip) toast('Cette zone est déjà couverte.');
+        if (opts.announceSkip) toast(translate('toast.alreadyCovered'));
         return;
       }
       state.expanding = true;
@@ -622,7 +632,7 @@ export function useWalkedia() {
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
-        toast('Nouvelle zone chargée 🗺️');
+        toast(translate('toast.newZoneLoaded'));
         logLoad({
           trigger,
           outcome: 'success',
@@ -631,13 +641,13 @@ export function useWalkedia() {
           junctions: state.graph!.junctions.size,
         });
       } catch (err: any) {
-        toast('Extension de zone impossible : ' + err.message);
+        toast(translate('toast.zoneExpandFailed', { message: err.message }));
         logLoad({ trigger, outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
       } finally {
         state.expanding = false;
       }
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad, translate]
   );
 
   // Remplissage en grille de la zone visible en mode cluster (voir
@@ -706,7 +716,7 @@ export function useWalkedia() {
         if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
         sweepCompletions(false);
         rerender();
-        toast(`${loaded} zone(s) supplémentaire(s) chargée(s) 🗺️`);
+        toast(translate('toast.extraZonesLoaded', { count: loaded }));
       }
       logLoad({
         trigger: 'batch',
@@ -718,7 +728,7 @@ export function useWalkedia() {
       });
       state.gridLoading = false;
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, logLoad]
+    [state, applyRegion, sweepCompletions, rerender, toast, logLoad, translate]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -802,9 +812,9 @@ export function useWalkedia() {
       });
       await persist();
       rerender();
-      toast(`Marche importée : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
+      toast(translate('toast.walkImported', { edges: newEdges.size, junctions: newInter.size }), 6000);
     },
-    [state, checkJunction, persist, rememberEdge, rerender, toast]
+    [state, checkJunction, persist, rememberEdge, rerender, toast, translate]
   );
 
   // Règle 1 (app fermée) : vérifie au démarrage si la tâche de fond a
@@ -816,25 +826,25 @@ export function useWalkedia() {
     if (!found) return;
     const mins = Math.max(1, Math.round((found.fixes[found.fixes.length - 1].t - found.startedAt) / 60000));
     Alert.alert(
-      'Marche détectée',
-      `Une marche a été détectée pendant que l'app était fermée (~${mins} min, ${Math.round(found.distance)} m).\nImporter ce trajet dans ton historique ?`,
+      translate('alert.walkDetectedTitle'),
+      translate('alert.walkDetectedBody', { minutes: mins, distance: Math.round(found.distance) }),
       [
-        { text: 'Ignorer', style: 'cancel' },
-        { text: 'Importer', onPress: () => importShadowWalk(found.fixes, found.startedAt) },
+        { text: translate('alert.ignore'), style: 'cancel' },
+        { text: translate('alert.importAction'), onPress: () => importShadowWalk(found.fixes, found.startedAt) },
       ]
     );
-  }, [importShadowWalk]);
+  }, [importShadowWalk, translate]);
 
   const enableBackgroundTracking = useCallback(async () => {
     const result = await startBackgroundTracking();
     if (result.ok) {
       state.backgroundTrackingEnabled = true;
-      toast('Détection de marche en arrière-plan activée.');
+      toast(translate('toast.backgroundTrackingEnabled'));
     } else {
       toast(result.reason);
     }
     rerender();
-  }, [state, rerender, toast]);
+  }, [state, rerender, toast, translate]);
 
   const disableBackgroundTracking = useCallback(async () => {
     await stopBackgroundTracking();
@@ -877,7 +887,7 @@ export function useWalkedia() {
               // startSession refuse tant que la zone n'est pas chargée : ne pas
               // annoncer un démarrage qui n'a pas eu lieu (il en émet alors son
               // propre message).
-              if (state.session) toast('Session démarrée automatiquement — bonne marche !');
+              if (state.session) toast(translate('toast.autoSessionStarted'));
             }
           } else {
             // Vitesse implausible pour de la marche (saut GPS, véhicule) :
@@ -899,7 +909,7 @@ export function useWalkedia() {
         state.speedStreak++;
         if (state.speedStreak >= SPEED_STREAK_LIMIT) {
           state.speedStreak = 0;
-          toast(`Session arrêtée : vitesse trop élevée (${Math.round(speedKmh)} km/h) pour de la marche.`, 6000);
+          toast(translate('toast.sessionStoppedSpeed', { speed: Math.round(speedKmh) }), 6000);
           // eslint-disable-next-line @typescript-eslint/no-use-before-define
           endSessionRef.current?.();
           return;
@@ -931,7 +941,7 @@ export function useWalkedia() {
             const j = graph.junctions.get(jid);
             if (j && checkJunction(j)) {
               state.session.newInter.add(jid);
-              toast('Carrefour complété ! +1 point 🎉');
+              toast(translate('toast.junctionCompleted'));
             }
           }
           persist();
@@ -942,7 +952,7 @@ export function useWalkedia() {
         // le déplacement seul (trackLine, position) doit quand même se voir
       }
     },
-    [state, maybeExpand, rerender, checkJunction, persist, rememberEdge, toast]
+    [state, maybeExpand, rerender, checkJunction, persist, rememberEdge, toast, translate]
   );
   onFixRef.current = onFix;
 
@@ -954,7 +964,7 @@ export function useWalkedia() {
     // démarrée là ne créditerait aucun tronçon. Vaut aussi pour le démarrage
     // automatique déclenché par onFix.
     if (!state.graph) {
-      toast('Zone pas encore chargée — la session démarrera dès que le réseau sera là.');
+      toast(translate('toast.zoneNotLoadedYet'));
       return;
     }
     state.matcher = new Matcher(state.graph, state.proj);
@@ -963,8 +973,8 @@ export function useWalkedia() {
     state.idleMovement = null; // pas de sens hors session, évite un résidu périmé au prochain arrêt
     state.session = { newEdges: new Set(), newInter: new Set(), track: [], startedAt: Date.now() };
     rerender();
-    toast('Session démarrée — bonne exploration !');
-  }, [state, rerender, toast]);
+    toast(translate('toast.sessionStarted'));
+  }, [state, rerender, toast, translate]);
   startSessionRef.current = startSession;
 
   const endSession = useCallback(() => {
@@ -983,9 +993,9 @@ export function useWalkedia() {
     discovered.flush(state.discovered).catch(() => {});
 
     const mins = Math.round((Date.now() - startedAt) / 60000);
-    toast(`Session terminée (${mins} min) : ${newEdges.size} nouveau(x) tronçon(s), ${newInter.size} carrefour(s) complété(s).`, 6000);
+    toast(translate('toast.sessionEnded', { minutes: mins, edges: newEdges.size, junctions: newInter.size }), 6000);
     rerender();
-  }, [state, persist, toast, rerender]);
+  }, [state, persist, toast, rerender, translate]);
 
   const endSessionRef = useRef(endSession);
   endSessionRef.current = endSession;
@@ -1014,7 +1024,8 @@ export function useWalkedia() {
       state.center = [lat, lon];
       state.proj = makeProj(lat);
       state.mapReady = true;
-      state.startStatus = 'Chargement du réseau piéton…';
+      state.startStatus = translate('start.loadingNetwork');
+      state.startStatusError = false;
       // `expanding` pendant tout le chargement initial : c'est le même verrou
       // que maybeExpand, donc un tick GPS survenant entre-temps ne relancera
       // pas une requête pour la même zone.
@@ -1029,9 +1040,10 @@ export function useWalkedia() {
         region = await fetchRegion(lat, lon);
       } catch (err: any) {
         state.expanding = false;
-        state.startStatus = 'Impossible de charger la zone : ' + err.message;
+        state.startStatus = translate('start.zoneLoadFailed', { message: err.message });
+        state.startStatusError = true;
         rerender();
-        toast('Zone indisponible : ' + err.message, 6000);
+        toast(translate('toast.zoneUnavailable', { message: err.message }), 6000);
         logLoad({ trigger: 'init', outcome: 'error', detail: err.message, durationMs: Date.now() - startedAt });
         return;
       }
@@ -1040,7 +1052,7 @@ export function useWalkedia() {
       state.expanding = false;
       sweepCompletions(false);
       rerender();
-      toast(`${state.graph!.edges.size} tronçons · ${state.graph!.junctions.size} carrefours dans la zone`);
+      toast(translate('toast.segmentsInZone', { edges: state.graph!.edges.size, junctions: state.graph!.junctions.size }));
       logLoad({
         trigger: 'init',
         outcome: 'success',
@@ -1051,7 +1063,7 @@ export function useWalkedia() {
 
       checkBackgroundImport();
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport]
+    [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport, translate]
   );
 
   const requestLocationAndInit = useCallback(async () => {
@@ -1060,13 +1072,14 @@ export function useWalkedia() {
     // que la géoloc tourne déjà) ne doit pas relancer toute la séquence.
     if (requestingLocation.current || state.mapReady) return;
     requestingLocation.current = true;
-    state.startStatus = 'Recherche de ta position…';
+    state.startStatus = translate('start.searchingPosition');
+    state.startStatusError = false;
     rerender();
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        state.startStatus =
-          "Accès à la position refusé. Autorise la position pour Walkedia dans les réglages du téléphone, puis relance l'app.";
+        state.startStatus = translate('start.permissionDenied');
+        state.startStatusError = true;
         rerender();
         return;
       }
@@ -1078,14 +1091,13 @@ export function useWalkedia() {
       await init(pos.coords.latitude, pos.coords.longitude);
     } catch (err: any) {
       state.startStatus =
-        err && err.message === 'timeout'
-          ? 'Délai dépassé pour obtenir la position. Réessaie (le premier fix GPS peut être lent en intérieur).'
-          : 'Position indisponible. Vérifie que la localisation du téléphone est activée et réessaie, de préférence en extérieur.';
+        err && err.message === 'timeout' ? translate('start.timeout') : translate('start.positionUnavailable');
+      state.startStatusError = true;
       rerender();
     } finally {
       requestingLocation.current = false;
     }
-  }, [state, rerender, init]);
+  }, [state, rerender, init, translate]);
 
   // ------------------------------------------------------------- debug/simu
 
@@ -1144,7 +1156,7 @@ export function useWalkedia() {
     if (!state.mapReady) return;
     const path = resamplePath(buildSimPath(), INTERP_STEP);
     if (path.length < 2) {
-      toast('Pas assez de réseau chargé pour simuler.');
+      toast(translate('toast.notEnoughNetwork'));
       return;
     }
     let i = 0;
@@ -1160,7 +1172,7 @@ export function useWalkedia() {
       onFixRef.current?.(lat, lon, 8, simT, null);
       i++;
     }, 180);
-  }, [state, buildSimPath, toast]);
+  }, [state, buildSimPath, toast, translate]);
 
   const recenter = useCallback(() => {
     if (state.position) return [state.position.lat, state.position.lon] as [number, number];

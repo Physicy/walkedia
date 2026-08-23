@@ -5,6 +5,7 @@
 
 import { supabase, supabaseAnonKey, supabaseUrl } from '../lib/supabase';
 import { deserializeRegion, type Region } from './regionGraph';
+import i18n from '../i18n';
 
 // Plafond côté client : sur une zone jamais calculée, la fonction fait tout
 // le travail en synchrone (Overpass + construction), et les miroirs Overpass
@@ -43,7 +44,9 @@ export async function fetchRegion(lat: number, lon: number): Promise<Region> {
       signal: controller.signal,
     });
   } catch {
-    throw new Error(timedOut ? 'délai dépassé (zone jamais calculée et serveurs OSM lents)' : 'serveur injoignable');
+    throw new Error(
+      timedOut ? i18n.t('errors.timeoutSlowServers') : i18n.t('errors.serverUnreachable')
+    );
   } finally {
     clearTimeout(timer);
   }

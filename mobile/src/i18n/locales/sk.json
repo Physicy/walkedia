@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Skúsiť znova"
+  },
+  "start": {
+    "loadingNetwork": "Načítava sa pešia sieť…",
+    "searchingPosition": "Vyhľadáva sa tvoja poloha…",
+    "permissionDenied": "Prístup k polohe bol zamietnutý. Povoľ aplikácii Walkedia prístup k polohe v nastaveniach telefónu a potom aplikáciu reštartuj.",
+    "timeout": "Vypršal čas na získanie polohy. Skús to znova (prvý GPS signál môže byť vnútri budov pomalý).",
+    "positionUnavailable": "Poloha nie je dostupná. Skontroluj, či je na telefóne zapnutá poloha, a skús to znova, najlepšie vonku.",
+    "zoneLoadFailed": "Oblasť sa nepodarilo načítať: {{message}}",
+    "slowServersHint": "Verejné servery OpenStreetMap môžu byť pomalé — môže to trvať až minútu."
+  },
+  "account": {
+    "notConfigured": "Účet nie je nastavený — vyplň mobile/.env podľa .env.example, aby si povolil(a) prihlásenie.",
+    "continueGoogle": "Pokračovať cez Google",
+    "continueApple": "Pokračovať cez Apple",
+    "connectedAs": "Prihlásený(á): {{name}}",
+    "defaultName": "Účet",
+    "signOut": "Odhlásiť sa",
+    "syncing": "Synchronizácia…"
+  },
+  "login": {
+    "subtitle": "Prihlás sa a pokračuj",
+    "magicLinkSent": "Prihlasovací odkaz odoslaný na {{email}}. Otvor ho z tohto telefónu a pokračuj.",
+    "or": "alebo",
+    "emailPlaceholder": "E-mailová adresa",
+    "sendMagicLink": "Získať prihlasovací odkaz",
+    "genericError": "Vyskytla sa chyba."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Rozpoznávať moje prechádzky aj pri zatvorenej aplikácii",
+    "backgroundTrackingDesc": "Používa tvoju polohu na pozadí (oprávnenie \"Vždy\"), aby ti po návrate do aplikácie navrhla import prechádzok. V predvolenom nastavení vypnuté.",
+    "totalPoints": "bodov celkovo",
+    "today": "dnes",
+    "thisWeek": "tento týždeň",
+    "thisMonth": "tento mesiac",
+    "pointsOver7Days": "Body za posledných 7 dní",
+    "segmentsDiscovered": "objavených úsekov",
+    "kmDiscovered": "objavených km",
+    "sessionsLabel": "relácie",
+    "neighborhoods": "Štvrte",
+    "noNeighborhoods": "V načítaných oblastiach zatiaľ nie sú zmapované žiadne štvrte.",
+    "unnamedNeighborhood": "Štvrť bez názvu",
+    "unlocked": "Odomknuté 🔓",
+    "lastSessions": "Posledné relácie",
+    "noSessions": "Zatiaľ žiadna relácia",
+    "sessionImportedLabel": "{{date}} (importované)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} úsek(ov)",
+    "pointCountLabel": "+{{count}} b.",
+    "untrackedNote": "{{count}} bod(ov) získané pred spustením časového sledovania: započítané iba v celkovom súčte.",
+    "language": "Jazyk",
+    "chooseLanguage": "Vybrať jazyk",
+    "restartForRtl": "Zavri a znova otvor aplikáciu, aby sa rozloženie plne prispôsobilo tomuto jazyku."
+  },
+  "search": {
+    "title": "Hľadať",
+    "loginPrompt": "Prihlás sa (karta Profil), aby si videl(a) rebríček a mohol(mohla) spravovať priateľov.",
+    "leaderboardTab": "Rebríček",
+    "friendsTab": "Priatelia"
+  },
+  "leaderboard": {
+    "allPlayers": "Všetci hráči",
+    "friendsScope": "Priatelia",
+    "noOneYet": "Zatiaľ nikto.",
+    "addFriendsPrompt": "Pridaj priateľov, aby si videl(a) ich rebríček.",
+    "defaultPlayerName": "Hráč",
+    "youSuffix": " (ty)",
+    "pointsCount": "{{count}} b."
+  },
+  "friends": {
+    "searchPlaceholder": "Hľadať hráča podľa používateľského mena…",
+    "searching": "Hľadanie…",
+    "noPlayerFound": "Žiadny hráč nenájdený.",
+    "alreadyFriend": "Už ste priatelia",
+    "pending": "Čaká sa",
+    "add": "Pridať",
+    "incomingRequests": "Prijaté žiadosti",
+    "accept": "Prijať",
+    "decline": "Odmietnuť",
+    "friendsCount": "Priatelia ({{count}})",
+    "noFriendsYet": "Zatiaľ žiadni priatelia — vyhľadaj používateľské meno vyššie."
+  },
+  "map": {
+    "endSession": "Ukončiť reláciu",
+    "startSession": "Spustiť reláciu",
+    "hudPts": "b.",
+    "hudSegments": "úsekov",
+    "hudIntersections": "križovatiek"
+  },
+  "tabbar": {
+    "adventure": "Dobrodružstvo",
+    "search": "Hľadať",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Postup synchronizovaný ✅",
+    "syncFailed": "Synchronizácia zlyhala: {{message}}",
+    "junctionsCompleted": "+{{count}} dokončená(ých) križovatka(iek)!",
+    "tooZoomedOut": "Príliš oddialené na načítanie nových oblastí.",
+    "loadingInProgress": "Načítanie už prebieha…",
+    "retryIn": "Nová oblasť: skús to znova o {{seconds}}s…",
+    "alreadyCovered": "Táto oblasť je už pokrytá.",
+    "newZoneLoaded": "Nová oblasť načítaná 🗺️",
+    "zoneExpandFailed": "Oblasť sa nepodarilo rozšíriť: {{message}}",
+    "extraZonesLoaded": "Načítaných {{count}} ďalších oblastí 🗺️",
+    "walkImported": "Prechádzka importovaná: {{edges}} nových úsekov, {{junctions}} dokončených križovatiek.",
+    "backgroundTrackingEnabled": "Rozpoznávanie prechádzok na pozadí zapnuté.",
+    "autoSessionStarted": "Relácia spustená automaticky — príjemnú prechádzku!",
+    "sessionStoppedSpeed": "Relácia zastavená: príliš vysoká rýchlosť ({{speed}} km/h) na chôdzu.",
+    "junctionCompleted": "Križovatka dokončená! +1 bod 🎉",
+    "zoneNotLoadedYet": "Oblasť ešte nie je načítaná — relácia sa spustí, hneď ako bude sieť k dispozícii.",
+    "sessionStarted": "Relácia spustená — príjemné objavovanie!",
+    "sessionEnded": "Relácia ukončená ({{minutes}} min): {{edges}} nových úsekov, {{junctions}} dokončených križovatiek.",
+    "notEnoughNetwork": "Nedostatok načítanej siete na simuláciu.",
+    "zoneUnavailable": "Oblasť nedostupná: {{message}}",
+    "segmentsInZone": "{{edges}} úsekov · {{junctions}} križovatiek v oblasti"
+  },
+  "alert": {
+    "walkDetectedTitle": "Prechádzka zistená",
+    "walkDetectedBody": "Bola zistená prechádzka, kým bola aplikácia zatvorená (~{{minutes}} min, {{distance}} m).\nImportovať túto trasu do histórie?",
+    "ignore": "Ignorovať",
+    "importAction": "Importovať"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL na prihlásenie nie je k dispozícii.",
+    "connectionInterrupted": "Prihlásenie bolo prerušené.",
+    "invalidConnectionResponse": "Neplatná odpoveď prihlásenia.",
+    "timeoutSlowServers": "vypršal čas (oblasť nikdy nevypočítaná a servery OSM sú pomalé)",
+    "serverUnreachable": "server nedostupný"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Najprv zapni polohu na popredí.",
+    "alwaysPermissionDenied": "Oprávnenie na polohu \"Vždy\" bolo zamietnuté.",
+    "notifBody": "Rozpoznávanie prechádzok na pozadí je aktívne"
+  }
+}

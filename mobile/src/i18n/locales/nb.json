@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Prøv igjen"
+  },
+  "start": {
+    "loadingNetwork": "Laster inn gangveinettet…",
+    "searchingPosition": "Søker etter posisjonen din…",
+    "permissionDenied": "Tilgang til posisjon ble avslått. Tillat posisjon for Walkedia i telefoninnstillingene, og start deretter appen på nytt.",
+    "timeout": "Tidsavbrudd ved henting av posisjon. Prøv igjen (den første GPS-signalet kan være tregt innendørs).",
+    "positionUnavailable": "Posisjon ikke tilgjengelig. Sjekk at posisjonstjenester er slått på på telefonen, og prøv igjen, helst utendørs.",
+    "zoneLoadFailed": "Kunne ikke laste inn området: {{message}}",
+    "slowServersHint": "Offentlige OpenStreetMap-servere kan være trege — dette kan ta opptil et minutt."
+  },
+  "account": {
+    "notConfigured": "Kontoen er ikke konfigurert — fyll ut mobile/.env basert på .env.example for å aktivere innlogging.",
+    "continueGoogle": "Fortsett med Google",
+    "continueApple": "Fortsett med Apple",
+    "connectedAs": "Logget inn: {{name}}",
+    "defaultName": "Konto",
+    "signOut": "Logg ut",
+    "syncing": "Synkroniserer…"
+  },
+  "login": {
+    "subtitle": "Logg inn for å fortsette",
+    "magicLinkSent": "Innloggingslenke sendt til {{email}}. Åpne den fra denne telefonen for å fortsette.",
+    "or": "eller",
+    "emailPlaceholder": "E-postadresse",
+    "sendMagicLink": "Motta en innloggingslenke",
+    "genericError": "Det oppstod en feil."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Oppdag turene mine selv når appen er lukket",
+    "backgroundTrackingDesc": "Bruker posisjonen din i bakgrunnen (tillatelsen \"Alltid\") for å foreslå import av turene dine når du kommer tilbake til appen. Avslått som standard.",
+    "totalPoints": "poeng totalt",
+    "today": "i dag",
+    "thisWeek": "denne uken",
+    "thisMonth": "denne måneden",
+    "pointsOver7Days": "Poeng de siste 7 dagene",
+    "segmentsDiscovered": "oppdagede strekninger",
+    "kmDiscovered": "oppdagede km",
+    "sessionsLabel": "økter",
+    "neighborhoods": "Nabolag",
+    "noNeighborhoods": "Ingen nabolag kartlagt ennå i de innlastede områdene.",
+    "unnamedNeighborhood": "Navnløst nabolag",
+    "unlocked": "Låst opp 🔓",
+    "lastSessions": "Siste økter",
+    "noSessions": "Ingen økter ennå",
+    "sessionImportedLabel": "{{date}} (importert)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} strekning(er)",
+    "pointCountLabel": "+{{count}} p.",
+    "untrackedNote": "{{count}} poeng opptjent før tidssporingen startet: telles bare med i totalen.",
+    "language": "Språk",
+    "chooseLanguage": "Velg språk",
+    "restartForRtl": "Lukk og åpne appen på nytt slik at layoutet tilpasser seg dette språket fullt ut."
+  },
+  "search": {
+    "title": "Søk",
+    "loginPrompt": "Logg inn (fanen Profil) for å se rangeringen og administrere vennene dine.",
+    "leaderboardTab": "Rangering",
+    "friendsTab": "Venner"
+  },
+  "leaderboard": {
+    "allPlayers": "Alle spillere",
+    "friendsScope": "Venner",
+    "noOneYet": "Ingen ennå.",
+    "addFriendsPrompt": "Legg til venner for å se rangeringen deres.",
+    "defaultPlayerName": "Spiller",
+    "youSuffix": " (deg)",
+    "pointsCount": "{{count}} p."
+  },
+  "friends": {
+    "searchPlaceholder": "Søk etter en spiller på brukernavn…",
+    "searching": "Søker…",
+    "noPlayerFound": "Ingen spiller funnet.",
+    "alreadyFriend": "Allerede venner",
+    "pending": "Venter",
+    "add": "Legg til",
+    "incomingRequests": "Mottatte forespørsler",
+    "accept": "Godta",
+    "decline": "Avslå",
+    "friendsCount": "Venner ({{count}})",
+    "noFriendsYet": "Ingen venner ennå — søk etter et brukernavn ovenfor."
+  },
+  "map": {
+    "endSession": "Avslutt økten",
+    "startSession": "Start en økt",
+    "hudPts": "p.",
+    "hudSegments": "strekninger",
+    "hudIntersections": "kryss"
+  },
+  "tabbar": {
+    "adventure": "Eventyr",
+    "search": "Søk",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Fremgang synkronisert ✅",
+    "syncFailed": "Synkronisering mislyktes: {{message}}",
+    "junctionsCompleted": "+{{count}} kryss fullført!",
+    "tooZoomedOut": "For langt zoomet ut til å laste inn nye områder.",
+    "loadingInProgress": "Laster allerede inn…",
+    "retryIn": "Nytt område: prøv igjen om {{seconds}}s…",
+    "alreadyCovered": "Dette området er allerede dekket.",
+    "newZoneLoaded": "Nytt område lastet inn 🗺️",
+    "zoneExpandFailed": "Kunne ikke utvide området: {{message}}",
+    "extraZonesLoaded": "{{count}} ekstra område(r) lastet inn 🗺️",
+    "walkImported": "Tur importert: {{edges}} ny(e) strekning(er), {{junctions}} kryss fullført.",
+    "backgroundTrackingEnabled": "Bakgrunnsregistrering av turer aktivert.",
+    "autoSessionStarted": "Økt startet automatisk — god tur!",
+    "sessionStoppedSpeed": "Økten ble stoppet: for høy hastighet ({{speed}} km/t) for å gå.",
+    "junctionCompleted": "Kryss fullført! +1 poeng 🎉",
+    "zoneNotLoadedYet": "Området er ikke lastet inn ennå — økten starter så snart nettverket er tilgjengelig.",
+    "sessionStarted": "Økt startet — god utforskning!",
+    "sessionEnded": "Økt avsluttet ({{minutes}} min): {{edges}} ny(e) strekning(er), {{junctions}} kryss fullført.",
+    "notEnoughNetwork": "Ikke nok innlastet nettverk til å simulere.",
+    "zoneUnavailable": "Området er utilgjengelig: {{message}}",
+    "segmentsInZone": "{{edges}} strekninger · {{junctions}} kryss i området"
+  },
+  "alert": {
+    "walkDetectedTitle": "Tur oppdaget",
+    "walkDetectedBody": "En tur ble oppdaget mens appen var lukket (~{{minutes}} min, {{distance}} m).\nVil du importere denne turen til historikken din?",
+    "ignore": "Ignorer",
+    "importAction": "Importer"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Innloggings-URL ikke tilgjengelig.",
+    "connectionInterrupted": "Innlogging avbrutt.",
+    "invalidConnectionResponse": "Ugyldig innloggingssvar.",
+    "timeoutSlowServers": "tidsavbrudd (området er aldri beregnet før, og OSM-servere er trege)",
+    "serverUnreachable": "server utilgjengelig"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Aktiver posisjon i forgrunnen først.",
+    "alwaysPermissionDenied": "Posisjonstillatelsen \"Alltid\" ble avslått.",
+    "notifBody": "Bakgrunnsregistrering av turer aktiv"
+  }
+}

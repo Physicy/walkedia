@@ -1,15 +1,16 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import type { useAuth } from '../hooks/useAuth';
 
 export function AccountSection({ auth, syncing }: { auth: ReturnType<typeof useAuth>; syncing: boolean }) {
+  const { t } = useTranslation();
+
   if (!auth.isConfigured) {
     return (
       <View style={styles.box}>
-        <Text style={styles.muted}>
-          Compte non configuré — renseigne mobile/.env à partir de .env.example pour activer la connexion.
-        </Text>
+        <Text style={styles.muted}>{t('account.notConfigured')}</Text>
       </View>
     );
   }
@@ -26,28 +27,28 @@ export function AccountSection({ auth, syncing }: { auth: ReturnType<typeof useA
     return (
       <View style={styles.box}>
         <TouchableOpacity style={styles.googleBtn} onPress={auth.signInWithGoogle} disabled={auth.busy}>
-          <Text style={styles.btnText}>Continuer avec Google</Text>
+          <Text style={styles.btnText}>{t('account.continueGoogle')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.appleBtn} onPress={auth.signInWithApple} disabled={auth.busy}>
-          <Text style={styles.btnTextWhite}>Continuer avec Apple</Text>
+          <Text style={styles.btnTextWhite}>{t('account.continueApple')}</Text>
         </TouchableOpacity>
         {auth.busy && <ActivityIndicator color={COLORS.accentCyan} style={{ marginTop: 8 }} />}
       </View>
     );
   }
 
-  const name = auth.user.user_metadata?.full_name || auth.user.user_metadata?.name || auth.user.email || 'Compte';
+  const name = auth.user.user_metadata?.full_name || auth.user.user_metadata?.name || auth.user.email || t('account.defaultName');
   return (
     <View style={styles.box}>
       <View style={styles.row}>
         <Text style={styles.connected} numberOfLines={1}>
-          Connecté : {name}
+          {t('account.connectedAs', { name })}
         </Text>
         <TouchableOpacity onPress={auth.signOut}>
-          <Text style={styles.signOut}>Se déconnecter</Text>
+          <Text style={styles.signOut}>{t('account.signOut')}</Text>
         </TouchableOpacity>
       </View>
-      {syncing && <Text style={styles.muted}>Synchronisation…</Text>}
+      {syncing && <Text style={styles.muted}>{t('account.syncing')}</Text>}
     </View>
   );
 }

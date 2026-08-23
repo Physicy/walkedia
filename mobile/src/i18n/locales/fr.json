@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Réessayer"
+  },
+  "start": {
+    "loadingNetwork": "Chargement du réseau piéton…",
+    "searchingPosition": "Recherche de ta position…",
+    "permissionDenied": "Accès à la position refusé. Autorise la position pour Walkedia dans les réglages du téléphone, puis relance l'app.",
+    "timeout": "Délai dépassé pour obtenir la position. Réessaie (le premier fix GPS peut être lent en intérieur).",
+    "positionUnavailable": "Position indisponible. Vérifie que la localisation du téléphone est activée et réessaie, de préférence en extérieur.",
+    "zoneLoadFailed": "Impossible de charger la zone : {{message}}",
+    "slowServersHint": "Les serveurs OpenStreetMap publics peuvent être lents — ça peut prendre jusqu'à une minute."
+  },
+  "account": {
+    "notConfigured": "Compte non configuré — renseigne mobile/.env à partir de .env.example pour activer la connexion.",
+    "continueGoogle": "Continuer avec Google",
+    "continueApple": "Continuer avec Apple",
+    "connectedAs": "Connecté : {{name}}",
+    "defaultName": "Compte",
+    "signOut": "Se déconnecter",
+    "syncing": "Synchronisation…"
+  },
+  "login": {
+    "subtitle": "Connecte-toi pour continuer",
+    "magicLinkSent": "Lien de connexion envoyé à {{email}}. Ouvre-le depuis ce téléphone pour continuer.",
+    "or": "ou",
+    "emailPlaceholder": "Adresse e-mail",
+    "sendMagicLink": "Recevoir un lien de connexion",
+    "genericError": "Une erreur est survenue."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Détecter mes marches même app fermée",
+    "backgroundTrackingDesc": "Utilise ta position en arrière-plan (permission \"Toujours\") pour te proposer d'importer tes marches au retour dans l'app. Désactivé par défaut.",
+    "totalPoints": "points au total",
+    "today": "aujourd'hui",
+    "thisWeek": "cette semaine",
+    "thisMonth": "ce mois-ci",
+    "pointsOver7Days": "Points sur 7 jours",
+    "segmentsDiscovered": "tronçons découverts",
+    "kmDiscovered": "km découverts",
+    "sessionsLabel": "sessions",
+    "neighborhoods": "Quartiers",
+    "noNeighborhoods": "Aucun quartier cartographié dans les zones chargées pour l'instant.",
+    "unnamedNeighborhood": "Quartier sans nom",
+    "unlocked": "Débloqué 🔓",
+    "lastSessions": "Dernières sessions",
+    "noSessions": "Aucune session pour l'instant",
+    "sessionImportedLabel": "{{date}} (importée)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} tronçon(s)",
+    "pointCountLabel": "+{{count}} pt(s)",
+    "untrackedNote": "{{count}} point(s) acquis avant le suivi temporel : comptés dans le total uniquement.",
+    "language": "Langue",
+    "chooseLanguage": "Choisir la langue",
+    "restartForRtl": "Ferme et relance l'app pour que la mise en page s'adapte complètement à cette langue."
+  },
+  "search": {
+    "title": "Recherche",
+    "loginPrompt": "Connecte-toi (onglet Profil) pour voir le classement et gérer tes amis.",
+    "leaderboardTab": "Classement",
+    "friendsTab": "Amis"
+  },
+  "leaderboard": {
+    "allPlayers": "Tous les joueurs",
+    "friendsScope": "Amis",
+    "noOneYet": "Personne pour le moment.",
+    "addFriendsPrompt": "Ajoute des amis pour voir leur classement.",
+    "defaultPlayerName": "Joueur",
+    "youSuffix": " (toi)",
+    "pointsCount": "{{count}} pt(s)"
+  },
+  "friends": {
+    "searchPlaceholder": "Chercher un joueur par pseudo…",
+    "searching": "Recherche…",
+    "noPlayerFound": "Aucun joueur trouvé.",
+    "alreadyFriend": "Déjà ami",
+    "pending": "En attente",
+    "add": "Ajouter",
+    "incomingRequests": "Demandes reçues",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "friendsCount": "Amis ({{count}})",
+    "noFriendsYet": "Pas encore d'ami — cherche un pseudo ci-dessus."
+  },
+  "map": {
+    "endSession": "Terminer la session",
+    "startSession": "Démarrer une session",
+    "hudPts": "pts",
+    "hudSegments": "tronçons",
+    "hudIntersections": "intersections"
+  },
+  "tabbar": {
+    "adventure": "Aventure",
+    "search": "Recherche",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Progression synchronisée ✅",
+    "syncFailed": "Synchronisation impossible : {{message}}",
+    "junctionsCompleted": "+{{count}} carrefour(s) complété(s) !",
+    "tooZoomedOut": "Trop dézoomé pour charger de nouvelles zones.",
+    "loadingInProgress": "Chargement déjà en cours…",
+    "retryIn": "Nouvelle zone : réessaie dans {{seconds}}s…",
+    "alreadyCovered": "Cette zone est déjà couverte.",
+    "newZoneLoaded": "Nouvelle zone chargée 🗺️",
+    "zoneExpandFailed": "Extension de zone impossible : {{message}}",
+    "extraZonesLoaded": "{{count}} zone(s) supplémentaire(s) chargée(s) 🗺️",
+    "walkImported": "Marche importée : {{edges}} nouveau(x) tronçon(s), {{junctions}} carrefour(s) complété(s).",
+    "backgroundTrackingEnabled": "Détection de marche en arrière-plan activée.",
+    "autoSessionStarted": "Session démarrée automatiquement — bonne marche !",
+    "sessionStoppedSpeed": "Session arrêtée : vitesse trop élevée ({{speed}} km/h) pour de la marche.",
+    "junctionCompleted": "Carrefour complété ! +1 point 🎉",
+    "zoneNotLoadedYet": "Zone pas encore chargée — la session démarrera dès que le réseau sera là.",
+    "sessionStarted": "Session démarrée — bonne exploration !",
+    "sessionEnded": "Session terminée ({{minutes}} min) : {{edges}} nouveau(x) tronçon(s), {{junctions}} carrefour(s) complété(s).",
+    "notEnoughNetwork": "Pas assez de réseau chargé pour simuler.",
+    "zoneUnavailable": "Zone indisponible : {{message}}",
+    "segmentsInZone": "{{edges}} tronçons · {{junctions}} carrefours dans la zone"
+  },
+  "alert": {
+    "walkDetectedTitle": "Marche détectée",
+    "walkDetectedBody": "Une marche a été détectée pendant que l'app était fermée (~{{minutes}} min, {{distance}} m).\nImporter ce trajet dans ton historique ?",
+    "ignore": "Ignorer",
+    "importAction": "Importer"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL de connexion indisponible.",
+    "connectionInterrupted": "Connexion interrompue.",
+    "invalidConnectionResponse": "Réponse de connexion invalide.",
+    "timeoutSlowServers": "délai dépassé (zone jamais calculée et serveurs OSM lents)",
+    "serverUnreachable": "serveur injoignable"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Active d'abord la localisation au premier plan.",
+    "alwaysPermissionDenied": "Permission de localisation \"Toujours\" refusée.",
+    "notifBody": "Détection de marche active en arrière-plan"
+  }
+}

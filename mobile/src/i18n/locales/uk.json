@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Повторити"
+  },
+  "start": {
+    "loadingNetwork": "Завантаження пішохідної мережі…",
+    "searchingPosition": "Пошук вашого місцезнаходження…",
+    "permissionDenied": "Доступ до геолокації відхилено. Дозволь Walkedia доступ до місцезнаходження в налаштуваннях телефона, а потім перезапусти застосунок.",
+    "timeout": "Час очікування визначення позиції минув. Спробуй ще раз (перший сигнал GPS може бути повільним у приміщенні).",
+    "positionUnavailable": "Позиція недоступна. Перевір, чи увімкнено геолокацію на телефоні, і спробуй ще раз, бажано надворі.",
+    "zoneLoadFailed": "Не вдалося завантажити зону: {{message}}",
+    "slowServersHint": "Публічні сервери OpenStreetMap можуть працювати повільно — це може тривати до хвилини."
+  },
+  "account": {
+    "notConfigured": "Обліковий запис не налаштовано — заповни mobile/.env на основі .env.example, щоб увімкнути вхід.",
+    "continueGoogle": "Продовжити з Google",
+    "continueApple": "Продовжити з Apple",
+    "connectedAs": "Ви увійшли як: {{name}}",
+    "defaultName": "Обліковий запис",
+    "signOut": "Вийти",
+    "syncing": "Синхронізація…"
+  },
+  "login": {
+    "subtitle": "Увійди, щоб продовжити",
+    "magicLinkSent": "Посилання для входу надіслано на {{email}}. Відкрий його з цього телефона, щоб продовжити.",
+    "or": "або",
+    "emailPlaceholder": "Електронна адреса",
+    "sendMagicLink": "Отримати посилання для входу",
+    "genericError": "Сталася помилка."
+  },
+  "profile": {
+    "title": "Профіль",
+    "backgroundTrackingLabel": "Визначати мої прогулянки навіть при закритому застосунку",
+    "backgroundTrackingDesc": "Використовує геолокацію у фоновому режимі (дозвіл \"Завжди\"), щоб запропонувати імпортувати прогулянки після повернення до застосунку. За замовчуванням вимкнено.",
+    "totalPoints": "балів загалом",
+    "today": "сьогодні",
+    "thisWeek": "цього тижня",
+    "thisMonth": "цього місяця",
+    "pointsOver7Days": "Бали за 7 днів",
+    "segmentsDiscovered": "відкритих ділянок",
+    "kmDiscovered": "відкритих км",
+    "sessionsLabel": "сесії",
+    "neighborhoods": "Райони",
+    "noNeighborhoods": "У завантажених зонах поки немає розмічених районів.",
+    "unnamedNeighborhood": "Район без назви",
+    "unlocked": "Відкрито 🔓",
+    "lastSessions": "Останні сесії",
+    "noSessions": "Поки немає сесій",
+    "sessionImportedLabel": "{{date}} (імпортовано)",
+    "minutesLabel": "{{count}} хв",
+    "segmentCountLabel": "{{count}} ділянка(ок)",
+    "pointCountLabel": "+{{count}} бал.",
+    "untrackedNote": "{{count}} бал(ів) отримано до початку обліку часу: враховується лише в загальній сумі.",
+    "language": "Мова",
+    "chooseLanguage": "Обрати мову",
+    "restartForRtl": "Закрий і знову відкрий застосунок, щоб макет повністю адаптувався до цієї мови."
+  },
+  "search": {
+    "title": "Пошук",
+    "loginPrompt": "Увійди (вкладка Профіль), щоб побачити рейтинг і керувати друзями.",
+    "leaderboardTab": "Рейтинг",
+    "friendsTab": "Друзі"
+  },
+  "leaderboard": {
+    "allPlayers": "Усі гравці",
+    "friendsScope": "Друзі",
+    "noOneYet": "Поки що нікого.",
+    "addFriendsPrompt": "Додай друзів, щоб побачити їхній рейтинг.",
+    "defaultPlayerName": "Гравець",
+    "youSuffix": " (ти)",
+    "pointsCount": "{{count}} бал."
+  },
+  "friends": {
+    "searchPlaceholder": "Знайти гравця за іменем користувача…",
+    "searching": "Пошук…",
+    "noPlayerFound": "Гравця не знайдено.",
+    "alreadyFriend": "Уже друзі",
+    "pending": "Очікування",
+    "add": "Додати",
+    "incomingRequests": "Отримані запити",
+    "accept": "Прийняти",
+    "decline": "Відхилити",
+    "friendsCount": "Друзі ({{count}})",
+    "noFriendsYet": "Поки немає друзів — знайди ім'я користувача вище."
+  },
+  "map": {
+    "endSession": "Завершити сесію",
+    "startSession": "Почати сесію",
+    "hudPts": "бал.",
+    "hudSegments": "ділянок",
+    "hudIntersections": "перехресть"
+  },
+  "tabbar": {
+    "adventure": "Пригода",
+    "search": "Пошук",
+    "profile": "Профіль"
+  },
+  "toast": {
+    "syncSuccess": "Прогрес синхронізовано ✅",
+    "syncFailed": "Синхронізація не вдалася: {{message}}",
+    "junctionsCompleted": "+{{count}} перехрестя пройдено!",
+    "tooZoomedOut": "Занадто віддалено, щоб завантажувати нові зони.",
+    "loadingInProgress": "Завантаження вже триває…",
+    "retryIn": "Нова зона: повтор через {{seconds}} с…",
+    "alreadyCovered": "Ця зона вже покрита.",
+    "newZoneLoaded": "Нову зону завантажено 🗺️",
+    "zoneExpandFailed": "Не вдалося розширити зону: {{message}}",
+    "extraZonesLoaded": "Завантажено додаткових зон: {{count}} 🗺️",
+    "walkImported": "Прогулянку імпортовано: нових ділянок — {{edges}}, пройдених перехресть — {{junctions}}.",
+    "backgroundTrackingEnabled": "Фонове визначення прогулянок увімкнено.",
+    "autoSessionStarted": "Сесію розпочато автоматично — гарної прогулянки!",
+    "sessionStoppedSpeed": "Сесію зупинено: занадто висока швидкість ({{speed}} км/год) для прогулянки.",
+    "junctionCompleted": "Перехрестя пройдено! +1 бал 🎉",
+    "zoneNotLoadedYet": "Зону ще не завантажено — сесія почнеться, щойно мережа стане доступною.",
+    "sessionStarted": "Сесію розпочато — гарного дослідження!",
+    "sessionEnded": "Сесію завершено ({{minutes}} хв): нових ділянок — {{edges}}, пройдених перехресть — {{junctions}}.",
+    "notEnoughNetwork": "Недостатньо завантаженої мережі для симуляції.",
+    "zoneUnavailable": "Зона недоступна: {{message}}",
+    "segmentsInZone": "Ділянок у зоні: {{edges}} · перехресть: {{junctions}}"
+  },
+  "alert": {
+    "walkDetectedTitle": "Виявлено прогулянку",
+    "walkDetectedBody": "Виявлено прогулянку, поки застосунок був закритий (~{{minutes}} хв, {{distance}} м).\nІмпортувати цей маршрут в історію?",
+    "ignore": "Ігнорувати",
+    "importAction": "Імпортувати"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL для входу недоступний.",
+    "connectionInterrupted": "Вхід перервано.",
+    "invalidConnectionResponse": "Недійсна відповідь входу.",
+    "timeoutSlowServers": "минув час очікування (зону ще жодного разу не обчислено, а сервери OSM повільні)",
+    "serverUnreachable": "сервер недоступний"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Спочатку увімкни визначення місцезнаходження на передньому плані.",
+    "alwaysPermissionDenied": "Дозвіл на геолокацію \"Завжди\" відхилено.",
+    "notifBody": "Фонове визначення прогулянок активне"
+  }
+}

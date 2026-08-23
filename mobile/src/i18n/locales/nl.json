@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Opnieuw proberen"
+  },
+  "start": {
+    "loadingNetwork": "Voetgangersnetwerk laden…",
+    "searchingPosition": "Je positie zoeken…",
+    "permissionDenied": "Locatietoegang geweigerd. Sta locatie voor Walkedia toe in de telefooninstellingen en start de app opnieuw.",
+    "timeout": "Time-out bij het ophalen van je positie. Probeer opnieuw (de eerste GPS-fix kan traag zijn binnenshuis).",
+    "positionUnavailable": "Positie niet beschikbaar. Controleer of locatie op je telefoon is ingeschakeld en probeer opnieuw, bij voorkeur buiten.",
+    "zoneLoadFailed": "Kan het gebied niet laden: {{message}}",
+    "slowServersHint": "Openbare OpenStreetMap-servers kunnen traag zijn — dit kan tot een minuut duren."
+  },
+  "account": {
+    "notConfigured": "Account niet geconfigureerd — vul mobile/.env in op basis van .env.example om inloggen te activeren.",
+    "continueGoogle": "Doorgaan met Google",
+    "continueApple": "Doorgaan met Apple",
+    "connectedAs": "Ingelogd: {{name}}",
+    "defaultName": "Account",
+    "signOut": "Uitloggen",
+    "syncing": "Synchroniseren…"
+  },
+  "login": {
+    "subtitle": "Log in om verder te gaan",
+    "magicLinkSent": "Inloglink verzonden naar {{email}}. Open deze vanaf dit telefoon om verder te gaan.",
+    "or": "of",
+    "emailPlaceholder": "E-mailadres",
+    "sendMagicLink": "Inloglink ontvangen",
+    "genericError": "Er is een fout opgetreden."
+  },
+  "profile": {
+    "title": "Profiel",
+    "backgroundTrackingLabel": "Mijn wandelingen detecteren, ook als de app gesloten is",
+    "backgroundTrackingDesc": "Gebruikt je locatie op de achtergrond (toestemming \"Altijd\") om voor te stellen je wandelingen te importeren wanneer je terugkeert naar de app. Standaard uitgeschakeld.",
+    "totalPoints": "punten totaal",
+    "today": "vandaag",
+    "thisWeek": "deze week",
+    "thisMonth": "deze maand",
+    "pointsOver7Days": "Punten over 7 dagen",
+    "segmentsDiscovered": "ontdekte segmenten",
+    "kmDiscovered": "ontdekte km",
+    "sessionsLabel": "sessies",
+    "neighborhoods": "Buurten",
+    "noNeighborhoods": "Nog geen buurten in kaart gebracht in de geladen gebieden.",
+    "unnamedNeighborhood": "Naamloze buurt",
+    "unlocked": "Ontgrendeld 🔓",
+    "lastSessions": "Laatste sessies",
+    "noSessions": "Nog geen sessies",
+    "sessionImportedLabel": "{{date}} (geïmporteerd)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} segment(en)",
+    "pointCountLabel": "+{{count}} pt",
+    "untrackedNote": "{{count}} punt(en) behaald vóór de tijdregistratie: alleen meegeteld in het totaal.",
+    "language": "Taal",
+    "chooseLanguage": "Taal kiezen",
+    "restartForRtl": "Sluit de app en open deze opnieuw zodat de lay-out zich volledig aan deze taal aanpast."
+  },
+  "search": {
+    "title": "Zoeken",
+    "loginPrompt": "Log in (tabblad Profiel) om het klassement te zien en je vrienden te beheren.",
+    "leaderboardTab": "Klassement",
+    "friendsTab": "Vrienden"
+  },
+  "leaderboard": {
+    "allPlayers": "Alle spelers",
+    "friendsScope": "Vrienden",
+    "noOneYet": "Nog niemand.",
+    "addFriendsPrompt": "Voeg vrienden toe om hun klassement te zien.",
+    "defaultPlayerName": "Speler",
+    "youSuffix": " (jij)",
+    "pointsCount": "{{count}} pt"
+  },
+  "friends": {
+    "searchPlaceholder": "Zoek een speler op gebruikersnaam…",
+    "searching": "Zoeken…",
+    "noPlayerFound": "Geen speler gevonden.",
+    "alreadyFriend": "Al vrienden",
+    "pending": "In behandeling",
+    "add": "Toevoegen",
+    "incomingRequests": "Ontvangen verzoeken",
+    "accept": "Accepteren",
+    "decline": "Weigeren",
+    "friendsCount": "Vrienden ({{count}})",
+    "noFriendsYet": "Nog geen vrienden — zoek hierboven een gebruikersnaam."
+  },
+  "map": {
+    "endSession": "Sessie beëindigen",
+    "startSession": "Sessie starten",
+    "hudPts": "pt",
+    "hudSegments": "segmenten",
+    "hudIntersections": "kruispunten"
+  },
+  "tabbar": {
+    "adventure": "Avontuur",
+    "search": "Zoeken",
+    "profile": "Profiel"
+  },
+  "toast": {
+    "syncSuccess": "Voortgang gesynchroniseerd ✅",
+    "syncFailed": "Synchronisatie mislukt: {{message}}",
+    "junctionsCompleted": "+{{count}} kruispunt(en) voltooid!",
+    "tooZoomedOut": "Te ver uitgezoomd om nieuwe gebieden te laden.",
+    "loadingInProgress": "Al bezig met laden…",
+    "retryIn": "Nieuw gebied: probeer opnieuw over {{seconds}}s…",
+    "alreadyCovered": "Dit gebied is al gedekt.",
+    "newZoneLoaded": "Nieuw gebied geladen 🗺️",
+    "zoneExpandFailed": "Kan gebied niet uitbreiden: {{message}}",
+    "extraZonesLoaded": "{{count}} extra gebied(en) geladen 🗺️",
+    "walkImported": "Wandeling geïmporteerd: {{edges}} nieuw(e) segment(en), {{junctions}} kruispunt(en) voltooid.",
+    "backgroundTrackingEnabled": "Detectie van wandelingen op de achtergrond ingeschakeld.",
+    "autoSessionStarted": "Sessie automatisch gestart — veel wandelplezier!",
+    "sessionStoppedSpeed": "Sessie gestopt: te snel ({{speed}} km/u) voor een wandeling.",
+    "junctionCompleted": "Kruispunt voltooid! +1 punt 🎉",
+    "zoneNotLoadedYet": "Gebied nog niet geladen — de sessie start zodra het netwerk beschikbaar is.",
+    "sessionStarted": "Sessie gestart — veel plezier met verkennen!",
+    "sessionEnded": "Sessie beëindigd ({{minutes}} min): {{edges}} nieuw(e) segment(en), {{junctions}} kruispunt(en) voltooid.",
+    "notEnoughNetwork": "Niet genoeg geladen netwerk om te simuleren.",
+    "zoneUnavailable": "Gebied niet beschikbaar: {{message}}",
+    "segmentsInZone": "{{edges}} segmenten · {{junctions}} kruispunten in het gebied"
+  },
+  "alert": {
+    "walkDetectedTitle": "Wandeling gedetecteerd",
+    "walkDetectedBody": "Er is een wandeling gedetecteerd terwijl de app gesloten was (~{{minutes}} min, {{distance}} m).\nDeze wandeling importeren in je geschiedenis?",
+    "ignore": "Negeren",
+    "importAction": "Importeren"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Inlog-URL niet beschikbaar.",
+    "connectionInterrupted": "Inloggen onderbroken.",
+    "invalidConnectionResponse": "Ongeldig inlogantwoord.",
+    "timeoutSlowServers": "time-out (gebied nog nooit berekend en OSM-servers traag)",
+    "serverUnreachable": "server onbereikbaar"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Schakel eerst locatie op de voorgrond in.",
+    "alwaysPermissionDenied": "Locatietoestemming \"Altijd\" geweigerd.",
+    "notifBody": "Detectie van wandelingen op de achtergrond actief"
+  }
+}

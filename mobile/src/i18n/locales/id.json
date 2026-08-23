@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Coba lagi"
+  },
+  "start": {
+    "loadingNetwork": "Memuat jaringan pejalan kaki…",
+    "searchingPosition": "Mencari posisi Anda…",
+    "permissionDenied": "Akses lokasi ditolak. Izinkan Walkedia mengakses lokasi di pengaturan ponsel, lalu mulai ulang aplikasi.",
+    "timeout": "Waktu habis saat mendapatkan posisi. Coba lagi (sinyal GPS pertama mungkin lambat di dalam ruangan).",
+    "positionUnavailable": "Posisi tidak tersedia. Periksa apakah lokasi ponsel Anda aktif dan coba lagi, sebaiknya di luar ruangan.",
+    "zoneLoadFailed": "Area tidak dapat dimuat: {{message}}",
+    "slowServersHint": "Server publik OpenStreetMap mungkin lambat — ini bisa memakan waktu hingga satu menit."
+  },
+  "account": {
+    "notConfigured": "Akun belum dikonfigurasi — isi mobile/.env berdasarkan .env.example untuk mengaktifkan masuk.",
+    "continueGoogle": "Lanjutkan dengan Google",
+    "continueApple": "Lanjutkan dengan Apple",
+    "connectedAs": "Masuk sebagai: {{name}}",
+    "defaultName": "Akun",
+    "signOut": "Keluar",
+    "syncing": "Menyinkronkan…"
+  },
+  "login": {
+    "subtitle": "Masuk untuk melanjutkan",
+    "magicLinkSent": "Tautan masuk dikirim ke {{email}}. Buka dari ponsel ini untuk melanjutkan.",
+    "or": "atau",
+    "emailPlaceholder": "Alamat email",
+    "sendMagicLink": "Terima tautan masuk",
+    "genericError": "Terjadi kesalahan."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Deteksi jalan kaki saya bahkan saat aplikasi ditutup",
+    "backgroundTrackingDesc": "Menggunakan lokasi Anda di latar belakang (izin \"Selalu\") untuk menawarkan mengimpor jalan kaki Anda saat kembali ke aplikasi. Nonaktif secara default.",
+    "totalPoints": "total poin",
+    "today": "hari ini",
+    "thisWeek": "minggu ini",
+    "thisMonth": "bulan ini",
+    "pointsOver7Days": "Poin dalam 7 hari terakhir",
+    "segmentsDiscovered": "segmen ditemukan",
+    "kmDiscovered": "km ditemukan",
+    "sessionsLabel": "sesi",
+    "neighborhoods": "Lingkungan",
+    "noNeighborhoods": "Belum ada lingkungan yang dipetakan di area yang dimuat.",
+    "unnamedNeighborhood": "Lingkungan tanpa nama",
+    "unlocked": "Terbuka 🔓",
+    "lastSessions": "Sesi terbaru",
+    "noSessions": "Belum ada sesi",
+    "sessionImportedLabel": "{{date}} (diimpor)",
+    "minutesLabel": "{{count}} mnt",
+    "segmentCountLabel": "{{count}} segmen",
+    "pointCountLabel": "+{{count}} poin",
+    "untrackedNote": "{{count}} poin diperoleh sebelum pelacakan waktu dimulai: hanya dihitung dalam total.",
+    "language": "Bahasa",
+    "chooseLanguage": "Pilih bahasa",
+    "restartForRtl": "Tutup dan buka kembali aplikasi agar tata letak sepenuhnya menyesuaikan dengan bahasa ini."
+  },
+  "search": {
+    "title": "Cari",
+    "loginPrompt": "Masuk (tab Profil) untuk melihat papan peringkat dan mengelola teman Anda.",
+    "leaderboardTab": "Papan Peringkat",
+    "friendsTab": "Teman"
+  },
+  "leaderboard": {
+    "allPlayers": "Semua pemain",
+    "friendsScope": "Teman",
+    "noOneYet": "Belum ada siapa pun.",
+    "addFriendsPrompt": "Tambahkan teman untuk melihat peringkat mereka.",
+    "defaultPlayerName": "Pemain",
+    "youSuffix": " (Anda)",
+    "pointsCount": "{{count}} poin"
+  },
+  "friends": {
+    "searchPlaceholder": "Cari pemain berdasarkan nama pengguna…",
+    "searching": "Mencari…",
+    "noPlayerFound": "Pemain tidak ditemukan.",
+    "alreadyFriend": "Sudah berteman",
+    "pending": "Menunggu",
+    "add": "Tambah",
+    "incomingRequests": "Permintaan masuk",
+    "accept": "Terima",
+    "decline": "Tolak",
+    "friendsCount": "Teman ({{count}})",
+    "noFriendsYet": "Belum ada teman — cari nama pengguna di atas."
+  },
+  "map": {
+    "endSession": "Akhiri sesi",
+    "startSession": "Mulai sesi",
+    "hudPts": "poin",
+    "hudSegments": "segmen",
+    "hudIntersections": "persimpangan"
+  },
+  "tabbar": {
+    "adventure": "Petualangan",
+    "search": "Cari",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Progres disinkronkan ✅",
+    "syncFailed": "Sinkronisasi gagal: {{message}}",
+    "junctionsCompleted": "+{{count}} persimpangan selesai!",
+    "tooZoomedOut": "Terlalu jauh diperkecil untuk memuat area baru.",
+    "loadingInProgress": "Sudah sedang dimuat…",
+    "retryIn": "Area baru: coba lagi dalam {{seconds}} dtk…",
+    "alreadyCovered": "Area ini sudah tercakup.",
+    "newZoneLoaded": "Area baru dimuat 🗺️",
+    "zoneExpandFailed": "Area tidak dapat diperluas: {{message}}",
+    "extraZonesLoaded": "{{count}} area tambahan dimuat 🗺️",
+    "walkImported": "Jalan kaki diimpor: {{edges}} segmen baru, {{junctions}} persimpangan selesai.",
+    "backgroundTrackingEnabled": "Deteksi jalan kaki latar belakang diaktifkan.",
+    "autoSessionStarted": "Sesi dimulai secara otomatis — selamat berjalan kaki!",
+    "sessionStoppedSpeed": "Sesi dihentikan: kecepatan terlalu tinggi ({{speed}} km/jam) untuk jalan kaki.",
+    "junctionCompleted": "Persimpangan selesai! +1 poin 🎉",
+    "zoneNotLoadedYet": "Area belum dimuat — sesi akan dimulai segera setelah jaringan tersedia.",
+    "sessionStarted": "Sesi dimulai — selamat menjelajah!",
+    "sessionEnded": "Sesi berakhir ({{minutes}} mnt): {{edges}} segmen baru, {{junctions}} persimpangan selesai.",
+    "notEnoughNetwork": "Jaringan yang dimuat tidak cukup untuk simulasi.",
+    "zoneUnavailable": "Area tidak tersedia: {{message}}",
+    "segmentsInZone": "{{edges}} segmen · {{junctions}} persimpangan di area ini"
+  },
+  "alert": {
+    "walkDetectedTitle": "Jalan kaki terdeteksi",
+    "walkDetectedBody": "Jalan kaki terdeteksi saat aplikasi ditutup (~{{minutes}} mnt, {{distance}} m).\nImpor rute ini ke riwayat Anda?",
+    "ignore": "Abaikan",
+    "importAction": "Impor"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL masuk tidak tersedia.",
+    "connectionInterrupted": "Proses masuk terputus.",
+    "invalidConnectionResponse": "Respons masuk tidak valid.",
+    "timeoutSlowServers": "waktu habis (area belum pernah dihitung sebelumnya dan server OSM lambat)",
+    "serverUnreachable": "server tidak dapat dijangkau"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Aktifkan lokasi latar depan terlebih dahulu.",
+    "alwaysPermissionDenied": "Izin lokasi \"Selalu\" ditolak.",
+    "notifBody": "Deteksi jalan kaki latar belakang aktif"
+  }
+}

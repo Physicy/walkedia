@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "ลองอีกครั้ง"
+  },
+  "start": {
+    "loadingNetwork": "กำลังโหลดเครือข่ายเส้นทางเดิน…",
+    "searchingPosition": "กำลังค้นหาตำแหน่งของคุณ…",
+    "permissionDenied": "การเข้าถึงตำแหน่งถูกปฏิเสธ อนุญาตให้ Walkedia เข้าถึงตำแหน่งในการตั้งค่าโทรศัพท์ จากนั้นเริ่มแอปใหม่",
+    "timeout": "หมดเวลาในการรับตำแหน่ง ลองอีกครั้ง (สัญญาณ GPS แรกอาจช้าเมื่ออยู่ในอาคาร)",
+    "positionUnavailable": "ไม่พบตำแหน่ง ตรวจสอบว่าเปิดบริการตำแหน่งบนโทรศัพท์แล้ว และลองอีกครั้ง ควรอยู่กลางแจ้ง",
+    "zoneLoadFailed": "ไม่สามารถโหลดพื้นที่ได้: {{message}}",
+    "slowServersHint": "เซิร์ฟเวอร์ OpenStreetMap สาธารณะอาจทำงานช้า — อาจใช้เวลาถึงหนึ่งนาที"
+  },
+  "account": {
+    "notConfigured": "ยังไม่ได้ตั้งค่าบัญชี — กรอก mobile/.env โดยอ้างอิงจาก .env.example เพื่อเปิดใช้การเข้าสู่ระบบ",
+    "continueGoogle": "ดำเนินการต่อด้วย Google",
+    "continueApple": "ดำเนินการต่อด้วย Apple",
+    "connectedAs": "เข้าสู่ระบบแล้ว: {{name}}",
+    "defaultName": "บัญชี",
+    "signOut": "ออกจากระบบ",
+    "syncing": "กำลังซิงค์…"
+  },
+  "login": {
+    "subtitle": "เข้าสู่ระบบเพื่อดำเนินการต่อ",
+    "magicLinkSent": "ส่งลิงก์เข้าสู่ระบบไปที่ {{email}} แล้ว เปิดจากโทรศัพท์เครื่องนี้เพื่อดำเนินการต่อ",
+    "or": "หรือ",
+    "emailPlaceholder": "ที่อยู่อีเมล",
+    "sendMagicLink": "รับลิงก์เข้าสู่ระบบ",
+    "genericError": "เกิดข้อผิดพลาด"
+  },
+  "profile": {
+    "title": "โปรไฟล์",
+    "backgroundTrackingLabel": "ตรวจจับการเดินของฉันแม้แอปจะปิดอยู่",
+    "backgroundTrackingDesc": "ใช้ตำแหน่งของคุณในเบื้องหลัง (สิทธิ์ \"เสมอ\") เพื่อเสนอให้นำเข้าการเดินของคุณเมื่อกลับมาที่แอป ปิดอยู่โดยค่าเริ่มต้น",
+    "totalPoints": "คะแนนรวม",
+    "today": "วันนี้",
+    "thisWeek": "สัปดาห์นี้",
+    "thisMonth": "เดือนนี้",
+    "pointsOver7Days": "คะแนนใน 7 วันที่ผ่านมา",
+    "segmentsDiscovered": "ช่วงถนนที่ค้นพบ",
+    "kmDiscovered": "กม. ที่ค้นพบ",
+    "sessionsLabel": "เซสชัน",
+    "neighborhoods": "ย่าน",
+    "noNeighborhoods": "ยังไม่มีย่านที่ทำแผนที่ไว้ในพื้นที่ที่โหลดแล้ว",
+    "unnamedNeighborhood": "ย่านที่ไม่มีชื่อ",
+    "unlocked": "ปลดล็อกแล้ว 🔓",
+    "lastSessions": "เซสชันล่าสุด",
+    "noSessions": "ยังไม่มีเซสชัน",
+    "sessionImportedLabel": "{{date}} (นำเข้าแล้ว)",
+    "minutesLabel": "{{count}} นาที",
+    "segmentCountLabel": "{{count}} ช่วงถนน",
+    "pointCountLabel": "+{{count}} คะแนน",
+    "untrackedNote": "{{count}} คะแนนที่ได้รับก่อนเริ่มการติดตามเวลา: นับรวมในยอดรวมเท่านั้น",
+    "language": "ภาษา",
+    "chooseLanguage": "เลือกภาษา",
+    "restartForRtl": "ปิดและเปิดแอปใหม่เพื่อให้เลย์เอาต์ปรับให้เข้ากับภาษานี้อย่างสมบูรณ์"
+  },
+  "search": {
+    "title": "ค้นหา",
+    "loginPrompt": "เข้าสู่ระบบ (แท็บโปรไฟล์) เพื่อดูอันดับและจัดการเพื่อนของคุณ",
+    "leaderboardTab": "อันดับ",
+    "friendsTab": "เพื่อน"
+  },
+  "leaderboard": {
+    "allPlayers": "ผู้เล่นทั้งหมด",
+    "friendsScope": "เพื่อน",
+    "noOneYet": "ยังไม่มีใครเลย",
+    "addFriendsPrompt": "เพิ่มเพื่อนเพื่อดูอันดับของพวกเขา",
+    "defaultPlayerName": "ผู้เล่น",
+    "youSuffix": " (คุณ)",
+    "pointsCount": "{{count}} คะแนน"
+  },
+  "friends": {
+    "searchPlaceholder": "ค้นหาผู้เล่นด้วยชื่อผู้ใช้…",
+    "searching": "กำลังค้นหา…",
+    "noPlayerFound": "ไม่พบผู้เล่น",
+    "alreadyFriend": "เป็นเพื่อนกันแล้ว",
+    "pending": "รอดำเนินการ",
+    "add": "เพิ่ม",
+    "incomingRequests": "คำขอที่ได้รับ",
+    "accept": "ยอมรับ",
+    "decline": "ปฏิเสธ",
+    "friendsCount": "เพื่อน ({{count}})",
+    "noFriendsYet": "ยังไม่มีเพื่อน — ค้นหาชื่อผู้ใช้ด้านบน"
+  },
+  "map": {
+    "endSession": "จบเซสชัน",
+    "startSession": "เริ่มเซสชัน",
+    "hudPts": "คะแนน",
+    "hudSegments": "ช่วงถนน",
+    "hudIntersections": "ทางแยก"
+  },
+  "tabbar": {
+    "adventure": "ผจญภัย",
+    "search": "ค้นหา",
+    "profile": "โปรไฟล์"
+  },
+  "toast": {
+    "syncSuccess": "ซิงค์ความคืบหน้าแล้ว ✅",
+    "syncFailed": "ซิงค์ไม่สำเร็จ: {{message}}",
+    "junctionsCompleted": "ผ่านทางแยกแล้ว {{count}} แห่ง!",
+    "tooZoomedOut": "ซูมออกมากเกินไปที่จะโหลดพื้นที่ใหม่",
+    "loadingInProgress": "กำลังโหลดอยู่แล้ว…",
+    "retryIn": "พื้นที่ใหม่: ลองอีกครั้งใน {{seconds}} วินาที…",
+    "alreadyCovered": "พื้นที่นี้ครอบคลุมแล้ว",
+    "newZoneLoaded": "โหลดพื้นที่ใหม่แล้ว 🗺️",
+    "zoneExpandFailed": "ไม่สามารถขยายพื้นที่ได้: {{message}}",
+    "extraZonesLoaded": "โหลดพื้นที่เพิ่มเติมแล้ว {{count}} แห่ง 🗺️",
+    "walkImported": "นำเข้าการเดินแล้ว: ช่วงถนนใหม่ {{edges}} ช่วง ผ่านทางแยก {{junctions}} แห่ง",
+    "backgroundTrackingEnabled": "เปิดใช้การตรวจจับการเดินในเบื้องหลังแล้ว",
+    "autoSessionStarted": "เริ่มเซสชันโดยอัตโนมัติ — ขอให้เดินอย่างมีความสุข!",
+    "sessionStoppedSpeed": "หยุดเซสชันแล้ว: ความเร็วสูงเกินไป ({{speed}} กม./ชม.) สำหรับการเดิน",
+    "junctionCompleted": "ผ่านทางแยกแล้ว! +1 คะแนน 🎉",
+    "zoneNotLoadedYet": "ยังไม่ได้โหลดพื้นที่ — เซสชันจะเริ่มทันทีที่เครือข่ายพร้อม",
+    "sessionStarted": "เริ่มเซสชันแล้ว — ขอให้สำรวจอย่างสนุก!",
+    "sessionEnded": "จบเซสชันแล้ว ({{minutes}} นาที): ช่วงถนนใหม่ {{edges}} ช่วง ผ่านทางแยก {{junctions}} แห่ง",
+    "notEnoughNetwork": "เครือข่ายที่โหลดไว้ไม่เพียงพอสำหรับการจำลอง",
+    "zoneUnavailable": "พื้นที่ไม่พร้อมใช้งาน: {{message}}",
+    "segmentsInZone": "ในพื้นที่นี้มีช่วงถนน {{edges}} ช่วง · ทางแยก {{junctions}} แห่ง"
+  },
+  "alert": {
+    "walkDetectedTitle": "ตรวจพบการเดิน",
+    "walkDetectedBody": "ตรวจพบการเดินขณะที่แอปปิดอยู่ (~{{minutes}} นาที, {{distance}} ม.)\nต้องการนำเข้าเส้นทางนี้ไปยังประวัติของคุณหรือไม่?",
+    "ignore": "ไม่สนใจ",
+    "importAction": "นำเข้า"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "ไม่มี URL สำหรับเข้าสู่ระบบ",
+    "connectionInterrupted": "การเข้าสู่ระบบถูกขัดจังหวะ",
+    "invalidConnectionResponse": "การตอบกลับการเข้าสู่ระบบไม่ถูกต้อง",
+    "timeoutSlowServers": "หมดเวลา (ยังไม่เคยคำนวณพื้นที่นี้มาก่อนและเซิร์ฟเวอร์ OSM ทำงานช้า)",
+    "serverUnreachable": "ไม่สามารถเข้าถึงเซิร์ฟเวอร์ได้"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "เปิดใช้ตำแหน่งเบื้องหน้าก่อน",
+    "alwaysPermissionDenied": "สิทธิ์ตำแหน่ง \"เสมอ\" ถูกปฏิเสธ",
+    "notifBody": "การตรวจจับการเดินในเบื้องหลังทำงานอยู่"
+  }
+}

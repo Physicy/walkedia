@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Pokušaj ponovno"
+  },
+  "start": {
+    "loadingNetwork": "Učitavanje pješačke mreže…",
+    "searchingPosition": "Traženje tvoje pozicije…",
+    "permissionDenied": "Pristup lokaciji odbijen. Dopusti Walkediji pristup lokaciji u postavkama telefona, a zatim ponovno pokreni aplikaciju.",
+    "timeout": "Isteklo je vrijeme za dobivanje pozicije. Pokušaj ponovno (prvi GPS signal može biti spor u zatvorenom prostoru).",
+    "positionUnavailable": "Pozicija nije dostupna. Provjeri je li lokacija na telefonu uključena i pokušaj ponovno, po mogućnosti na otvorenom.",
+    "zoneLoadFailed": "Područje se nije moglo učitati: {{message}}",
+    "slowServersHint": "Javni OpenStreetMap poslužitelji mogu biti spori — to može potrajati i do minute."
+  },
+  "account": {
+    "notConfigured": "Račun nije konfiguriran — popuni mobile/.env prema .env.example kako bi omogućio(la) prijavu.",
+    "continueGoogle": "Nastavi s Googleom",
+    "continueApple": "Nastavi s Appleom",
+    "connectedAs": "Prijavljen(a): {{name}}",
+    "defaultName": "Račun",
+    "signOut": "Odjava",
+    "syncing": "Sinkronizacija…"
+  },
+  "login": {
+    "subtitle": "Prijavi se za nastavak",
+    "magicLinkSent": "Poveznica za prijavu poslana na {{email}}. Otvori je s ovog telefona za nastavak.",
+    "or": "ili",
+    "emailPlaceholder": "Adresa e-pošte",
+    "sendMagicLink": "Pošalji poveznicu za prijavu",
+    "genericError": "Došlo je do pogreške."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Otkrivaj moje šetnje čak i kad je aplikacija zatvorena",
+    "backgroundTrackingDesc": "Koristi tvoju lokaciju u pozadini (dopuštenje \"Uvijek\") kako bi ti predložila uvoz šetnji nakon povratka u aplikaciju. Zadano isključeno.",
+    "totalPoints": "bodova ukupno",
+    "today": "danas",
+    "thisWeek": "ovaj tjedan",
+    "thisMonth": "ovaj mjesec",
+    "pointsOver7Days": "Bodovi u posljednjih 7 dana",
+    "segmentsDiscovered": "otkrivenih dionica",
+    "kmDiscovered": "otkrivenih km",
+    "sessionsLabel": "sesije",
+    "neighborhoods": "Četvrti",
+    "noNeighborhoods": "U učitanim područjima još nema mapiranih četvrti.",
+    "unnamedNeighborhood": "Četvrt bez naziva",
+    "unlocked": "Otključano 🔓",
+    "lastSessions": "Posljednje sesije",
+    "noSessions": "Još nema sesija",
+    "sessionImportedLabel": "{{date}} (uvezeno)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} dionica",
+    "pointCountLabel": "+{{count}} b.",
+    "untrackedNote": "{{count}} bod(ova) ostvareno prije početka vremenskog praćenja: uračunato samo u ukupan zbroj.",
+    "language": "Jezik",
+    "chooseLanguage": "Odaberi jezik",
+    "restartForRtl": "Zatvori i ponovno otvori aplikaciju kako bi se raspored potpuno prilagodio ovom jeziku."
+  },
+  "search": {
+    "title": "Pretraga",
+    "loginPrompt": "Prijavi se (kartica Profil) za pregled ljestvice i upravljanje prijateljima.",
+    "leaderboardTab": "Ljestvica",
+    "friendsTab": "Prijatelji"
+  },
+  "leaderboard": {
+    "allPlayers": "Svi igrači",
+    "friendsScope": "Prijatelji",
+    "noOneYet": "Zasad nikoga.",
+    "addFriendsPrompt": "Dodaj prijatelje kako bi vidio(la) njihovu ljestvicu.",
+    "defaultPlayerName": "Igrač",
+    "youSuffix": " (ti)",
+    "pointsCount": "{{count}} b."
+  },
+  "friends": {
+    "searchPlaceholder": "Pretraži igrača po korisničkom imenu…",
+    "searching": "Pretraživanje…",
+    "noPlayerFound": "Nijedan igrač nije pronađen.",
+    "alreadyFriend": "Već ste prijatelji",
+    "pending": "Na čekanju",
+    "add": "Dodaj",
+    "incomingRequests": "Primljeni zahtjevi",
+    "accept": "Prihvati",
+    "decline": "Odbij",
+    "friendsCount": "Prijatelji ({{count}})",
+    "noFriendsYet": "Još nemaš prijatelja — pretraži korisničko ime iznad."
+  },
+  "map": {
+    "endSession": "Završi sesiju",
+    "startSession": "Pokreni sesiju",
+    "hudPts": "b.",
+    "hudSegments": "dionica",
+    "hudIntersections": "raskrižja"
+  },
+  "tabbar": {
+    "adventure": "Avantura",
+    "search": "Pretraga",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Napredak sinkroniziran ✅",
+    "syncFailed": "Sinkronizacija nije uspjela: {{message}}",
+    "junctionsCompleted": "+{{count}} završeno(ih) raskrižje/a!",
+    "tooZoomedOut": "Previše udaljeno za učitavanje novih područja.",
+    "loadingInProgress": "Učitavanje je već u tijeku…",
+    "retryIn": "Novo područje: pokušaj ponovno za {{seconds}}s…",
+    "alreadyCovered": "Ovo područje je već pokriveno.",
+    "newZoneLoaded": "Novo područje učitano 🗺️",
+    "zoneExpandFailed": "Područje se nije moglo proširiti: {{message}}",
+    "extraZonesLoaded": "Učitano {{count}} dodatno(ih) područje/a 🗺️",
+    "walkImported": "Šetnja uvezena: {{edges}} nova dionica, {{junctions}} završenih raskrižja.",
+    "backgroundTrackingEnabled": "Otkrivanje šetnji u pozadini uključeno.",
+    "autoSessionStarted": "Sesija automatski pokrenuta — ugodnu šetnju!",
+    "sessionStoppedSpeed": "Sesija zaustavljena: prevelika brzina ({{speed}} km/h) za šetnju.",
+    "junctionCompleted": "Raskrižje završeno! +1 bod 🎉",
+    "zoneNotLoadedYet": "Područje još nije učitano — sesija će započeti čim mreža bude dostupna.",
+    "sessionStarted": "Sesija pokrenuta — ugodno istraživanje!",
+    "sessionEnded": "Sesija završena ({{minutes}} min): {{edges}} nova dionica, {{junctions}} završenih raskrižja.",
+    "notEnoughNetwork": "Nedovoljno učitane mreže za simulaciju.",
+    "zoneUnavailable": "Područje nedostupno: {{message}}",
+    "segmentsInZone": "{{edges}} dionica · {{junctions}} raskrižja u području"
+  },
+  "alert": {
+    "walkDetectedTitle": "Šetnja otkrivena",
+    "walkDetectedBody": "Otkrivena je šetnja dok je aplikacija bila zatvorena (~{{minutes}} min, {{distance}} m).\nUvesti ovu rutu u povijest?",
+    "ignore": "Zanemari",
+    "importAction": "Uvezi"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL za prijavu nije dostupan.",
+    "connectionInterrupted": "Prijava prekinuta.",
+    "invalidConnectionResponse": "Nevažeći odgovor prijave.",
+    "timeoutSlowServers": "isteklo vrijeme (područje nikad izračunato, a OSM poslužitelji su spori)",
+    "serverUnreachable": "poslužitelj nedostupan"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Prvo uključi lokaciju u prednjem planu.",
+    "alwaysPermissionDenied": "Dopuštenje lokacije \"Uvijek\" odbijeno.",
+    "notifBody": "Otkrivanje šetnji u pozadini aktivno"
+  }
+}

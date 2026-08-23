@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { loadSavedLanguage } from './src/i18n';
 import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -12,6 +13,8 @@ import { SearchScreen } from './src/screens/SearchScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { TabBar, TabName } from './src/components/TabBar';
 import { COLORS } from './src/theme';
+
+loadSavedLanguage();
 
 function AppContent() {
   const walkedia = useWalkedia();
@@ -79,7 +82,11 @@ function AppContent() {
   if (!state.mapReady) {
     return (
       <View style={styles.fill}>
-        <StartScreen status={state.startStatus} onLocate={actions.requestLocationAndInit} />
+        <StartScreen
+          status={state.startStatus}
+          isError={state.startStatusError}
+          onLocate={actions.requestLocationAndInit}
+        />
         <StatusBar style="light" />
       </View>
     );

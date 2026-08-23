@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "إعادة المحاولة"
+  },
+  "start": {
+    "loadingNetwork": "جارٍ تحميل شبكة المشي…",
+    "searchingPosition": "جارٍ البحث عن موقعك…",
+    "permissionDenied": "تم رفض الوصول إلى الموقع. اسمح لتطبيق Walkedia بالوصول إلى الموقع من إعدادات الهاتف، ثم أعد تشغيل التطبيق.",
+    "timeout": "انتهت مهلة الحصول على الموقع. أعد المحاولة (قد تكون أول إشارة GPS بطيئة داخل المباني).",
+    "positionUnavailable": "الموقع غير متاح. تحقق من تفعيل خدمة الموقع في هاتفك وأعد المحاولة، ويُفضّل في الخارج.",
+    "zoneLoadFailed": "تعذّر تحميل المنطقة: {{message}}",
+    "slowServersHint": "قد تكون خوادم OpenStreetMap العامة بطيئة — قد يستغرق هذا حتى دقيقة واحدة."
+  },
+  "account": {
+    "notConfigured": "الحساب غير مُهيَّأ — املأ ملف mobile/.env استنادًا إلى .env.example لتفعيل تسجيل الدخول.",
+    "continueGoogle": "المتابعة باستخدام Google",
+    "continueApple": "المتابعة باستخدام Apple",
+    "connectedAs": "تم تسجيل الدخول: {{name}}",
+    "defaultName": "الحساب",
+    "signOut": "تسجيل الخروج",
+    "syncing": "جارٍ المزامنة…"
+  },
+  "login": {
+    "subtitle": "سجّل الدخول للمتابعة",
+    "magicLinkSent": "تم إرسال رابط تسجيل الدخول إلى {{email}}. افتحه من هذا الهاتف للمتابعة.",
+    "or": "أو",
+    "emailPlaceholder": "عنوان البريد الإلكتروني",
+    "sendMagicLink": "استلام رابط تسجيل الدخول",
+    "genericError": "حدث خطأ ما."
+  },
+  "profile": {
+    "title": "الملف الشخصي",
+    "backgroundTrackingLabel": "رصد نزهاتي حتى عندما يكون التطبيق مغلقًا",
+    "backgroundTrackingDesc": "يستخدم موقعك في الخلفية (إذن \"دائمًا\") لاقتراح استيراد نزهاتك عند عودتك إلى التطبيق. معطّل افتراضيًا.",
+    "totalPoints": "إجمالي النقاط",
+    "today": "اليوم",
+    "thisWeek": "هذا الأسبوع",
+    "thisMonth": "هذا الشهر",
+    "pointsOver7Days": "النقاط خلال 7 أيام",
+    "segmentsDiscovered": "المقاطع المكتشفة",
+    "kmDiscovered": "الكيلومترات المكتشفة",
+    "sessionsLabel": "الجلسات",
+    "neighborhoods": "الأحياء",
+    "noNeighborhoods": "لا توجد أحياء مُخطَّطة بعد في المناطق المُحمَّلة.",
+    "unnamedNeighborhood": "حي بلا اسم",
+    "unlocked": "مفتوح 🔓",
+    "lastSessions": "آخر الجلسات",
+    "noSessions": "لا توجد جلسات بعد",
+    "sessionImportedLabel": "{{date}} (مستوردة)",
+    "minutesLabel": "{{count}} دقيقة",
+    "segmentCountLabel": "{{count}} مقطع",
+    "pointCountLabel": "+{{count}} نقطة",
+    "untrackedNote": "تم اكتساب {{count}} نقطة قبل بدء تتبع الوقت: تُحتسب ضمن الإجمالي فقط.",
+    "language": "اللغة",
+    "chooseLanguage": "اختيار اللغة",
+    "restartForRtl": "أغلق التطبيق وأعد فتحه ليتكيّف التخطيط بالكامل مع هذه اللغة."
+  },
+  "search": {
+    "title": "بحث",
+    "loginPrompt": "سجّل الدخول (علامة تبويب الملف الشخصي) لعرض لوحة المتصدرين وإدارة أصدقائك.",
+    "leaderboardTab": "لوحة المتصدرين",
+    "friendsTab": "الأصدقاء"
+  },
+  "leaderboard": {
+    "allPlayers": "جميع اللاعبين",
+    "friendsScope": "الأصدقاء",
+    "noOneYet": "لا يوجد أحد بعد.",
+    "addFriendsPrompt": "أضف أصدقاء لعرض ترتيبهم.",
+    "defaultPlayerName": "لاعب",
+    "youSuffix": " (أنت)",
+    "pointsCount": "{{count}} نقطة"
+  },
+  "friends": {
+    "searchPlaceholder": "ابحث عن لاعب باسم المستخدم…",
+    "searching": "جارٍ البحث…",
+    "noPlayerFound": "لم يتم العثور على لاعب.",
+    "alreadyFriend": "صديق بالفعل",
+    "pending": "قيد الانتظار",
+    "add": "إضافة",
+    "incomingRequests": "الطلبات الواردة",
+    "accept": "قبول",
+    "decline": "رفض",
+    "friendsCount": "الأصدقاء ({{count}})",
+    "noFriendsYet": "لا يوجد أصدقاء بعد — ابحث عن اسم مستخدم أعلاه."
+  },
+  "map": {
+    "endSession": "إنهاء الجلسة",
+    "startSession": "بدء جلسة",
+    "hudPts": "نقطة",
+    "hudSegments": "مقاطع",
+    "hudIntersections": "تقاطعات"
+  },
+  "tabbar": {
+    "adventure": "مغامرة",
+    "search": "بحث",
+    "profile": "الملف الشخصي"
+  },
+  "toast": {
+    "syncSuccess": "تمت مزامنة التقدّم ✅",
+    "syncFailed": "فشلت المزامنة: {{message}}",
+    "junctionsCompleted": "تم إكمال {{count}} تقاطع!",
+    "tooZoomedOut": "التكبير مصغّر جدًا لتحميل مناطق جديدة.",
+    "loadingInProgress": "جارٍ التحميل بالفعل…",
+    "retryIn": "منطقة جديدة: أعد المحاولة خلال {{seconds}} ثانية…",
+    "alreadyCovered": "هذه المنطقة مغطّاة بالفعل.",
+    "newZoneLoaded": "تم تحميل منطقة جديدة 🗺️",
+    "zoneExpandFailed": "تعذّر توسيع المنطقة: {{message}}",
+    "extraZonesLoaded": "تم تحميل {{count}} منطقة إضافية 🗺️",
+    "walkImported": "تم استيراد النزهة: {{edges}} مقطع جديد، {{junctions}} تقاطع مكتمل.",
+    "backgroundTrackingEnabled": "تم تفعيل رصد النزهات في الخلفية.",
+    "autoSessionStarted": "بدأت الجلسة تلقائيًا — نزهة سعيدة!",
+    "sessionStoppedSpeed": "تم إيقاف الجلسة: السرعة مرتفعة جدًا ({{speed}} كم/سا) لتُعتبر مشيًا.",
+    "junctionCompleted": "تم إكمال التقاطع! +1 نقطة 🎉",
+    "zoneNotLoadedYet": "المنطقة غير محمَّلة بعد — ستبدأ الجلسة بمجرد توفر الشبكة.",
+    "sessionStarted": "بدأت الجلسة — استكشافًا ممتعًا!",
+    "sessionEnded": "انتهت الجلسة ({{minutes}} دقيقة): {{edges}} مقطع جديد، {{junctions}} تقاطع مكتمل.",
+    "notEnoughNetwork": "الشبكة المحمَّلة غير كافية للمحاكاة.",
+    "zoneUnavailable": "المنطقة غير متاحة: {{message}}",
+    "segmentsInZone": "{{edges}} مقطعًا · {{junctions}} تقاطعًا في المنطقة"
+  },
+  "alert": {
+    "walkDetectedTitle": "تم رصد نزهة",
+    "walkDetectedBody": "تم رصد نزهة أثناء إغلاق التطبيق (~{{minutes}} دقيقة، {{distance}} م).\nهل تريد استيراد هذا المسار إلى سجلّك؟",
+    "ignore": "تجاهل",
+    "importAction": "استيراد"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "رابط تسجيل الدخول غير متاح.",
+    "connectionInterrupted": "تم مقاطعة تسجيل الدخول.",
+    "invalidConnectionResponse": "استجابة تسجيل دخول غير صالحة.",
+    "timeoutSlowServers": "انتهت المهلة (لم يتم احتساب هذه المنطقة من قبل وخوادم OSM بطيئة)",
+    "serverUnreachable": "تعذّر الوصول إلى الخادم"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "فعّل أولًا تحديد الموقع في الواجهة الأمامية.",
+    "alwaysPermissionDenied": "تم رفض إذن الموقع \"دائمًا\".",
+    "notifBody": "رصد النزهات في الخلفية مفعّل"
+  }
+}

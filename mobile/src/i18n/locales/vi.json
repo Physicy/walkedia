@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Thử lại"
+  },
+  "start": {
+    "loadingNetwork": "Đang tải mạng lưới đi bộ…",
+    "searchingPosition": "Đang tìm vị trí của bạn…",
+    "permissionDenied": "Quyền truy cập vị trí bị từ chối. Cho phép Walkedia truy cập vị trí trong cài đặt điện thoại, sau đó khởi động lại ứng dụng.",
+    "timeout": "Hết thời gian chờ lấy vị trí. Hãy thử lại (tín hiệu GPS đầu tiên có thể chậm khi ở trong nhà).",
+    "positionUnavailable": "Không có vị trí. Kiểm tra xem định vị trên điện thoại đã bật chưa và thử lại, tốt nhất là ở ngoài trời.",
+    "zoneLoadFailed": "Không thể tải khu vực: {{message}}",
+    "slowServersHint": "Máy chủ OpenStreetMap công cộng có thể chậm — việc này có thể mất đến một phút."
+  },
+  "account": {
+    "notConfigured": "Tài khoản chưa được cấu hình — điền mobile/.env dựa trên .env.example để bật đăng nhập.",
+    "continueGoogle": "Tiếp tục với Google",
+    "continueApple": "Tiếp tục với Apple",
+    "connectedAs": "Đã đăng nhập: {{name}}",
+    "defaultName": "Tài khoản",
+    "signOut": "Đăng xuất",
+    "syncing": "Đang đồng bộ…"
+  },
+  "login": {
+    "subtitle": "Đăng nhập để tiếp tục",
+    "magicLinkSent": "Liên kết đăng nhập đã được gửi tới {{email}}. Mở liên kết đó từ điện thoại này để tiếp tục.",
+    "or": "hoặc",
+    "emailPlaceholder": "Địa chỉ email",
+    "sendMagicLink": "Nhận liên kết đăng nhập",
+    "genericError": "Đã xảy ra lỗi."
+  },
+  "profile": {
+    "title": "Hồ sơ",
+    "backgroundTrackingLabel": "Phát hiện các buổi đi bộ của tôi ngay cả khi ứng dụng đóng",
+    "backgroundTrackingDesc": "Sử dụng vị trí của bạn ở chế độ nền (quyền \"Luôn cho phép\") để đề xuất nhập các buổi đi bộ khi bạn quay lại ứng dụng. Mặc định tắt.",
+    "totalPoints": "tổng điểm",
+    "today": "hôm nay",
+    "thisWeek": "tuần này",
+    "thisMonth": "tháng này",
+    "pointsOver7Days": "Điểm trong 7 ngày qua",
+    "segmentsDiscovered": "đoạn đường đã khám phá",
+    "kmDiscovered": "km đã khám phá",
+    "sessionsLabel": "phiên",
+    "neighborhoods": "Khu phố",
+    "noNeighborhoods": "Chưa có khu phố nào được lập bản đồ trong các khu vực đã tải.",
+    "unnamedNeighborhood": "Khu phố chưa đặt tên",
+    "unlocked": "Đã mở khóa 🔓",
+    "lastSessions": "Các phiên gần đây",
+    "noSessions": "Chưa có phiên nào",
+    "sessionImportedLabel": "{{date}} (đã nhập)",
+    "minutesLabel": "{{count}} phút",
+    "segmentCountLabel": "{{count}} đoạn đường",
+    "pointCountLabel": "+{{count}} điểm",
+    "untrackedNote": "{{count}} điểm đạt được trước khi bắt đầu theo dõi thời gian: chỉ được tính vào tổng số.",
+    "language": "Ngôn ngữ",
+    "chooseLanguage": "Chọn ngôn ngữ",
+    "restartForRtl": "Đóng và mở lại ứng dụng để bố cục thích ứng hoàn toàn với ngôn ngữ này."
+  },
+  "search": {
+    "title": "Tìm kiếm",
+    "loginPrompt": "Đăng nhập (thẻ Hồ sơ) để xem bảng xếp hạng và quản lý bạn bè của bạn.",
+    "leaderboardTab": "Bảng xếp hạng",
+    "friendsTab": "Bạn bè"
+  },
+  "leaderboard": {
+    "allPlayers": "Tất cả người chơi",
+    "friendsScope": "Bạn bè",
+    "noOneYet": "Chưa có ai cả.",
+    "addFriendsPrompt": "Thêm bạn bè để xem thứ hạng của họ.",
+    "defaultPlayerName": "Người chơi",
+    "youSuffix": " (bạn)",
+    "pointsCount": "{{count}} điểm"
+  },
+  "friends": {
+    "searchPlaceholder": "Tìm người chơi theo tên người dùng…",
+    "searching": "Đang tìm kiếm…",
+    "noPlayerFound": "Không tìm thấy người chơi nào.",
+    "alreadyFriend": "Đã là bạn bè",
+    "pending": "Đang chờ",
+    "add": "Thêm",
+    "incomingRequests": "Lời mời đã nhận",
+    "accept": "Chấp nhận",
+    "decline": "Từ chối",
+    "friendsCount": "Bạn bè ({{count}})",
+    "noFriendsYet": "Chưa có bạn bè nào — tìm một tên người dùng ở trên."
+  },
+  "map": {
+    "endSession": "Kết thúc phiên",
+    "startSession": "Bắt đầu phiên",
+    "hudPts": "điểm",
+    "hudSegments": "đoạn đường",
+    "hudIntersections": "giao lộ"
+  },
+  "tabbar": {
+    "adventure": "Phiêu lưu",
+    "search": "Tìm kiếm",
+    "profile": "Hồ sơ"
+  },
+  "toast": {
+    "syncSuccess": "Tiến trình đã được đồng bộ ✅",
+    "syncFailed": "Đồng bộ thất bại: {{message}}",
+    "junctionsCompleted": "Đã hoàn thành {{count}} giao lộ!",
+    "tooZoomedOut": "Đã thu nhỏ quá mức để tải khu vực mới.",
+    "loadingInProgress": "Đang tải rồi…",
+    "retryIn": "Khu vực mới: thử lại sau {{seconds}} giây…",
+    "alreadyCovered": "Khu vực này đã được bao phủ.",
+    "newZoneLoaded": "Đã tải khu vực mới 🗺️",
+    "zoneExpandFailed": "Không thể mở rộng khu vực: {{message}}",
+    "extraZonesLoaded": "Đã tải thêm {{count}} khu vực 🗺️",
+    "walkImported": "Đã nhập buổi đi bộ: {{edges}} đoạn đường mới, {{junctions}} giao lộ đã hoàn thành.",
+    "backgroundTrackingEnabled": "Đã bật phát hiện đi bộ ở chế độ nền.",
+    "autoSessionStarted": "Phiên đã tự động bắt đầu — chúc bạn đi bộ vui vẻ!",
+    "sessionStoppedSpeed": "Phiên đã dừng: tốc độ quá cao ({{speed}} km/h) để coi là đi bộ.",
+    "junctionCompleted": "Đã hoàn thành giao lộ! +1 điểm 🎉",
+    "zoneNotLoadedYet": "Khu vực chưa được tải — phiên sẽ bắt đầu ngay khi có mạng lưới.",
+    "sessionStarted": "Phiên đã bắt đầu — chúc bạn khám phá vui vẻ!",
+    "sessionEnded": "Phiên đã kết thúc ({{minutes}} phút): {{edges}} đoạn đường mới, {{junctions}} giao lộ đã hoàn thành.",
+    "notEnoughNetwork": "Không đủ mạng lưới đã tải để mô phỏng.",
+    "zoneUnavailable": "Khu vực không khả dụng: {{message}}",
+    "segmentsInZone": "{{edges}} đoạn đường · {{junctions}} giao lộ trong khu vực"
+  },
+  "alert": {
+    "walkDetectedTitle": "Đã phát hiện buổi đi bộ",
+    "walkDetectedBody": "Đã phát hiện một buổi đi bộ trong khi ứng dụng đóng (~{{minutes}} phút, {{distance}} m).\nBạn có muốn nhập lộ trình này vào lịch sử không?",
+    "ignore": "Bỏ qua",
+    "importAction": "Nhập"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL đăng nhập không khả dụng.",
+    "connectionInterrupted": "Đăng nhập bị gián đoạn.",
+    "invalidConnectionResponse": "Phản hồi đăng nhập không hợp lệ.",
+    "timeoutSlowServers": "hết thời gian chờ (khu vực chưa từng được tính toán trước đó và máy chủ OSM chậm)",
+    "serverUnreachable": "không thể kết nối đến máy chủ"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Trước tiên hãy bật định vị ở chế độ nền trước (foreground).",
+    "alwaysPermissionDenied": "Quyền vị trí \"Luôn cho phép\" đã bị từ chối.",
+    "notifBody": "Phát hiện đi bộ ở chế độ nền đang hoạt động"
+  }
+}

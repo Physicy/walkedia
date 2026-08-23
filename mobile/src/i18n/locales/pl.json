@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Spróbuj ponownie"
+  },
+  "start": {
+    "loadingNetwork": "Wczytywanie sieci pieszej…",
+    "searchingPosition": "Wyszukiwanie Twojej pozycji…",
+    "permissionDenied": "Odmówiono dostępu do lokalizacji. Zezwól aplikacji Walkedia na dostęp do lokalizacji w ustawieniach telefonu, a następnie uruchom aplikację ponownie.",
+    "timeout": "Przekroczono czas oczekiwania na pozycję. Spróbuj ponownie (pierwszy odczyt GPS może być wolny w pomieszczeniach).",
+    "positionUnavailable": "Pozycja niedostępna. Sprawdź, czy lokalizacja w telefonie jest włączona, i spróbuj ponownie, najlepiej na zewnątrz.",
+    "zoneLoadFailed": "Nie udało się wczytać obszaru: {{message}}",
+    "slowServersHint": "Publiczne serwery OpenStreetMap mogą działać wolno — może to potrwać nawet minutę."
+  },
+  "account": {
+    "notConfigured": "Konto nieskonfigurowane — uzupełnij mobile/.env na podstawie .env.example, aby włączyć logowanie.",
+    "continueGoogle": "Kontynuuj z Google",
+    "continueApple": "Kontynuuj z Apple",
+    "connectedAs": "Zalogowano: {{name}}",
+    "defaultName": "Konto",
+    "signOut": "Wyloguj się",
+    "syncing": "Synchronizowanie…"
+  },
+  "login": {
+    "subtitle": "Zaloguj się, aby kontynuować",
+    "magicLinkSent": "Link logowania wysłany na {{email}}. Otwórz go z tego telefonu, aby kontynuować.",
+    "or": "lub",
+    "emailPlaceholder": "Adres e-mail",
+    "sendMagicLink": "Otrzymaj link logowania",
+    "genericError": "Wystąpił błąd."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Wykrywaj moje spacery nawet przy zamkniętej aplikacji",
+    "backgroundTrackingDesc": "Wykorzystuje Twoją lokalizację w tle (uprawnienie \"Zawsze\"), aby zaproponować import Twoich spacerów po powrocie do aplikacji. Domyślnie wyłączone.",
+    "totalPoints": "punktów łącznie",
+    "today": "dzisiaj",
+    "thisWeek": "w tym tygodniu",
+    "thisMonth": "w tym miesiącu",
+    "pointsOver7Days": "Punkty z ostatnich 7 dni",
+    "segmentsDiscovered": "odkrytych odcinków",
+    "kmDiscovered": "odkrytych km",
+    "sessionsLabel": "sesje",
+    "neighborhoods": "Dzielnice",
+    "noNeighborhoods": "W wczytanych obszarach nie ma jeszcze zmapowanych dzielnic.",
+    "unnamedNeighborhood": "Dzielnica bez nazwy",
+    "unlocked": "Odblokowane 🔓",
+    "lastSessions": "Ostatnie sesje",
+    "noSessions": "Brak sesji na razie",
+    "sessionImportedLabel": "{{date}} (zaimportowana)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} odcinek/odcinki/odcinków",
+    "pointCountLabel": "+{{count}} pkt",
+    "untrackedNote": "{{count}} punkt(y/ów) zdobyte przed rozpoczęciem śledzenia czasu: liczone tylko w sumie łącznej.",
+    "language": "Język",
+    "chooseLanguage": "Wybierz język",
+    "restartForRtl": "Zamknij i uruchom aplikację ponownie, aby układ w pełni dostosował się do tego języka."
+  },
+  "search": {
+    "title": "Szukaj",
+    "loginPrompt": "Zaloguj się (zakładka Profil), aby zobaczyć ranking i zarządzać znajomymi.",
+    "leaderboardTab": "Ranking",
+    "friendsTab": "Znajomi"
+  },
+  "leaderboard": {
+    "allPlayers": "Wszyscy gracze",
+    "friendsScope": "Znajomi",
+    "noOneYet": "Na razie nikogo.",
+    "addFriendsPrompt": "Dodaj znajomych, aby zobaczyć ich ranking.",
+    "defaultPlayerName": "Gracz",
+    "youSuffix": " (Ty)",
+    "pointsCount": "{{count}} pkt"
+  },
+  "friends": {
+    "searchPlaceholder": "Szukaj gracza po nazwie użytkownika…",
+    "searching": "Szukanie…",
+    "noPlayerFound": "Nie znaleziono gracza.",
+    "alreadyFriend": "Już znajomi",
+    "pending": "Oczekujące",
+    "add": "Dodaj",
+    "incomingRequests": "Otrzymane zaproszenia",
+    "accept": "Akceptuj",
+    "decline": "Odrzuć",
+    "friendsCount": "Znajomi ({{count}})",
+    "noFriendsYet": "Nie masz jeszcze znajomych — wyszukaj nazwę użytkownika powyżej."
+  },
+  "map": {
+    "endSession": "Zakończ sesję",
+    "startSession": "Rozpocznij sesję",
+    "hudPts": "pkt",
+    "hudSegments": "odcinków",
+    "hudIntersections": "skrzyżowań"
+  },
+  "tabbar": {
+    "adventure": "Przygoda",
+    "search": "Szukaj",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Postęp zsynchronizowany ✅",
+    "syncFailed": "Synchronizacja nieudana: {{message}}",
+    "junctionsCompleted": "+{{count}} ukończone skrzyżowanie/a!",
+    "tooZoomedOut": "Zbyt duże oddalenie, aby wczytać nowe obszary.",
+    "loadingInProgress": "Wczytywanie już trwa…",
+    "retryIn": "Nowy obszar: spróbuj ponownie za {{seconds}}s…",
+    "alreadyCovered": "Ten obszar jest już objęty zasięgiem.",
+    "newZoneLoaded": "Wczytano nowy obszar 🗺️",
+    "zoneExpandFailed": "Nie udało się rozszerzyć obszaru: {{message}}",
+    "extraZonesLoaded": "Wczytano {{count}} dodatkowy(ch) obszar(ów) 🗺️",
+    "walkImported": "Zaimportowano spacer: {{edges}} nowy(ch) odcinek/ów, {{junctions}} ukończone skrzyżowanie/a.",
+    "backgroundTrackingEnabled": "Włączono wykrywanie spacerów w tle.",
+    "autoSessionStarted": "Sesja rozpoczęta automatycznie — udanego spaceru!",
+    "sessionStoppedSpeed": "Sesja zatrzymana: zbyt duża prędkość ({{speed}} km/h) jak na spacer.",
+    "junctionCompleted": "Skrzyżowanie ukończone! +1 punkt 🎉",
+    "zoneNotLoadedYet": "Obszar jeszcze nie wczytany — sesja rozpocznie się, gdy tylko sieć będzie dostępna.",
+    "sessionStarted": "Sesja rozpoczęta — udanej eksploracji!",
+    "sessionEnded": "Sesja zakończona ({{minutes}} min): {{edges}} nowy(ch) odcinek/ów, {{junctions}} ukończone skrzyżowanie/a.",
+    "notEnoughNetwork": "Za mało wczytanej sieci, aby przeprowadzić symulację.",
+    "zoneUnavailable": "Obszar niedostępny: {{message}}",
+    "segmentsInZone": "{{edges}} odcinków · {{junctions}} skrzyżowań w obszarze"
+  },
+  "alert": {
+    "walkDetectedTitle": "Wykryto spacer",
+    "walkDetectedBody": "Wykryto spacer, gdy aplikacja była zamknięta (~{{minutes}} min, {{distance}} m).\nZaimportować tę trasę do historii?",
+    "ignore": "Zignoruj",
+    "importAction": "Importuj"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Adres URL logowania niedostępny.",
+    "connectionInterrupted": "Logowanie przerwane.",
+    "invalidConnectionResponse": "Nieprawidłowa odpowiedź logowania.",
+    "timeoutSlowServers": "przekroczono czas oczekiwania (obszar nigdy nieobliczony, a serwery OSM są wolne)",
+    "serverUnreachable": "serwer nieosiągalny"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Najpierw włącz lokalizację na pierwszym planie.",
+    "alwaysPermissionDenied": "Odmówiono uprawnienia lokalizacji \"Zawsze\".",
+    "notifBody": "Wykrywanie spacerów w tle aktywne"
+  }
+}

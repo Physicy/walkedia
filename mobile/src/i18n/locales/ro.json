@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Reîncearcă"
+  },
+  "start": {
+    "loadingNetwork": "Se încarcă rețeaua pietonală…",
+    "searchingPosition": "Se caută poziția ta…",
+    "permissionDenied": "Accesul la locație a fost refuzat. Permite locația pentru Walkedia în setările telefonului, apoi repornește aplicația.",
+    "timeout": "Timp expirat la obținerea poziției. Încearcă din nou (primul semnal GPS poate fi lent în interior).",
+    "positionUnavailable": "Poziție indisponibilă. Verifică dacă locația telefonului este activată și încearcă din nou, de preferință în aer liber.",
+    "zoneLoadFailed": "Zona nu a putut fi încărcată: {{message}}",
+    "slowServersHint": "Serverele publice OpenStreetMap pot fi lente — poate dura până la un minut."
+  },
+  "account": {
+    "notConfigured": "Cont neconfigurat — completează mobile/.env pornind de la .env.example pentru a activa autentificarea.",
+    "continueGoogle": "Continuă cu Google",
+    "continueApple": "Continuă cu Apple",
+    "connectedAs": "Conectat: {{name}}",
+    "defaultName": "Cont",
+    "signOut": "Deconectare",
+    "syncing": "Se sincronizează…"
+  },
+  "login": {
+    "subtitle": "Autentifică-te pentru a continua",
+    "magicLinkSent": "Link de autentificare trimis la {{email}}. Deschide-l de pe acest telefon pentru a continua.",
+    "or": "sau",
+    "emailPlaceholder": "Adresă de e-mail",
+    "sendMagicLink": "Primește un link de autentificare",
+    "genericError": "A apărut o eroare."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Detectează plimbările mele chiar și cu aplicația închisă",
+    "backgroundTrackingDesc": "Folosește locația ta în fundal (permisiunea \"Întotdeauna\") pentru a-ți propune să imporți plimbările la revenirea în aplicație. Dezactivat implicit.",
+    "totalPoints": "puncte în total",
+    "today": "astăzi",
+    "thisWeek": "săptămâna aceasta",
+    "thisMonth": "luna aceasta",
+    "pointsOver7Days": "Puncte în ultimele 7 zile",
+    "segmentsDiscovered": "segmente descoperite",
+    "kmDiscovered": "km descoperiți",
+    "sessionsLabel": "sesiuni",
+    "neighborhoods": "Cartiere",
+    "noNeighborhoods": "Niciun cartier cartografiat încă în zonele încărcate.",
+    "unnamedNeighborhood": "Cartier fără nume",
+    "unlocked": "Deblocat 🔓",
+    "lastSessions": "Ultimele sesiuni",
+    "noSessions": "Nicio sesiune încă",
+    "sessionImportedLabel": "{{date}} (importată)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} segment(e)",
+    "pointCountLabel": "+{{count}} pct",
+    "untrackedNote": "{{count}} punct(e) obținute înainte de urmărirea temporală: contorizate doar în total.",
+    "language": "Limbă",
+    "chooseLanguage": "Alege limba",
+    "restartForRtl": "Închide și redeschide aplicația pentru ca aspectul să se adapteze complet la această limbă."
+  },
+  "search": {
+    "title": "Căutare",
+    "loginPrompt": "Autentifică-te (fila Profil) pentru a vedea clasamentul și a-ți gestiona prietenii.",
+    "leaderboardTab": "Clasament",
+    "friendsTab": "Prieteni"
+  },
+  "leaderboard": {
+    "allPlayers": "Toți jucătorii",
+    "friendsScope": "Prieteni",
+    "noOneYet": "Deocamdată nimeni.",
+    "addFriendsPrompt": "Adaugă prieteni pentru a le vedea clasamentul.",
+    "defaultPlayerName": "Jucător",
+    "youSuffix": " (tu)",
+    "pointsCount": "{{count}} pct"
+  },
+  "friends": {
+    "searchPlaceholder": "Caută un jucător după numele de utilizator…",
+    "searching": "Se caută…",
+    "noPlayerFound": "Niciun jucător găsit.",
+    "alreadyFriend": "Deja prieteni",
+    "pending": "În așteptare",
+    "add": "Adaugă",
+    "incomingRequests": "Cereri primite",
+    "accept": "Acceptă",
+    "decline": "Refuză",
+    "friendsCount": "Prieteni ({{count}})",
+    "noFriendsYet": "Niciun prieten încă — caută un nume de utilizator mai sus."
+  },
+  "map": {
+    "endSession": "Încheie sesiunea",
+    "startSession": "Începe o sesiune",
+    "hudPts": "pct",
+    "hudSegments": "segmente",
+    "hudIntersections": "intersecții"
+  },
+  "tabbar": {
+    "adventure": "Aventură",
+    "search": "Căutare",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Progres sincronizat ✅",
+    "syncFailed": "Sincronizare eșuată: {{message}}",
+    "junctionsCompleted": "+{{count}} intersecție(i) completată(e)!",
+    "tooZoomedOut": "Prea depărtat pentru a încărca zone noi.",
+    "loadingInProgress": "Se încarcă deja…",
+    "retryIn": "Zonă nouă: reîncearcă în {{seconds}}s…",
+    "alreadyCovered": "Această zonă este deja acoperită.",
+    "newZoneLoaded": "Zonă nouă încărcată 🗺️",
+    "zoneExpandFailed": "Zona nu a putut fi extinsă: {{message}}",
+    "extraZonesLoaded": "{{count}} zonă(e) suplimentară(e) încărcată(e) 🗺️",
+    "walkImported": "Plimbare importată: {{edges}} segment(e) nou(i), {{junctions}} intersecție(i) completată(e).",
+    "backgroundTrackingEnabled": "Detectarea plimbărilor în fundal a fost activată.",
+    "autoSessionStarted": "Sesiune pornită automat — plimbare plăcută!",
+    "sessionStoppedSpeed": "Sesiune oprită: viteză prea mare ({{speed}} km/h) pentru mers pe jos.",
+    "junctionCompleted": "Intersecție completată! +1 punct 🎉",
+    "zoneNotLoadedYet": "Zonă neîncărcată încă — sesiunea va porni de îndată ce rețeaua va fi disponibilă.",
+    "sessionStarted": "Sesiune pornită — explorare plăcută!",
+    "sessionEnded": "Sesiune încheiată ({{minutes}} min): {{edges}} segment(e) nou(i), {{junctions}} intersecție(i) completată(e).",
+    "notEnoughNetwork": "Rețea încărcată insuficientă pentru simulare.",
+    "zoneUnavailable": "Zonă indisponibilă: {{message}}",
+    "segmentsInZone": "{{edges}} segmente · {{junctions}} intersecții în zonă"
+  },
+  "alert": {
+    "walkDetectedTitle": "Plimbare detectată",
+    "walkDetectedBody": "A fost detectată o plimbare cât timp aplicația era închisă (~{{minutes}} min, {{distance}} m).\nImporți acest traseu în istoric?",
+    "ignore": "Ignoră",
+    "importAction": "Importă"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL de autentificare indisponibil.",
+    "connectionInterrupted": "Autentificare întreruptă.",
+    "invalidConnectionResponse": "Răspuns de autentificare invalid.",
+    "timeoutSlowServers": "timp expirat (zonă niciodată calculată și servere OSM lente)",
+    "serverUnreachable": "server inaccesibil"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Activează mai întâi localizarea în prim-plan.",
+    "alwaysPermissionDenied": "Permisiunea de locație \"Întotdeauna\" a fost refuzată.",
+    "notifBody": "Detectarea plimbărilor în fundal este activă"
+  }
+}

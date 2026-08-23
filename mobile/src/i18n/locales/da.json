@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Prøv igen"
+  },
+  "start": {
+    "loadingNetwork": "Indlæser gangstinettet…",
+    "searchingPosition": "Finder din position…",
+    "permissionDenied": "Adgang til placering nægtet. Tillad placering for Walkedia i telefonens indstillinger, og genstart derefter appen.",
+    "timeout": "Timeout ved hentning af position. Prøv igen (den første GPS-fix kan være langsom indendørs).",
+    "positionUnavailable": "Position ikke tilgængelig. Tjek at placering er aktiveret på telefonen, og prøv igen, helst udendørs.",
+    "zoneLoadFailed": "Kunne ikke indlæse området: {{message}}",
+    "slowServersHint": "Offentlige OpenStreetMap-servere kan være langsomme — det kan tage op til et minut."
+  },
+  "account": {
+    "notConfigured": "Konto ikke konfigureret — udfyld mobile/.env ud fra .env.example for at aktivere login.",
+    "continueGoogle": "Fortsæt med Google",
+    "continueApple": "Fortsæt med Apple",
+    "connectedAs": "Logget ind: {{name}}",
+    "defaultName": "Konto",
+    "signOut": "Log ud",
+    "syncing": "Synkroniserer…"
+  },
+  "login": {
+    "subtitle": "Log ind for at fortsætte",
+    "magicLinkSent": "Login-link sendt til {{email}}. Åbn det fra denne telefon for at fortsætte.",
+    "or": "eller",
+    "emailPlaceholder": "E-mailadresse",
+    "sendMagicLink": "Modtag et login-link",
+    "genericError": "Der opstod en fejl."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Registrer mine gåture, selv når appen er lukket",
+    "backgroundTrackingDesc": "Bruger din placering i baggrunden (tilladelsen \"Altid\") for at foreslå import af dine gåture, når du vender tilbage til appen. Slået fra som standard.",
+    "totalPoints": "point i alt",
+    "today": "i dag",
+    "thisWeek": "denne uge",
+    "thisMonth": "denne måned",
+    "pointsOver7Days": "Point over 7 dage",
+    "segmentsDiscovered": "opdagede strækninger",
+    "kmDiscovered": "opdagede km",
+    "sessionsLabel": "sessioner",
+    "neighborhoods": "Kvarterer",
+    "noNeighborhoods": "Ingen kvarterer kortlagt endnu i de indlæste områder.",
+    "unnamedNeighborhood": "Unavngivet kvarter",
+    "unlocked": "Låst op 🔓",
+    "lastSessions": "Seneste sessioner",
+    "noSessions": "Ingen sessioner endnu",
+    "sessionImportedLabel": "{{date}} (importeret)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} strækning(er)",
+    "pointCountLabel": "+{{count}} p.",
+    "untrackedNote": "{{count}} point optjent før tidsregistreringen startede: tælles kun med i totalen.",
+    "language": "Sprog",
+    "chooseLanguage": "Vælg sprog",
+    "restartForRtl": "Luk og genåbn appen, så layoutet tilpasser sig dette sprog fuldt ud."
+  },
+  "search": {
+    "title": "Søg",
+    "loginPrompt": "Log ind (fanen Profil) for at se ranglisten og administrere dine venner.",
+    "leaderboardTab": "Rangliste",
+    "friendsTab": "Venner"
+  },
+  "leaderboard": {
+    "allPlayers": "Alle spillere",
+    "friendsScope": "Venner",
+    "noOneYet": "Ingen endnu.",
+    "addFriendsPrompt": "Tilføj venner for at se deres placering.",
+    "defaultPlayerName": "Spiller",
+    "youSuffix": " (dig)",
+    "pointsCount": "{{count}} p."
+  },
+  "friends": {
+    "searchPlaceholder": "Søg efter en spiller ud fra brugernavn…",
+    "searching": "Søger…",
+    "noPlayerFound": "Ingen spiller fundet.",
+    "alreadyFriend": "Allerede venner",
+    "pending": "Afventer",
+    "add": "Tilføj",
+    "incomingRequests": "Modtagne anmodninger",
+    "accept": "Accepter",
+    "decline": "Afvis",
+    "friendsCount": "Venner ({{count}})",
+    "noFriendsYet": "Ingen venner endnu — søg efter et brugernavn ovenfor."
+  },
+  "map": {
+    "endSession": "Afslut session",
+    "startSession": "Start en session",
+    "hudPts": "p.",
+    "hudSegments": "strækninger",
+    "hudIntersections": "kryds"
+  },
+  "tabbar": {
+    "adventure": "Eventyr",
+    "search": "Søg",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Fremskridt synkroniseret ✅",
+    "syncFailed": "Synkronisering mislykkedes: {{message}}",
+    "junctionsCompleted": "+{{count}} kryds gennemført!",
+    "tooZoomedOut": "For langt zoomet ud til at indlæse nye områder.",
+    "loadingInProgress": "Indlæser allerede…",
+    "retryIn": "Nyt område: prøv igen om {{seconds}}s…",
+    "alreadyCovered": "Dette område er allerede dækket.",
+    "newZoneLoaded": "Nyt område indlæst 🗺️",
+    "zoneExpandFailed": "Kunne ikke udvide området: {{message}}",
+    "extraZonesLoaded": "{{count}} ekstra område(r) indlæst 🗺️",
+    "walkImported": "Gåtur importeret: {{edges}} ny(e) strækning(er), {{junctions}} kryds gennemført.",
+    "backgroundTrackingEnabled": "Registrering af gåture i baggrunden aktiveret.",
+    "autoSessionStarted": "Session startet automatisk — god gåtur!",
+    "sessionStoppedSpeed": "Session stoppet: for høj hastighed ({{speed}} km/t) til at gå.",
+    "junctionCompleted": "Kryds gennemført! +1 point 🎉",
+    "zoneNotLoadedYet": "Området er ikke indlæst endnu — sessionen starter, så snart netværket er tilgængeligt.",
+    "sessionStarted": "Session startet — god fornøjelse med udforskningen!",
+    "sessionEnded": "Session afsluttet ({{minutes}} min): {{edges}} ny(e) strækning(er), {{junctions}} kryds gennemført.",
+    "notEnoughNetwork": "Ikke nok indlæst netværk til at simulere.",
+    "zoneUnavailable": "Område ikke tilgængeligt: {{message}}",
+    "segmentsInZone": "{{edges}} strækninger · {{junctions}} kryds i området"
+  },
+  "alert": {
+    "walkDetectedTitle": "Gåtur registreret",
+    "walkDetectedBody": "En gåtur blev registreret, mens appen var lukket (~{{minutes}} min, {{distance}} m).\nVil du importere denne tur til din historik?",
+    "ignore": "Ignorer",
+    "importAction": "Importer"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Login-URL ikke tilgængelig.",
+    "connectionInterrupted": "Login afbrudt.",
+    "invalidConnectionResponse": "Ugyldigt login-svar.",
+    "timeoutSlowServers": "timeout (område aldrig beregnet før, og OSM-servere er langsomme)",
+    "serverUnreachable": "server utilgængelig"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Aktiver først placering i forgrunden.",
+    "alwaysPermissionDenied": "Placeringstilladelsen \"Altid\" blev nægtet.",
+    "notifBody": "Registrering af gåture i baggrunden er aktiv"
+  }
+}

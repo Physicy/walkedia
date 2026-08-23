@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Повторить"
+  },
+  "start": {
+    "loadingNetwork": "Загрузка пешеходной сети…",
+    "searchingPosition": "Поиск вашего местоположения…",
+    "permissionDenied": "Доступ к геолокации запрещён. Разрешите Walkedia доступ к местоположению в настройках телефона, затем перезапустите приложение.",
+    "timeout": "Истекло время ожидания определения местоположения. Попробуйте снова (первый сигнал GPS может быть медленным в помещении).",
+    "positionUnavailable": "Местоположение недоступно. Проверьте, включена ли геолокация на телефоне, и попробуйте снова, желательно на улице.",
+    "zoneLoadFailed": "Не удалось загрузить зону: {{message}}",
+    "slowServersHint": "Публичные серверы OpenStreetMap могут работать медленно — это может занять до минуты."
+  },
+  "account": {
+    "notConfigured": "Аккаунт не настроен — заполните mobile/.env на основе .env.example, чтобы включить вход.",
+    "continueGoogle": "Продолжить с Google",
+    "continueApple": "Продолжить с Apple",
+    "connectedAs": "Вы вошли как: {{name}}",
+    "defaultName": "Аккаунт",
+    "signOut": "Выйти",
+    "syncing": "Синхронизация…"
+  },
+  "login": {
+    "subtitle": "Войдите, чтобы продолжить",
+    "magicLinkSent": "Ссылка для входа отправлена на {{email}}. Откройте её с этого телефона, чтобы продолжить.",
+    "or": "или",
+    "emailPlaceholder": "Адрес электронной почты",
+    "sendMagicLink": "Получить ссылку для входа",
+    "genericError": "Произошла ошибка."
+  },
+  "profile": {
+    "title": "Профиль",
+    "backgroundTrackingLabel": "Определять мои прогулки даже при закрытом приложении",
+    "backgroundTrackingDesc": "Использует геолокацию в фоновом режиме (разрешение \"Всегда\"), чтобы предложить импортировать прогулки при возвращении в приложение. По умолчанию выключено.",
+    "totalPoints": "очков всего",
+    "today": "сегодня",
+    "thisWeek": "на этой неделе",
+    "thisMonth": "в этом месяце",
+    "pointsOver7Days": "Очки за 7 дней",
+    "segmentsDiscovered": "открытых участков",
+    "kmDiscovered": "открытых км",
+    "sessionsLabel": "сессии",
+    "neighborhoods": "Районы",
+    "noNeighborhoods": "В загруженных зонах пока нет размеченных районов.",
+    "unnamedNeighborhood": "Район без названия",
+    "unlocked": "Открыт 🔓",
+    "lastSessions": "Последние сессии",
+    "noSessions": "Пока нет сессий",
+    "sessionImportedLabel": "{{date}} (импортировано)",
+    "minutesLabel": "{{count}} мин",
+    "segmentCountLabel": "{{count}} участок(ов)",
+    "pointCountLabel": "+{{count}} очк.",
+    "untrackedNote": "{{count}} очк. получено до начала учёта времени: учитывается только в общей сумме.",
+    "language": "Язык",
+    "chooseLanguage": "Выбрать язык",
+    "restartForRtl": "Закройте и снова откройте приложение, чтобы макет полностью адаптировался к этому языку."
+  },
+  "search": {
+    "title": "Поиск",
+    "loginPrompt": "Войдите (вкладка Профиль), чтобы увидеть рейтинг и управлять друзьями.",
+    "leaderboardTab": "Рейтинг",
+    "friendsTab": "Друзья"
+  },
+  "leaderboard": {
+    "allPlayers": "Все игроки",
+    "friendsScope": "Друзья",
+    "noOneYet": "Пока никого.",
+    "addFriendsPrompt": "Добавьте друзей, чтобы увидеть их рейтинг.",
+    "defaultPlayerName": "Игрок",
+    "youSuffix": " (вы)",
+    "pointsCount": "{{count}} очк."
+  },
+  "friends": {
+    "searchPlaceholder": "Найти игрока по имени пользователя…",
+    "searching": "Поиск…",
+    "noPlayerFound": "Игрок не найден.",
+    "alreadyFriend": "Уже друзья",
+    "pending": "Ожидание",
+    "add": "Добавить",
+    "incomingRequests": "Входящие заявки",
+    "accept": "Принять",
+    "decline": "Отклонить",
+    "friendsCount": "Друзья ({{count}})",
+    "noFriendsYet": "Пока нет друзей — найдите имя пользователя выше."
+  },
+  "map": {
+    "endSession": "Завершить сессию",
+    "startSession": "Начать сессию",
+    "hudPts": "очк.",
+    "hudSegments": "участков",
+    "hudIntersections": "перекрёстков"
+  },
+  "tabbar": {
+    "adventure": "Приключение",
+    "search": "Поиск",
+    "profile": "Профиль"
+  },
+  "toast": {
+    "syncSuccess": "Прогресс синхронизирован ✅",
+    "syncFailed": "Синхронизация не удалась: {{message}}",
+    "junctionsCompleted": "+{{count}} перекрёсток(ов) пройдено!",
+    "tooZoomedOut": "Слишком сильно отдалено, чтобы загружать новые зоны.",
+    "loadingInProgress": "Загрузка уже выполняется…",
+    "retryIn": "Новая зона: повтор через {{seconds}} с…",
+    "alreadyCovered": "Эта зона уже покрыта.",
+    "newZoneLoaded": "Новая зона загружена 🗺️",
+    "zoneExpandFailed": "Не удалось расширить зону: {{message}}",
+    "extraZonesLoaded": "Загружено дополнительных зон: {{count}} 🗺️",
+    "walkImported": "Прогулка импортирована: новых участков — {{edges}}, пройденных перекрёстков — {{junctions}}.",
+    "backgroundTrackingEnabled": "Фоновое определение прогулок включено.",
+    "autoSessionStarted": "Сессия начата автоматически — приятной прогулки!",
+    "sessionStoppedSpeed": "Сессия остановлена: слишком высокая скорость ({{speed}} км/ч) для прогулки.",
+    "junctionCompleted": "Перекрёсток пройден! +1 очко 🎉",
+    "zoneNotLoadedYet": "Зона ещё не загружена — сессия начнётся, как только сеть станет доступна.",
+    "sessionStarted": "Сессия начата — приятного исследования!",
+    "sessionEnded": "Сессия завершена ({{minutes}} мин): новых участков — {{edges}}, пройденных перекрёстков — {{junctions}}.",
+    "notEnoughNetwork": "Недостаточно загруженной сети для симуляции.",
+    "zoneUnavailable": "Зона недоступна: {{message}}",
+    "segmentsInZone": "Участков в зоне: {{edges}} · перекрёстков: {{junctions}}"
+  },
+  "alert": {
+    "walkDetectedTitle": "Обнаружена прогулка",
+    "walkDetectedBody": "Обнаружена прогулка, пока приложение было закрыто (~{{minutes}} мин, {{distance}} м).\nИмпортировать этот маршрут в историю?",
+    "ignore": "Игнорировать",
+    "importAction": "Импортировать"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL для входа недоступен.",
+    "connectionInterrupted": "Вход прерван.",
+    "invalidConnectionResponse": "Недействительный ответ при входе.",
+    "timeoutSlowServers": "истекло время ожидания (зона ещё ни разу не вычислялась, а серверы OSM медленные)",
+    "serverUnreachable": "сервер недоступен"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Сначала включите определение местоположения на переднем плане.",
+    "alwaysPermissionDenied": "Разрешение на геолокацию \"Всегда\" отклонено.",
+    "notifBody": "Фоновое определение прогулок активно"
+  }
+}

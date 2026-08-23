@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Circle, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
+import { useTranslation } from 'react-i18next';
 
 import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
 import { Hud } from '../components/Hud';
@@ -126,6 +127,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const { state, actions } = walkedia;
   const mapRef = useRef<MapView>(null);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   // `region` reflète la zone réellement affichée par la carte native (mise à
   // jour par onRegionChangeComplete, y compris son premier appel juste après
@@ -442,7 +444,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           style={[styles.sessionBtn, state.session && styles.sessionBtnRecording]}
           onPress={() => (state.session ? actions.endSession() : actions.startSession())}
         >
-          <Text style={styles.sessionBtnText}>{state.session ? 'Terminer la session' : 'Démarrer une session'}</Text>
+          <Text style={styles.sessionBtnText}>{state.session ? t('map.endSession') : t('map.startSession')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.centerBtn} onPress={recenter}>
           <Text style={styles.centerBtnText}>⌖</Text>

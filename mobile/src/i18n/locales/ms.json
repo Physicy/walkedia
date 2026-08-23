@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Cuba lagi"
+  },
+  "start": {
+    "loadingNetwork": "Memuatkan rangkaian pejalan kaki…",
+    "searchingPosition": "Mencari kedudukan anda…",
+    "permissionDenied": "Akses lokasi ditolak. Benarkan Walkedia mengakses lokasi dalam tetapan telefon, kemudian mulakan semula aplikasi.",
+    "timeout": "Tamat masa mendapatkan kedudukan. Cuba lagi (isyarat GPS pertama mungkin perlahan di dalam bangunan).",
+    "positionUnavailable": "Kedudukan tidak tersedia. Semak sama ada lokasi telefon anda diaktifkan dan cuba lagi, sebaiknya di luar.",
+    "zoneLoadFailed": "Kawasan tidak dapat dimuatkan: {{message}}",
+    "slowServersHint": "Pelayan awam OpenStreetMap mungkin perlahan — ini boleh mengambil masa sehingga seminit."
+  },
+  "account": {
+    "notConfigured": "Akaun belum dikonfigurasi — isi mobile/.env berdasarkan .env.example untuk mengaktifkan log masuk.",
+    "continueGoogle": "Teruskan dengan Google",
+    "continueApple": "Teruskan dengan Apple",
+    "connectedAs": "Log masuk sebagai: {{name}}",
+    "defaultName": "Akaun",
+    "signOut": "Log keluar",
+    "syncing": "Menyegerakkan…"
+  },
+  "login": {
+    "subtitle": "Log masuk untuk teruskan",
+    "magicLinkSent": "Pautan log masuk dihantar ke {{email}}. Buka daripada telefon ini untuk teruskan.",
+    "or": "atau",
+    "emailPlaceholder": "Alamat e-mel",
+    "sendMagicLink": "Terima pautan log masuk",
+    "genericError": "Ralat berlaku."
+  },
+  "profile": {
+    "title": "Profil",
+    "backgroundTrackingLabel": "Kesan jalan kaki saya walaupun aplikasi ditutup",
+    "backgroundTrackingDesc": "Menggunakan lokasi anda di latar belakang (kebenaran \"Sentiasa\") untuk mencadangkan mengimport jalan kaki anda apabila kembali ke aplikasi. Dimatikan secara lalai.",
+    "totalPoints": "jumlah mata",
+    "today": "hari ini",
+    "thisWeek": "minggu ini",
+    "thisMonth": "bulan ini",
+    "pointsOver7Days": "Mata dalam 7 hari",
+    "segmentsDiscovered": "segmen ditemui",
+    "kmDiscovered": "km ditemui",
+    "sessionsLabel": "sesi",
+    "neighborhoods": "Kejiranan",
+    "noNeighborhoods": "Belum ada kejiranan dipetakan dalam kawasan yang dimuatkan.",
+    "unnamedNeighborhood": "Kejiranan tanpa nama",
+    "unlocked": "Dibuka kunci 🔓",
+    "lastSessions": "Sesi terkini",
+    "noSessions": "Belum ada sesi",
+    "sessionImportedLabel": "{{date}} (diimport)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} segmen",
+    "pointCountLabel": "+{{count}} mata",
+    "untrackedNote": "{{count}} mata diperoleh sebelum penjejakan masa bermula: dikira hanya dalam jumlah keseluruhan.",
+    "language": "Bahasa",
+    "chooseLanguage": "Pilih bahasa",
+    "restartForRtl": "Tutup dan buka semula aplikasi supaya susun atur menyesuaikan sepenuhnya dengan bahasa ini."
+  },
+  "search": {
+    "title": "Cari",
+    "loginPrompt": "Log masuk (tab Profil) untuk melihat papan pendahulu dan menguruskan rakan anda.",
+    "leaderboardTab": "Papan Pendahulu",
+    "friendsTab": "Rakan"
+  },
+  "leaderboard": {
+    "allPlayers": "Semua pemain",
+    "friendsScope": "Rakan",
+    "noOneYet": "Belum ada sesiapa.",
+    "addFriendsPrompt": "Tambah rakan untuk melihat kedudukan mereka.",
+    "defaultPlayerName": "Pemain",
+    "youSuffix": " (anda)",
+    "pointsCount": "{{count}} mata"
+  },
+  "friends": {
+    "searchPlaceholder": "Cari pemain mengikut nama pengguna…",
+    "searching": "Mencari…",
+    "noPlayerFound": "Tiada pemain dijumpai.",
+    "alreadyFriend": "Sudah berkawan",
+    "pending": "Menunggu",
+    "add": "Tambah",
+    "incomingRequests": "Permintaan diterima",
+    "accept": "Terima",
+    "decline": "Tolak",
+    "friendsCount": "Rakan ({{count}})",
+    "noFriendsYet": "Belum ada rakan — cari nama pengguna di atas."
+  },
+  "map": {
+    "endSession": "Tamatkan sesi",
+    "startSession": "Mulakan sesi",
+    "hudPts": "mata",
+    "hudSegments": "segmen",
+    "hudIntersections": "persimpangan"
+  },
+  "tabbar": {
+    "adventure": "Pengembaraan",
+    "search": "Cari",
+    "profile": "Profil"
+  },
+  "toast": {
+    "syncSuccess": "Kemajuan disegerakkan ✅",
+    "syncFailed": "Penyegerakan gagal: {{message}}",
+    "junctionsCompleted": "+{{count}} persimpangan selesai!",
+    "tooZoomedOut": "Terlalu jauh dizum keluar untuk memuatkan kawasan baharu.",
+    "loadingInProgress": "Sedang dimuatkan…",
+    "retryIn": "Kawasan baharu: cuba lagi dalam {{seconds}}s…",
+    "alreadyCovered": "Kawasan ini sudah diliputi.",
+    "newZoneLoaded": "Kawasan baharu dimuatkan 🗺️",
+    "zoneExpandFailed": "Kawasan tidak dapat dikembangkan: {{message}}",
+    "extraZonesLoaded": "{{count}} kawasan tambahan dimuatkan 🗺️",
+    "walkImported": "Jalan kaki diimport: {{edges}} segmen baharu, {{junctions}} persimpangan selesai.",
+    "backgroundTrackingEnabled": "Pengesanan jalan kaki latar belakang diaktifkan.",
+    "autoSessionStarted": "Sesi dimulakan secara automatik — selamat berjalan kaki!",
+    "sessionStoppedSpeed": "Sesi dihentikan: kelajuan terlalu tinggi ({{speed}} km/j) untuk berjalan kaki.",
+    "junctionCompleted": "Persimpangan selesai! +1 mata 🎉",
+    "zoneNotLoadedYet": "Kawasan belum dimuatkan — sesi akan bermula sebaik sahaja rangkaian tersedia.",
+    "sessionStarted": "Sesi dimulakan — selamat meneroka!",
+    "sessionEnded": "Sesi tamat ({{minutes}} min): {{edges}} segmen baharu, {{junctions}} persimpangan selesai.",
+    "notEnoughNetwork": "Rangkaian yang dimuatkan tidak mencukupi untuk simulasi.",
+    "zoneUnavailable": "Kawasan tidak tersedia: {{message}}",
+    "segmentsInZone": "{{edges}} segmen · {{junctions}} persimpangan dalam kawasan"
+  },
+  "alert": {
+    "walkDetectedTitle": "Jalan kaki dikesan",
+    "walkDetectedBody": "Jalan kaki dikesan semasa aplikasi ditutup (~{{minutes}} min, {{distance}} m).\nImport laluan ini ke sejarah anda?",
+    "ignore": "Abaikan",
+    "importAction": "Import"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "URL log masuk tidak tersedia.",
+    "connectionInterrupted": "Log masuk terganggu.",
+    "invalidConnectionResponse": "Respons log masuk tidak sah.",
+    "timeoutSlowServers": "tamat masa (kawasan belum pernah dikira dan pelayan OSM perlahan)",
+    "serverUnreachable": "pelayan tidak dapat dihubungi"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Aktifkan lokasi latar depan dahulu.",
+    "alwaysPermissionDenied": "Kebenaran lokasi \"Sentiasa\" ditolak.",
+    "notifBody": "Pengesanan jalan kaki latar belakang aktif"
+  }
+}

@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS } from '../theme';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
 import type { NeighborhoodStat } from '../hooks/useWalkedia';
 import { AccountSection } from '../components/AccountSection';
+import { LanguagePicker } from '../components/LanguagePicker';
 
 const DAY = 86400000;
 
@@ -39,13 +41,14 @@ export function ProfileScreen({
   backgroundTrackingEnabled: boolean;
   onToggleBackgroundTracking: (next: boolean) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const stats = useMemo(() => {
     const today = startOfToday();
     const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
     const now = new Date();
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-    const dayName = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
+    const dayName = new Intl.DateTimeFormat(i18n.language, { weekday: 'short' });
     const days: { label: string; pts: number }[] = [];
     let max = 0;
     for (let i = 6; i >= 0; i--) {
@@ -55,7 +58,7 @@ export function ProfileScreen({
       days.push({ label: dayName.format(new Date(start)).replace('.', ''), pts });
     }
 
-    const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit' });
+    const dateFmt = new Intl.DateTimeFormat(i18n.language, { day: '2-digit', month: '2-digit' });
     const recent = progress.sessions.slice(-5).reverse();
 
     const untracked = progress.junctions.size - Object.keys(progress.completedAt).length;
@@ -74,21 +77,20 @@ export function ProfileScreen({
       dateFmt,
       untracked,
     };
-  }, [progress]);
+  }, [progress, i18n.language]);
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      <Text style={styles.h2}>Profil</Text>
+      <Text style={styles.h2}>{t('profile.title')}</Text>
 
       <AccountSection auth={auth} syncing={syncing} />
 
+      <LanguagePicker />
+
       <View style={styles.bgTrackingRow}>
         <View style={styles.bgTrackingText}>
-          <Text style={styles.bgTrackingLabel}>Détecter mes marches même app fermée</Text>
-          <Text style={styles.muted}>
-            Utilise ta position en arrière-plan (permission "Toujours") pour te proposer d'importer tes marches
-            au retour dans l'app. Désactivé par défaut.
-          </Text>
+          <Text style={styles.bgTrackingLabel}>{t('profile.backgroundTrackingLabel')}</Text>
+          <Text style={styles.muted}>{t('profile.backgroundTrackingDesc')}</Text>
         </View>
         <Switch
           value={backgroundTrackingEnabled}
@@ -99,16 +101,16 @@ export function ProfileScreen({
 
       <View style={styles.bigScore}>
         <Text style={styles.bigScoreValue}>{stats.total}</Text>
-        <Text style={styles.bigScoreLabel}>points au total</Text>
+        <Text style={styles.bigScoreLabel}>{t('profile.totalPoints')}</Text>
       </View>
 
       <View style={styles.statGrid}>
-        <StatCell value={stats.today} label="aujourd'hui" />
-        <StatCell value={stats.week} label="cette semaine" />
-        <StatCell value={stats.month} label="ce mois-ci" />
+        <StatCell value={stats.today} label={t('profile.today')} />
+        <StatCell value={stats.week} label={t('profile.thisWeek')} />
+        <StatCell value={stats.month} label={t('profile.thisMonth')} />
       </View>
 
-      <Text style={styles.h3}>Points sur 7 jours</Text>
+      <Text style={styles.h3}>{t('profile.pointsOver7Days')}</Text>
       <View style={styles.chart}>
         {stats.days.map((d, i) => {
           const h = stats.max > 0 ? Math.max(6, Math.round((d.pts / stats.max) * 52)) : 6;
@@ -123,52 +125,48 @@ export function ProfileScreen({
       </View>
 
       <View style={styles.statGrid}>
-        <StatCell value={stats.edges} label="tronçons découverts" />
-        <StatCell value={stats.km} label="km découverts" />
-        <StatCell value={stats.sessions} label="sessions" />
+        <StatCell value={stats.edges} label={t('profile.segmentsDiscovered')} />
+        <StatCell value={stats.km} label={t('profile.kmDiscovered')} />
+        <StatCell value={stats.sessions} label={t('profile.sessionsLabel')} />
       </View>
 
-      <Text style={styles.h3}>Quartiers</Text>
+      <Text style={styles.h3}>{t('profile.neighborhoods')}</Text>
       {neighborhoods.length === 0 ? (
-        <Text style={styles.emptyList}>
-          Aucun quartier cartographié dans les zones chargées pour l'instant.
-        </Text>
+        <Text style={styles.emptyList}>{t('profile.noNeighborhoods')}</Text>
       ) : (
         neighborhoods.map((n) => (
           <View key={n.id} style={styles.neighborhoodRow}>
             <Text style={styles.neighborhoodName} numberOfLines={1}>
-              {n.name || 'Quartier sans nom'}
+              {n.name || t('profile.unnamedNeighborhood')}
             </Text>
             <Text style={[styles.neighborhoodPct, n.unlocked && styles.neighborhoodUnlocked]}>
-              {n.unlocked ? 'Débloqué 🔓' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+              {n.unlocked ? t('profile.unlocked') : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
             </Text>
           </View>
         ))
       )}
 
-      <Text style={styles.h3}>Dernières sessions</Text>
+      <Text style={styles.h3}>{t('profile.lastSessions')}</Text>
       {stats.recent.length === 0 ? (
-        <Text style={styles.emptyList}>Aucune session pour l'instant</Text>
+        <Text style={styles.emptyList}>{t('profile.noSessions')}</Text>
       ) : (
         stats.recent.map((s, i) => {
           const mins = Math.max(1, Math.round((s.end - s.start) / 60000));
-          const label = s.imported ? `${stats.dateFmt.format(new Date(s.start))} (importée)` : stats.dateFmt.format(new Date(s.start));
+          const label = s.imported
+            ? t('profile.sessionImportedLabel', { date: stats.dateFmt.format(new Date(s.start)) })
+            : stats.dateFmt.format(new Date(s.start));
           return (
             <View key={i} style={styles.sessionRow}>
               <Text style={styles.sessionCell}>{label}</Text>
-              <Text style={styles.sessionCell}>{mins} min</Text>
-              <Text style={styles.sessionCell}>{s.edges} tronçon(s)</Text>
-              <Text style={[styles.sessionCell, styles.sessionPts]}>+{s.junctions} pt(s)</Text>
+              <Text style={styles.sessionCell}>{t('profile.minutesLabel', { count: mins })}</Text>
+              <Text style={styles.sessionCell}>{t('profile.segmentCountLabel', { count: s.edges })}</Text>
+              <Text style={[styles.sessionCell, styles.sessionPts]}>{t('profile.pointCountLabel', { count: s.junctions })}</Text>
             </View>
           );
         })
       )}
 
-      {stats.untracked > 0 && (
-        <Text style={styles.muted}>
-          {stats.untracked} point(s) acquis avant le suivi temporel : comptés dans le total uniquement.
-        </Text>
-      )}
+      {stats.untracked > 0 && <Text style={styles.muted}>{t('profile.untrackedNote', { count: stats.untracked })}</Text>}
     </ScrollView>
   );
 }

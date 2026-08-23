@@ -1,0 +1,139 @@
+{
+  "common": {
+    "retry": "Retry"
+  },
+  "start": {
+    "loadingNetwork": "Loading the walking network…",
+    "searchingPosition": "Finding your position…",
+    "permissionDenied": "Location access denied. Allow location for Walkedia in your phone settings, then restart the app.",
+    "timeout": "Timed out getting your position. Try again (the first GPS fix can be slow indoors).",
+    "positionUnavailable": "Position unavailable. Check that location is enabled on your phone and try again, ideally outdoors.",
+    "zoneLoadFailed": "Couldn't load the area: {{message}}",
+    "slowServersHint": "Public OpenStreetMap servers can be slow — this can take up to a minute."
+  },
+  "account": {
+    "notConfigured": "Account not configured — fill in mobile/.env from .env.example to enable sign-in.",
+    "continueGoogle": "Continue with Google",
+    "continueApple": "Continue with Apple",
+    "connectedAs": "Signed in: {{name}}",
+    "defaultName": "Account",
+    "signOut": "Sign out",
+    "syncing": "Syncing…"
+  },
+  "login": {
+    "subtitle": "Sign in to continue",
+    "magicLinkSent": "Sign-in link sent to {{email}}. Open it from this phone to continue.",
+    "or": "or",
+    "emailPlaceholder": "Email address",
+    "sendMagicLink": "Send sign-in link",
+    "genericError": "Something went wrong."
+  },
+  "profile": {
+    "title": "Profile",
+    "backgroundTrackingLabel": "Detect my walks even when the app is closed",
+    "backgroundTrackingDesc": "Uses your location in the background (\"Always\" permission) to offer to import your walks when you return to the app. Off by default.",
+    "totalPoints": "total points",
+    "today": "today",
+    "thisWeek": "this week",
+    "thisMonth": "this month",
+    "pointsOver7Days": "Points over 7 days",
+    "segmentsDiscovered": "segments discovered",
+    "kmDiscovered": "km discovered",
+    "sessionsLabel": "sessions",
+    "neighborhoods": "Neighborhoods",
+    "noNeighborhoods": "No neighborhoods mapped in the loaded areas yet.",
+    "unnamedNeighborhood": "Unnamed neighborhood",
+    "unlocked": "Unlocked 🔓",
+    "lastSessions": "Latest sessions",
+    "noSessions": "No sessions yet",
+    "sessionImportedLabel": "{{date}} (imported)",
+    "minutesLabel": "{{count}} min",
+    "segmentCountLabel": "{{count}} segment(s)",
+    "pointCountLabel": "+{{count}} pt(s)",
+    "untrackedNote": "{{count}} point(s) earned before time tracking started: counted in the total only.",
+    "language": "Language",
+    "chooseLanguage": "Choose language",
+    "restartForRtl": "Close and reopen the app so the layout fully adapts to this language."
+  },
+  "search": {
+    "title": "Search",
+    "loginPrompt": "Sign in (Profile tab) to see the leaderboard and manage your friends.",
+    "leaderboardTab": "Leaderboard",
+    "friendsTab": "Friends"
+  },
+  "leaderboard": {
+    "allPlayers": "All players",
+    "friendsScope": "Friends",
+    "noOneYet": "No one yet.",
+    "addFriendsPrompt": "Add friends to see their ranking.",
+    "defaultPlayerName": "Player",
+    "youSuffix": " (you)",
+    "pointsCount": "{{count}} pt(s)"
+  },
+  "friends": {
+    "searchPlaceholder": "Search for a player by username…",
+    "searching": "Searching…",
+    "noPlayerFound": "No player found.",
+    "alreadyFriend": "Already friends",
+    "pending": "Pending",
+    "add": "Add",
+    "incomingRequests": "Incoming requests",
+    "accept": "Accept",
+    "decline": "Decline",
+    "friendsCount": "Friends ({{count}})",
+    "noFriendsYet": "No friends yet — search for a username above."
+  },
+  "map": {
+    "endSession": "End session",
+    "startSession": "Start a session",
+    "hudPts": "pts",
+    "hudSegments": "segments",
+    "hudIntersections": "intersections"
+  },
+  "tabbar": {
+    "adventure": "Adventure",
+    "search": "Search",
+    "profile": "Profile"
+  },
+  "toast": {
+    "syncSuccess": "Progress synced ✅",
+    "syncFailed": "Sync failed: {{message}}",
+    "junctionsCompleted": "+{{count}} intersection(s) completed!",
+    "tooZoomedOut": "Too zoomed out to load new areas.",
+    "loadingInProgress": "Already loading…",
+    "retryIn": "New area: try again in {{seconds}}s…",
+    "alreadyCovered": "This area is already covered.",
+    "newZoneLoaded": "New area loaded 🗺️",
+    "zoneExpandFailed": "Couldn't expand the area: {{message}}",
+    "extraZonesLoaded": "{{count}} extra area(s) loaded 🗺️",
+    "walkImported": "Walk imported: {{edges}} new segment(s), {{junctions}} intersection(s) completed.",
+    "backgroundTrackingEnabled": "Background walk detection enabled.",
+    "autoSessionStarted": "Session started automatically — happy walking!",
+    "sessionStoppedSpeed": "Session stopped: too fast ({{speed}} km/h) for walking.",
+    "junctionCompleted": "Intersection completed! +1 point 🎉",
+    "zoneNotLoadedYet": "Area not loaded yet — the session will start as soon as the network is there.",
+    "sessionStarted": "Session started — happy exploring!",
+    "sessionEnded": "Session ended ({{minutes}} min): {{edges}} new segment(s), {{junctions}} intersection(s) completed.",
+    "notEnoughNetwork": "Not enough loaded network to simulate.",
+    "zoneUnavailable": "Area unavailable: {{message}}",
+    "segmentsInZone": "{{edges}} segments · {{junctions}} intersections in the area"
+  },
+  "alert": {
+    "walkDetectedTitle": "Walk detected",
+    "walkDetectedBody": "A walk was detected while the app was closed (~{{minutes}} min, {{distance}} m).\nImport this walk into your history?",
+    "ignore": "Ignore",
+    "importAction": "Import"
+  },
+  "errors": {
+    "connectionUrlUnavailable": "Sign-in URL unavailable.",
+    "connectionInterrupted": "Sign-in interrupted.",
+    "invalidConnectionResponse": "Invalid sign-in response.",
+    "timeoutSlowServers": "timed out (area never computed before and OSM servers are slow)",
+    "serverUnreachable": "server unreachable"
+  },
+  "backgroundLocation": {
+    "enableForegroundFirst": "Enable foreground location first.",
+    "alwaysPermissionDenied": "\"Always\" location permission denied.",
+    "notifBody": "Background walk detection active"
+  }
+}
