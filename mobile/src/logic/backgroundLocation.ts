@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { MAX_ACCURACY } from './matching';
 import { haversine } from './geo';
+import i18n from '../i18n';
 
 export const BACKGROUND_LOCATION_TASK = 'walkedia-background-location';
 
@@ -85,12 +86,12 @@ export async function isBackgroundTrackingActive(): Promise<boolean> {
 export async function startBackgroundTracking(): Promise<{ ok: true } | { ok: false; reason: string }> {
   const fg = await Location.getForegroundPermissionsAsync();
   if (fg.status !== 'granted') {
-    return { ok: false, reason: "Active d'abord la localisation au premier plan." };
+    return { ok: false, reason: i18n.t('backgroundLocation.enableForegroundFirst') };
   }
 
   const bg = await Location.requestBackgroundPermissionsAsync();
   if (bg.status !== 'granted') {
-    return { ok: false, reason: 'Permission de localisation "Toujours" refusée.' };
+    return { ok: false, reason: i18n.t('backgroundLocation.alwaysPermissionDenied') };
   }
 
   await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
@@ -101,7 +102,7 @@ export async function startBackgroundTracking(): Promise<{ ok: true } | { ok: fa
     activityType: Location.ActivityType.Fitness,
     foregroundService: {
       notificationTitle: 'Walkedia',
-      notificationBody: 'Détection de marche active en arrière-plan',
+      notificationBody: i18n.t('backgroundLocation.notifBody'),
     },
   });
   return { ok: true };

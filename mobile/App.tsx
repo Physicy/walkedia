@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { loadSavedLanguage } from './src/i18n';
 import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
 import { useAppFonts } from './src/fonts';
@@ -18,6 +19,8 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { FusionVoile } from './src/components/FusionVoile';
 import { TabBar, TabName } from './src/components/TabBar';
 import { COLORS } from './src/theme';
+
+loadSavedLanguage();
 
 function AppContent() {
   const walkedia = useWalkedia();
@@ -129,7 +132,11 @@ function AppContent() {
   if (!state.mapReady) {
     return (
       <View style={styles.fill}>
-        <StartScreen status={state.startStatus} onLocate={actions.requestLocationAndInit} />
+        <StartScreen
+          status={state.startStatus}
+          kind={state.startStatusKind}
+          onLocate={actions.requestLocationAndInit}
+        />
         {state.fusionResume && <FusionVoile resume={state.fusionResume} onFermer={actions.dismissFusionResume} />}
         <StatusBar style="dark" />
       </View>

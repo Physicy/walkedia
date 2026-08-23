@@ -9,6 +9,7 @@
 import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
 import { Avatar, Eyebrow, Mono, Titre } from '../components/ui';
 import { Icone, NomIcone } from '../components/Icones';
@@ -53,12 +54,13 @@ export function ProfileScreen({
   onChoisirAvatar: (id: string | null) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t, i18n } = useTranslation();
 
   const stats = useMemo(() => {
     const today = startOfToday();
     const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
 
-    const dayName = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' });
+    const dayName = new Intl.DateTimeFormat(i18n.language, { weekday: 'short' });
     const days: { label: string; pts: number }[] = [];
     let max = 0;
     for (let i = 6; i >= 0; i--) {
@@ -70,7 +72,7 @@ export function ProfileScreen({
 
     const debuts = progress.sessions.map((s) => s.start);
     const premiereActivite = debuts.length ? Math.min(...debuts) : null;
-    const depuisFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' });
+    const depuisFmt = new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'long' });
 
     return {
       total: progress.junctions.size,
@@ -83,7 +85,7 @@ export function ProfileScreen({
       max,
       depuis: premiereActivite != null ? depuisFmt.format(new Date(premiereActivite)) : null,
     };
-  }, [progress]);
+  }, [progress, i18n.language]);
 
   const nom = auth.user?.user_metadata?.full_name || auth.user?.user_metadata?.name || auth.user?.email || null;
   const [personnaliserOuvert, setPersonnaliserOuvert] = useState(false);
@@ -99,7 +101,7 @@ export function ProfileScreen({
           <Pressable
             onPress={() => setPersonnaliserOuvert(true)}
             accessibilityRole="button"
-            accessibilityLabel="Changer d'avatar ou de couleur"
+            accessibilityLabel={t('profile.changeAvatarOrColor')}
             style={styles.avatarBouton}
           >
             <Avatar avatarId={avatarId} nom={nom} size={96} />
@@ -107,24 +109,24 @@ export function ProfileScreen({
               <Icone nom="crayon" size={13} color="#fff" strokeWidth={2} />
             </View>
           </Pressable>
-          <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
-          <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
+          <Text style={styles.eyebrow}>{stats.depuis ? t('profile.trackSince', { date: stats.depuis }) : t('profile.track')}</Text>
+          <Titre style={styles.nom}>{nom || t('profile.defaultName')}</Titre>
         </View>
 
-        <LigneNav icone="reglages" texte="Réglages" onPress={onOuvrirReglages} />
+        <LigneNav icone="reglages" texte={t('profile.settingsNav')} onPress={onOuvrirReglages} />
 
         <View style={styles.total}>
           <Mono style={styles.totalN}>{stats.total}</Mono>
           <View style={styles.totalTexte}>
-            <Text style={styles.totalLabel}>carrefours complétés</Text>
+            <Text style={styles.totalLabel}>{t('profile.junctionsCompletedLabel')}</Text>
             <Text style={styles.totalDetail}>
-              {stats.week} cette semaine, {stats.today} aujourd'hui
+              {t('profile.weekTodayDetail', { week: stats.week, today: stats.today })}
             </Text>
           </View>
         </View>
-        {syncing && <Text style={styles.syncing}>Synchronisation…</Text>}
+        {syncing && <Text style={styles.syncing}>{t('account.syncing')}</Text>}
 
-        <Eyebrow style={styles.sectionTitre}>Sept derniers jours</Eyebrow>
+        <Eyebrow style={styles.sectionTitre}>{t('profile.pointsOver7Days')}</Eyebrow>
         <View style={styles.barres}>
           {stats.days.map((d, i) => {
             const h = stats.max > 0 ? Math.max(3, Math.round((d.pts / stats.max) * 52)) : 3;
@@ -141,19 +143,19 @@ export function ProfileScreen({
         <View style={styles.grille}>
           <View style={styles.case}>
             <Mono style={styles.caseValeur}>{stats.edges}</Mono>
-            <Text style={styles.caseLabel}>tronçons relevés</Text>
+            <Text style={styles.caseLabel}>{t('profile.segmentsDiscovered')}</Text>
           </View>
           <View style={styles.case}>
             <Mono style={styles.caseValeur}>{stats.km}</Mono>
-            <Text style={styles.caseLabel}>km découverts</Text>
+            <Text style={styles.caseLabel}>{t('profile.kmDiscovered')}</Text>
           </View>
           <View style={[styles.case, styles.caseFin]}>
             <Mono style={styles.caseValeur}>{stats.sessions}</Mono>
-            <Text style={styles.caseLabel}>sessions</Text>
+            <Text style={styles.caseLabel}>{t('profile.sessionsLabel')}</Text>
           </View>
         </View>
 
-        <LigneNav icone="carte" texte="Sorties & quartiers" onPress={onOuvrirActivite} />
+        <LigneNav icone="carte" texte={t('profile.activityNav')} onPress={onOuvrirActivite} />
       </ScrollView>
 
       {personnaliserOuvert && (
@@ -190,11 +192,12 @@ function PersonnalisationSheet({
   onFermer: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <Pressable style={styles.voile} onPress={onFermer}>
       <Pressable style={styles.feuille} onPress={(e) => e.stopPropagation()}>
         <View style={styles.poignee} />
-        <Titre style={styles.feuilleTitre}>Personnaliser</Titre>
+        <Titre style={styles.feuilleTitre}>{t('profile.customizeTitle')}</Titre>
 
         {/* `flexShrink: 1` est ce qui force le ScrollView à se limiter à
             l'espace restant dans `feuille` (plafonnée par maxHeight) plutôt
@@ -206,10 +209,8 @@ function PersonnalisationSheet({
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           showsVerticalScrollIndicator={false}
         >
-        <Eyebrow style={styles.sectionTitreFeuille}>Ta couleur</Eyebrow>
-        <Text style={styles.couleurTexte}>
-          Remplace le violet pour le halo autour des carrefours, les points déjà validés et le tracé de ta session.
-        </Text>
+        <Eyebrow style={styles.sectionTitreFeuille}>{t('profile.yourColor')}</Eyebrow>
+        <Text style={styles.couleurTexte}>{t('profile.colorDesc')}</Text>
         <View style={styles.couleurs}>
           {TRACE_PALETTE.map((hex) => {
             const choisie = hex.toLowerCase() === traceColor.toLowerCase();
@@ -219,7 +220,7 @@ function PersonnalisationSheet({
                 onPress={() => onChoisirCouleur(hex)}
                 style={[styles.pastilleCouleur, { backgroundColor: hex }, choisie && styles.pastilleCouleurChoisie]}
                 accessibilityRole="button"
-                accessibilityLabel={`Choisir ${hex}`}
+                accessibilityLabel={t('profile.chooseColor', { hex })}
                 accessibilityState={{ selected: choisie }}
               >
                 {choisie && <Icone nom="coche" size={16} color="#fff" strokeWidth={2.6} />}
@@ -228,14 +229,14 @@ function PersonnalisationSheet({
           })}
         </View>
 
-        <Eyebrow style={styles.sectionTitreFeuille}>Ton avatar</Eyebrow>
-        <Text style={styles.couleurTexte}>Remplace aussi le repère de ta position sur la carte.</Text>
+        <Eyebrow style={styles.sectionTitreFeuille}>{t('profile.yourAvatar')}</Eyebrow>
+        <Text style={styles.couleurTexte}>{t('profile.avatarDesc')}</Text>
         <View style={styles.avatars}>
           <Pressable
             onPress={() => onChoisirAvatar(null)}
             style={[styles.pastilleAvatar, !avatarId && styles.pastilleAvatarChoisie]}
             accessibilityRole="button"
-            accessibilityLabel="Aucun avatar (initiales)"
+            accessibilityLabel={t('profile.noAvatarInitials')}
             accessibilityState={{ selected: !avatarId }}
           >
             <Text style={styles.avatarAucunTexte}>{(nom || '?').slice(0, 1).toUpperCase()}</Text>
@@ -248,7 +249,7 @@ function PersonnalisationSheet({
                 onPress={() => onChoisirAvatar(id)}
                 style={[styles.pastilleAvatar, choisi && styles.pastilleAvatarChoisie]}
                 accessibilityRole="button"
-                accessibilityLabel="Choisir cet avatar"
+                accessibilityLabel={t('profile.chooseThisAvatar')}
                 accessibilityState={{ selected: choisi }}
               >
                 <Image source={AVATARS[id]} style={styles.avatarImage} resizeMode="cover" />

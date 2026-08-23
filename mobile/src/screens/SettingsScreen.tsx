@@ -11,9 +11,11 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS, RADIUS } from '../theme';
 import { Eyebrow, Jeton, Mono } from '../components/ui';
 import { Icone } from '../components/Icones';
+import { LanguagePicker } from '../components/LanguagePicker';
 import type { useAuth } from '../hooks/useAuth';
 
 function Section({ titre, children }: { titre: string; children: React.ReactNode }) {
@@ -71,6 +73,7 @@ export function SettingsScreen({
   onFermer: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [confirmeEffacement, setConfirmeEffacement] = useState(false);
   const [effacement, setEffacement] = useState(false);
 
@@ -94,58 +97,62 @@ export function SettingsScreen({
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
       <View style={styles.tete}>
-        <Pressable style={styles.rond} onPress={onFermer} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable style={styles.rond} onPress={onFermer} accessibilityRole="button" accessibilityLabel={t('common.back')}>
           <Icone nom="retour" size={18} color={COLORS.encre} strokeWidth={1.9} />
         </Pressable>
-        <Text style={styles.titre}>Réglages</Text>
+        <Text style={styles.titre}>{t('profile.settingsNav')}</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
-        <Section titre="Marche">
+        <Section titre={t('settings.walkSection')}>
           <Reglage
-            titre="Détecter mes marches hors de l'app"
-            texte="Walkedia note tes trajets en arrière-plan et te propose de les importer au retour. Coupe-le quand tu veux."
+            titre={t('settings.bgTrackingTitle')}
+            texte={t('settings.bgTrackingDesc')}
             valeur={backgroundTrackingEnabled}
             onChange={onToggleBackgroundTracking}
           />
           <Reglage
-            titre="Arrêter la session en véhicule"
-            texte="Au-dessus de 20 km/h, la session s'arrête toute seule. Désactive si tu marches vite en descente et que ça te coupe à tort."
+            titre={t('settings.autoStopTitle')}
+            texte={t('settings.autoStopDesc')}
             valeur={arretAutoVitesse}
             onChange={onToggleArretAutoVitesse}
           />
         </Section>
 
-        <Section titre="Compte">
+        <Section titre={t('settings.accountSection')}>
           {auth.user ? (
             <View style={styles.compte}>
               <Jeton nom={nom} size={34} />
               <View style={styles.compteTexte}>
                 <Text style={styles.compteNom} numberOfLines={1}>
-                  {nom || 'Compte connecté'}
+                  {nom || t('settings.accountConnected')}
                 </Text>
               </View>
               <Pressable onPress={auth.signOut} hitSlop={8}>
-                <Text style={styles.lien}>Se déconnecter</Text>
+                <Text style={styles.lien}>{t('account.signOut')}</Text>
               </Pressable>
             </View>
           ) : (
-            <Text style={styles.pasDeCompte}>Pas de compte : ton relevé reste sur cet appareil.</Text>
+            <Text style={styles.pasDeCompte}>{t('settings.noAccount')}</Text>
           )}
         </Section>
 
-        <Section titre="Mes données">
+        <Section titre={t('profile.language')}>
+          <LanguagePicker />
+        </Section>
+
+        <Section titre={t('settings.dataSection')}>
           <View style={styles.reglage}>
             <View style={styles.reglageTexte}>
-              <Text style={styles.reglageTitre}>Effacer ma progression</Text>
+              <Text style={styles.reglageTitre}>{t('settings.wipeTitle')}</Text>
               <Text style={styles.reglageDetail}>
-                {confirmeEffacement
-                  ? 'Sans retour possible. Touche à nouveau pour confirmer.'
-                  : 'Supprime les rues, les points et les sessions, sur l’appareil et sur le compte.'}
+                {confirmeEffacement ? t('settings.wipeConfirmDesc') : t('settings.wipeDesc')}
               </Text>
             </View>
             <Pressable onPress={effacer} disabled={effacement} hitSlop={8}>
-              <Text style={styles.lienDanger}>{effacement ? '…' : confirmeEffacement ? 'Confirmer' : 'Effacer'}</Text>
+              <Text style={styles.lienDanger}>
+                {effacement ? '…' : confirmeEffacement ? t('settings.wipeConfirm') : t('settings.wipeAction')}
+              </Text>
             </Pressable>
           </View>
         </Section>

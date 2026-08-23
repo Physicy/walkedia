@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS, RADIUS } from '../theme';
 import { Jeton } from '../components/ui';
 import { Icone } from '../components/Icones';
@@ -14,6 +15,7 @@ function SectionTitre({ children }: { children: React.ReactNode }) {
 }
 
 export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
+  const { t } = useTranslation();
   const { friends, incoming, outgoing, searchUsers, sendRequest, respond } = api;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FriendProfile[]>([]);
@@ -42,7 +44,7 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
         <Icone nom="ami" size={16} color={COLORS.encre3} strokeWidth={1.7} />
         <TextInput
           style={styles.champ}
-          placeholder="Chercher un joueur par pseudo…"
+          placeholder={t('friends.searchPlaceholder')}
           placeholderTextColor={COLORS.encre3}
           value={query}
           onChangeText={runSearch}
@@ -55,21 +57,21 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
           {searching ? (
             <ActivityIndicator color={COLORS.trace} style={styles.loader} />
           ) : results.length === 0 ? (
-            <Text style={styles.vide}>Aucun joueur trouvé.</Text>
+            <Text style={styles.vide}>{t('friends.noPlayerFound')}</Text>
           ) : (
             results.map((r) => (
               <View key={r.id} style={styles.ligne}>
                 <Jeton nom={r.display_name} size={30} />
                 <Text style={styles.nom} numberOfLines={1}>
-                  {r.display_name || 'Joueur'}
+                  {r.display_name || t('leaderboard.defaultPlayerName')}
                 </Text>
                 {friendIds.has(r.id) ? (
-                  <Text style={styles.etat}>Déjà ami</Text>
+                  <Text style={styles.etat}>{t('friends.alreadyFriend')}</Text>
                 ) : outgoingIds.has(r.id) ? (
-                  <Text style={styles.etat}>En attente</Text>
+                  <Text style={styles.etat}>{t('friends.pending')}</Text>
                 ) : (
                   <Pressable style={styles.btnPetit} onPress={() => sendRequest(r.id)}>
-                    <Text style={styles.btnPetitTexte}>Ajouter</Text>
+                    <Text style={styles.btnPetitTexte}>{t('friends.add')}</Text>
                   </Pressable>
                 )}
               </View>
@@ -80,19 +82,19 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
 
       {incoming.length > 0 && (
         <>
-          <SectionTitre>Demandes reçues</SectionTitre>
+          <SectionTitre>{t('friends.incomingRequests')}</SectionTitre>
           {incoming.map((r) => (
             <View key={r.id} style={styles.ligne}>
               <Jeton nom={r.profile.display_name} size={30} />
               <Text style={styles.nom} numberOfLines={1}>
-                {r.profile.display_name || 'Joueur'}
+                {r.profile.display_name || t('leaderboard.defaultPlayerName')}
               </Text>
               <View style={styles.actions}>
                 <Pressable style={styles.btnPetit} onPress={() => respond(r.id, true)}>
-                  <Text style={styles.btnPetitTexte}>Accepter</Text>
+                  <Text style={styles.btnPetitTexte}>{t('friends.accept')}</Text>
                 </Pressable>
                 <Pressable style={styles.btnPetitFantome} onPress={() => respond(r.id, false)}>
-                  <Text style={styles.btnPetitFantomeTexte}>Refuser</Text>
+                  <Text style={styles.btnPetitFantomeTexte}>{t('friends.decline')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -100,15 +102,15 @@ export function FriendsScreen({ api }: { api: ReturnType<typeof useFriends> }) {
         </>
       )}
 
-      <SectionTitre>Amis ({friends.length})</SectionTitre>
+      <SectionTitre>{t('friends.friendsCount', { count: friends.length })}</SectionTitre>
       {friends.length === 0 ? (
-        <Text style={styles.vide}>Pas encore d'ami — cherche un pseudo au-dessus.</Text>
+        <Text style={styles.vide}>{t('friends.noFriendsYet')}</Text>
       ) : (
         friends.map((f) => (
           <View key={f.id} style={styles.ligne}>
             <Jeton nom={f.display_name} size={30} />
             <Text style={styles.nom} numberOfLines={1}>
-              {f.display_name || 'Joueur'}
+              {f.display_name || t('leaderboard.defaultPlayerName')}
             </Text>
           </View>
         ))

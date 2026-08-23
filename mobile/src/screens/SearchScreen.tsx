@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS } from '../theme';
 import { Titre } from '../components/ui';
 import { Icone } from '../components/Icones';
@@ -17,6 +18,7 @@ import type { LeaderboardRow } from '../hooks/useLeaderboard';
 
 export function SearchScreen({ userId }: { userId: string | null }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const friendsApi = useFriends(userId);
   const [amisOuvert, setAmisOuvert] = useState(false);
   const [joueurOuvert, setJoueurOuvert] = useState<{ row: LeaderboardRow; rang: number } | null>(null);
@@ -24,8 +26,8 @@ export function SearchScreen({ userId }: { userId: string | null }) {
   if (!userId) {
     return (
       <View style={[styles.wrap, { paddingTop: insets.top }]}>
-        <Titre style={styles.titre}>Classement</Titre>
-        <Text style={styles.placeholder}>Connecte-toi (onglet Profil) pour voir le classement et gérer tes amis.</Text>
+        <Titre style={styles.titre}>{t('search.title')}</Titre>
+        <Text style={styles.placeholder}>{t('search.loginPrompt')}</Text>
       </View>
     );
   }
@@ -35,12 +37,12 @@ export function SearchScreen({ userId }: { userId: string | null }) {
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
       <View style={styles.tete}>
-        <Titre style={styles.titre}>Classement</Titre>
+        <Titre style={styles.titre}>{t('search.title')}</Titre>
         <Pressable
           style={styles.rond}
           onPress={() => setAmisOuvert(true)}
           accessibilityRole="button"
-          accessibilityLabel="Amis"
+          accessibilityLabel={t('search.friendsTab')}
         >
           <Icone nom="ami" size={18} color={COLORS.encre} strokeWidth={1.7} />
           {(friendsApi.incoming.length > 0) && <View style={styles.pastille} />}
@@ -57,10 +59,10 @@ export function SearchScreen({ userId }: { userId: string | null }) {
       {amisOuvert && (
         <View style={[styles.overlay, { paddingTop: insets.top }]}>
           <View style={styles.tete}>
-            <Pressable style={styles.rond} onPress={() => setAmisOuvert(false)} accessibilityRole="button" accessibilityLabel="Retour">
+            <Pressable style={styles.rond} onPress={() => setAmisOuvert(false)} accessibilityRole="button" accessibilityLabel={t('common.back')}>
               <Icone nom="retour" size={18} color={COLORS.encre} strokeWidth={1.9} />
             </Pressable>
-            <Titre style={styles.titre}>Amis</Titre>
+            <Titre style={styles.titre}>{t('search.friendsTab')}</Titre>
           </View>
           <View style={styles.overlayCorps}>
             <FriendsScreen api={friendsApi} />

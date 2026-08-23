@@ -23,6 +23,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { COLORS, FONTS, RADIUS } from '../theme';
 import { Bouton, Corps } from '../components/ui';
@@ -37,6 +38,7 @@ function avatarEmailAleatoire(): string {
 }
 
 export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [parEmail, setParEmail] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
     try {
       await fn();
     } catch (e: any) {
-      setErreur(e?.message || 'Une erreur est survenue.');
+      setErreur(e?.message || t('login.genericError'));
     }
   };
 
@@ -57,11 +59,8 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
       <View style={[styles.wrap, { paddingTop: insets.top }]}>
         <View style={styles.corps}>
           <LogoAnime size={100} />
-          <Text style={styles.titre}>Le compte n'est pas configuré.</Text>
-          <Corps>
-            Renseigne mobile/.env à partir de .env.example pour activer la connexion : c'est le seul
-            moyen d'entrer dans l'app.
-          </Corps>
+          <Text style={styles.titre}>{t('login.notConfiguredTitle')}</Text>
+          <Corps>{t('login.notConfiguredBody')}</Corps>
         </View>
       </View>
     );
@@ -79,15 +78,13 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
       >
         <View style={styles.hero}>
           <LogoAnime size={128} />
-          <Text style={styles.slogan}>Une nouvelle aventure est toujours proche de nous</Text>
+          <Text style={styles.slogan}>{t('login.slogan')}</Text>
         </View>
 
         {auth.emailSent ? (
           <View style={styles.noteSys}>
             <Icone nom="coche" size={16} color={COLORS.trace} />
-            <Text style={styles.noteSysTexte}>
-              Lien de connexion envoyé à {email.trim()}. Ouvre-le depuis ce téléphone.
-            </Text>
+            <Text style={styles.noteSysTexte}>{t('login.magicLinkSent', { email: email.trim() })}</Text>
           </View>
         ) : (
           <View style={styles.actions}>
@@ -99,7 +96,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
                 onPress={() => lancer(auth.signInWithGoogle)}
                 icone={<LogoGoogle size={18} />}
               >
-                Continuer avec Google
+                {t('account.continueGoogle')}
               </Bouton>
               <Bouton
                 variante="sortie"
@@ -108,7 +105,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
                 onPress={() => lancer(auth.signInWithApple)}
                 icone={<LogoApple size={16} color={COLORS.encre} />}
               >
-                Continuer avec Apple
+                {t('account.continueApple')}
               </Bouton>
             </View>
 
@@ -118,7 +115,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
               <View style={styles.bloqEmail}>
                 <TextInput
                   style={styles.champ}
-                  placeholder="Adresse e-mail"
+                  placeholder={t('login.emailPlaceholder')}
                   placeholderTextColor={COLORS.encre3}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -132,7 +129,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
                   busy={auth.busyProvider === 'email'}
                   onPress={() => lancer(() => auth.signInWithEmail(email))}
                 >
-                  Recevoir un lien de connexion
+                  {t('login.sendMagicLink')}
                 </Bouton>
               </View>
             ) : (
@@ -142,7 +139,7 @@ export function LoginScreen({ auth }: { auth: ReturnType<typeof useAuth> }) {
                 onPress={() => setParEmail(true)}
                 icone={<Image source={AVATARS[avatarEmail]} style={styles.avatarEmail} />}
               >
-                Continuer par e-mail
+                {t('login.continueWithEmail')}
               </Bouton>
             )}
           </View>

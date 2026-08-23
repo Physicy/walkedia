@@ -10,6 +10,7 @@
 
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS } from '../theme';
 import { Bouton, Corps, Jeton, Titre } from '../components/ui';
 import { useLeaderboard, LeaderboardRow } from '../hooks/useLeaderboard';
@@ -30,6 +31,7 @@ export function LeaderboardScreen({
   onOuvrirJoueur: (row: LeaderboardRow, rang: number) => void;
   onAllerAmis: () => void;
 }) {
+  const { t } = useTranslation();
   const [scope, setScope] = useState<'all' | 'friends'>('all');
   const friendIds = scope === 'friends' ? friends.map((f) => f.id).concat(userId) : null;
   const { rows, loading } = useLeaderboard(friendIds);
@@ -37,8 +39,8 @@ export function LeaderboardScreen({
   return (
     <View style={styles.wrap}>
       <View style={styles.segments}>
-        <SegBtn label="Tout le monde" active={scope === 'all'} onPress={() => setScope('all')} />
-        <SegBtn label="Mes amis" active={scope === 'friends'} onPress={() => setScope('friends')} />
+        <SegBtn label={t('leaderboard.allPlayers')} active={scope === 'all'} onPress={() => setScope('all')} />
+        <SegBtn label={t('leaderboard.friendsScope')} active={scope === 'friends'} onPress={() => setScope('friends')} />
       </View>
 
       {loading ? (
@@ -46,14 +48,11 @@ export function LeaderboardScreen({
       ) : rows.length === 0 || (scope === 'friends' && rows.length === 1) ? (
         <View style={styles.vide}>
           <Titre style={styles.videTitre}>
-            {scope === 'friends' ? 'Tu es seul sur ce classement.' : 'Personne pour le moment.'}
+            {scope === 'friends' ? t('leaderboard.aloneOnBoard') : t('leaderboard.noOneYet')}
           </Titre>
-          <Corps style={styles.videTexte}>
-            Walkedia se compare mieux à plusieurs : chacun relève son quartier, et vous voyez qui avance le plus
-            vite.
-          </Corps>
+          <Corps style={styles.videTexte}>{t('leaderboard.emptyBody')}</Corps>
           <Bouton onPress={onAllerAmis} style={styles.videBouton}>
-            Chercher un joueur
+            {t('leaderboard.searchPlayerAction')}
           </Bouton>
         </View>
       ) : (
@@ -70,12 +69,12 @@ export function LeaderboardScreen({
               <Jeton nom={r.display_name} size={30} />
               <View style={styles.qui}>
                 <Text style={styles.nom} numberOfLines={1}>
-                  {r.display_name || 'Joueur'}
-                  {soi && <Text style={styles.etiqMoi}>  toi</Text>}
+                  {r.display_name || t('leaderboard.defaultPlayerName')}
+                  {soi && <Text style={styles.etiqMoi}>  {t('leaderboard.youSuffix')}</Text>}
                 </Text>
-                <Text style={styles.km}>{(r.edge_meters / 1000).toFixed(1)} km découverts</Text>
+                <Text style={styles.km}>{t('leaderboard.kmDiscovered', { km: (r.edge_meters / 1000).toFixed(1) })}</Text>
               </View>
-              <Text style={styles.pts}>{r.junction_count} pt{r.junction_count > 1 ? 's' : ''}</Text>
+              <Text style={styles.pts}>{t('leaderboard.pointsCount', { count: r.junction_count })}</Text>
             </Pressable>
           );
         })

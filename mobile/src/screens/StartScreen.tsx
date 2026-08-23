@@ -13,40 +13,50 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { COLORS, FONTS, RADIUS } from '../theme';
 import { Bouton, Corps } from '../components/ui';
 import { Icone, NomIcone } from '../components/Icones';
+import type { StartStatusKind } from '../hooks/useWalkedia';
 
 type Panne = { icone: NomIcone; titre: string; texte: string; reglages: boolean } | null;
 
-// Le hook ne renvoie qu'une phrase de statut ; c'est elle qui porte la nature
-// de la panne. On la reconnaît plutôt que de changer le contrat du hook pour
-// cet écran seul.
-function lirePanne(status: string): Panne {
-  if (/refusé/i.test(status)) {
+// `kind` porte la nature de la panne (voir useWalkedia.ts) : le statut lui-
+// même est un texte traduit, donc son contenu ne peut plus servir à deviner
+// s'il s'agit d'un refus de permission ou d'une autre erreur — auparavant
+// reconnu par une regex sur le français, cassée dès qu'on a traduit ce texte.
+function lirePanne(kind: StartStatusKind, t: (key: string) => string): Panne {
+  if (kind === 'permissionDenied') {
     return {
       icone: 'positionCoupee',
-      titre: 'Walkedia ne peut pas te situer.',
-      texte:
-        "L'accès à la position est refusé pour cette app. Active-le dans les réglages du téléphone pour reprendre le relevé. Ta progression est intacte.",
+      titre: t('start.permissionDeniedTitle'),
+      texte: t('start.permissionDeniedBody'),
       reglages: true,
     };
   }
-  if (/indisponible|dépassé|impossible|erreur/i.test(status)) {
+  if (kind === 'error') {
     return {
       icone: 'carteMuette',
-      titre: "Ce quartier n'a pas pu être chargé.",
-      texte:
-        'Les quartiers déjà chargés restent affichés, et ta progression est intacte. Réessaie dans un instant.',
+      titre: t('start.zoneErrorTitle'),
+      texte: t('start.zoneErrorBody'),
       reglages: false,
     };
   }
   return null;
 }
 
-export function StartScreen({ status, onLocate }: { status: string; onLocate: () => void }) {
-  const panne = lirePanne(status);
+export function StartScreen({
+  status,
+  kind,
+  onLocate,
+}: {
+  status: string;
+  kind: StartStatusKind;
+  onLocate: () => void;
+}) {
+  const { t } = useTranslation();
+  const panne = lirePanne(kind, t);
   const [ecoule, setEcoule] = useState(0);
   const depuis = useRef(Date.now());
   const insets = useSafeAreaInsets();
@@ -71,13 +81,13 @@ export function StartScreen({ status, onLocate }: { status: string; onLocate: ()
           <View style={styles.actions}>
             {panne.reglages ? (
               <>
-                <Bouton onPress={() => Linking.openSettings()}>Ouvrir les réglages</Bouton>
+                <Bouton onPress={() => Linking.openSettings()}>{t('start.openSettings')}</Bouton>
                 <Bouton variante="fantome" onPress={onLocate}>
-                  Réessayer
+                  {t('common.retry')}
                 </Bouton>
               </>
             ) : (
-              <Bouton onPress={onLocate}>Réessayer maintenant</Bouton>
+              <Bouton onPress={onLocate}>{t('start.retryNow')}</Bouton>
             )}
           </View>
         </View>
@@ -94,12 +104,7 @@ export function StartScreen({ status, onLocate }: { status: string; onLocate: ()
           {ecoule >= 5 ? ` (${ecoule} s)` : ''}
         </Text>
       )}
-      {ecoule >= 15 && (
-        <Text style={styles.indice}>
-          Les serveurs OpenStreetMap publics peuvent être lents. Le premier chargement d'un quartier
-          jamais visité peut prendre jusqu'à une minute ; les suivants sont immédiats.
-        </Text>
-      )}
+      {ecoule >= 15 && <Text style={styles.indice}>{t('start.slowServersHint')}</Text>}
     </View>
   );
 }

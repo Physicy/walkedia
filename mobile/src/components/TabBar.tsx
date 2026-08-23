@@ -8,15 +8,16 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS } from '../theme';
 import { Icone, NomIcone } from './Icones';
 
 export type TabName = 'adventure' | 'search' | 'profile';
 
-const TABS: { name: TabName; icone: NomIcone; label: string }[] = [
-  { name: 'adventure', icone: 'carte', label: 'Carte' },
-  { name: 'search', icone: 'classement', label: 'Classement' },
-  { name: 'profile', icone: 'profil', label: 'Profil' },
+const TABS: { name: TabName; icone: NomIcone; labelKey: string }[] = [
+  { name: 'adventure', icone: 'carte', labelKey: 'tabbar.adventure' },
+  { name: 'search', icone: 'classement', labelKey: 'tabbar.search' },
+  { name: 'profile', icone: 'profil', labelKey: 'tabbar.profile' },
 ];
 
 // Hauteur réelle de la barre, pour que les écrans qui posent quelque chose
@@ -35,21 +36,23 @@ export function tabBarHeight(insetsBottom: number): number {
 
 export function TabBar({ active, onChange }: { active: TabName; onChange: (t: TabName) => void }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, PADDING_BOTTOM_PLANCHER) }]}>
-      {TABS.map((t) => {
-        const actif = active === t.name;
+      {TABS.map((tab) => {
+        const actif = active === tab.name;
+        const label = t(tab.labelKey);
         return (
           <Pressable
-            key={t.name}
+            key={tab.name}
             style={styles.btn}
-            onPress={() => onChange(t.name)}
+            onPress={() => onChange(tab.name)}
             accessibilityRole="tab"
             accessibilityState={{ selected: actif }}
-            accessibilityLabel={t.label}
+            accessibilityLabel={label}
           >
-            <Icone nom={t.icone} size={21} color={actif ? COLORS.surface : 'rgba(232, 231, 238, 0.52)'} />
-            <Text style={[styles.label, actif && styles.labelActif]}>{t.label}</Text>
+            <Icone nom={tab.icone} size={21} color={actif ? COLORS.surface : 'rgba(232, 231, 238, 0.52)'} />
+            <Text style={[styles.label, actif && styles.labelActif]}>{label}</Text>
             {/* le point violet : un point gagné, donc le seul emploi permis de l'accent ici */}
             <View style={[styles.pastille, actif && styles.pastilleActive]} />
           </Pressable>
