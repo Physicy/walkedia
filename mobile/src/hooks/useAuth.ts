@@ -36,10 +36,15 @@ function parseFragmentParams(url: string): Record<string, string> {
   return params;
 }
 
+type BusyProvider = Provider | 'email';
+
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  // Identifie QUEL bouton a déclenché la connexion en cours, pour que seul
+  // celui-ci affiche son spinner (les autres restent juste désactivés).
+  const [busyProvider, setBusyProvider] = useState<BusyProvider | null>(null);
+  const busy = busyProvider !== null;
   const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
@@ -77,7 +82,7 @@ export function useAuth() {
   }, []);
 
   const signInWithProvider = useCallback(async (provider: Provider) => {
-    setBusy(true);
+    setBusyProvider(provider);
     try {
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'walkedia' });
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -103,12 +108,12 @@ export function useAuth() {
       });
       if (sessionError) throw sessionError;
     } finally {
-      setBusy(false);
+      setBusyProvider(null);
     }
   }, []);
 
   const signInWithEmail = useCallback(async (email: string) => {
-    setBusy(true);
+    setBusyProvider('email');
     setEmailSent(false);
     try {
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'walkedia' });
@@ -119,7 +124,7 @@ export function useAuth() {
       if (error) throw error;
       setEmailSent(true);
     } finally {
-      setBusy(false);
+      setBusyProvider(null);
     }
   }, []);
 
@@ -132,6 +137,7 @@ export function useAuth() {
     user: session?.user ?? null,
     loading,
     busy,
+    busyProvider,
     emailSent,
     isConfigured: isSupabaseConfigured,
     signInWithGoogle: () => signInWithProvider('google'),

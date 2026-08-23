@@ -20,6 +20,7 @@ export type NomIcone =
   | 'horloge'
   | 'fermer'
   | 'retour'
+  | 'chevronDroit'
   | 'reglages'
   | 'ami'
   | 'crayon';
@@ -91,6 +92,7 @@ export function Icone({
       )}
       {nom === 'fermer' && <Path d="M6 6l12 12M18 6L6 18" {...c} />}
       {nom === 'retour' && <Path d="M15 18l-6-6 6-6" {...c} />}
+      {nom === 'chevronDroit' && <Path d="M9 6l6 6-6 6" {...c} />}
       {nom === 'lecture' && <Path d="M7 5l12 7-12 7V5z" {...c} />}
       {nom === 'coche' && <Path d="M20 6L9 17l-5-5" {...c} strokeWidth={strokeWidth * 1.5} />}
       {nom === 'bouclier' && (

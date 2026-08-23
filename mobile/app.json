@@ -14,13 +14,16 @@
         "NSLocationWhenInUseUsageDescription": "Walkedia a besoin de ta position pour charger le réseau piéton autour de toi et suivre ta progression pendant une marche.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Si tu actives la détection de marche en arrière-plan (réglage optionnel, désactivé par défaut) dans ton profil, Walkedia utilise ta position même app fermée pour te proposer d'importer tes marches au retour dans l'app.",
         "UIBackgroundModes": [
+          "location",
           "location"
-        ]
-      }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.bbastian.walkedia"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#E8E7ED",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -28,7 +31,12 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -47,6 +55,11 @@
       ],
       "expo-web-browser",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9c65ab0c-e845-4b99-bc88-80e51acbbe45"
+      }
+    }
   }
 }

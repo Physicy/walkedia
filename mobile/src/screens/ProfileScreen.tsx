@@ -1,23 +1,21 @@
-// Profil : le relevé d'abord, les réglages ailleurs (voir SettingsScreen.tsx).
-// L'ancien profil ouvrait sur un interrupteur de permission GPS avec quatre
-// lignes de texte gris, avant la moindre donnée de jeu — le premier bloc est
-// maintenant le total de points.
-//
-// Les sorties sont nommées par les points décrochés (« Points n° 3 et 4 »),
-// pas par un quartier : une session ne porte aucun quartier en mémoire, et en
-// inventer un serait fabriquer une donnée qui n'existe pas.
+// Profil : le relevé d'abord, les réglages et les sorties ailleurs (voir
+// SettingsScreen.tsx et ProfileActivityScreen.tsx). L'ancien profil ouvrait
+// sur un interrupteur de permission GPS avec quatre lignes de texte gris,
+// avant la moindre donnée de jeu — le premier bloc est maintenant le total de
+// points. Les sorties et les quartiers, eux, allongeaient l'écran bien après
+// le contenu qu'on vient vraiment consulter ici (total, semaine, tronçons) ;
+// ils vivent maintenant à un appui de distance plutôt qu'en défilement.
 
 import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
 import { Avatar, Eyebrow, Mono, Titre } from '../components/ui';
-import { Icone } from '../components/Icones';
+import { Icone, NomIcone } from '../components/Icones';
 import { tabBarHeight } from '../components/TabBar';
 import { AVATARS, AVATAR_IDS } from '../logic/avatars';
 import type { Progress } from '../logic/storage';
 import type { useAuth } from '../hooks/useAuth';
-import type { NeighborhoodStat } from '../hooks/useWalkedia';
 
 const DAY = 86400000;
 
@@ -33,30 +31,12 @@ function pointsBetween(progress: Progress, a: number, b: number) {
   return n;
 }
 
-// Numérote chaque sortie par les points qu'elle a fait tomber : un simple
-// cumul sur les sessions dans l'ordre, puisque la numérotation elle-même suit
-// l'ordre de complétion (voir junctionInfo.ts, pointNumber) et que les
-// sessions sont conservées triées par date de début.
-function nommerSorties(sessions: Progress['sessions']) {
-  let cumul = 0;
-  return sessions.map((s) => {
-    const debut = cumul + 1;
-    cumul += s.junctions;
-    let label: string;
-    if (s.junctions === 0) label = 'Aucun point';
-    else if (s.junctions === 1) label = `Point n° ${debut}`;
-    else if (s.junctions === 2) label = `Points n° ${debut} et ${cumul}`;
-    else label = `Points n° ${debut} à ${cumul}`;
-    return { ...s, label };
-  });
-}
-
 export function ProfileScreen({
   progress,
   auth,
   syncing,
-  neighborhoods,
   onOuvrirReglages,
+  onOuvrirActivite,
   traceColor,
   onChoisirCouleur,
   avatarId,
@@ -65,8 +45,8 @@ export function ProfileScreen({
   progress: Progress;
   auth: ReturnType<typeof useAuth>;
   syncing: boolean;
-  neighborhoods: NeighborhoodStat[];
   onOuvrirReglages: () => void;
+  onOuvrirActivite: () => void;
   traceColor: string;
   onChoisirCouleur: (hex: string) => void;
   avatarId: string | null;
@@ -88,9 +68,6 @@ export function ProfileScreen({
       days.push({ label: dayName.format(new Date(start)).replace('.', ''), pts });
     }
 
-    const dateFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-    const sorties = nommerSorties(progress.sessions).slice(-6).reverse();
-
     const debuts = progress.sessions.map((s) => s.start);
     const premiereActivite = debuts.length ? Math.min(...debuts) : null;
     const depuisFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' });
@@ -104,8 +81,6 @@ export function ProfileScreen({
       sessions: progress.sessions.length,
       days,
       max,
-      sorties,
-      dateFmt,
       depuis: premiereActivite != null ? depuisFmt.format(new Date(premiereActivite)) : null,
     };
   }, [progress]);
@@ -115,15 +90,6 @@ export function ProfileScreen({
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
-      <Pressable
-        style={styles.rond}
-        onPress={onOuvrirReglages}
-        accessibilityRole="button"
-        accessibilityLabel="Réglages"
-      >
-        <Icone nom="reglages" size={18} color={COLORS.encre} strokeWidth={1.7} />
-      </Pressable>
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 26 }}
@@ -144,6 +110,8 @@ export function ProfileScreen({
           <Text style={styles.eyebrow}>{stats.depuis ? `Ton relevé · depuis le ${stats.depuis}` : 'Ton relevé'}</Text>
           <Titre style={styles.nom}>{nom || 'Marcheur sans nom'}</Titre>
         </View>
+
+        <LigneNav icone="reglages" texte="Réglages" onPress={onOuvrirReglages} />
 
         <View style={styles.total}>
           <Mono style={styles.totalN}>{stats.total}</Mono>
@@ -185,43 +153,7 @@ export function ProfileScreen({
           </View>
         </View>
 
-        <Eyebrow style={styles.sectionTitre}>Dernières sorties</Eyebrow>
-        {stats.sorties.length === 0 ? (
-          <Text style={styles.vide}>Aucune sortie pour l'instant.</Text>
-        ) : (
-          stats.sorties.map((s, i) => (
-            <View key={i} style={styles.sortie}>
-              <View style={[styles.puce, s.junctions > 0 && styles.puceGain]} />
-              <View style={styles.sortieTexte}>
-                <Text style={styles.sortieTitre}>{s.label}</Text>
-                <Text style={styles.sortieDetail}>
-                  {stats.dateFmt.format(new Date(s.start)).replace('.', '')}
-                  {s.km != null ? ` · ${s.km.toFixed(1)} km` : ''}
-                  {s.imported ? ' · importée' : ''}
-                </Text>
-              </View>
-              <Mono style={[styles.sortiePts, s.junctions === 0 && styles.sortiePtsNul]}>
-                {s.junctions > 0 ? `+${s.junctions} pt${s.junctions > 1 ? 's' : ''}` : `${s.edges} tronçons`}
-              </Mono>
-            </View>
-          ))
-        )}
-
-        {neighborhoods.length > 0 && (
-          <>
-            <Eyebrow style={styles.sectionTitre}>Quartiers</Eyebrow>
-            {neighborhoods.map((n) => (
-              <View key={n.id} style={styles.quartier}>
-                <Text style={styles.quartierNom} numberOfLines={1}>
-                  {n.name || 'Quartier sans nom'}
-                </Text>
-                <Text style={[styles.quartierPct, n.unlocked && styles.quartierDebloque]}>
-                  {n.unlocked ? 'Débloqué' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
-                </Text>
-              </View>
-            ))}
-          </>
-        )}
+        <LigneNav icone="carte" texte="Sorties & quartiers" onPress={onOuvrirActivite} />
       </ScrollView>
 
       {personnaliserOuvert && (
@@ -257,13 +189,23 @@ function PersonnalisationSheet({
   onChoisirAvatar: (id: string | null) => void;
   onFermer: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <Pressable style={styles.voile} onPress={onFermer}>
       <Pressable style={styles.feuille} onPress={(e) => e.stopPropagation()}>
         <View style={styles.poignee} />
         <Titre style={styles.feuilleTitre}>Personnaliser</Titre>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        {/* `flexShrink: 1` est ce qui force le ScrollView à se limiter à
+            l'espace restant dans `feuille` (plafonnée par maxHeight) plutôt
+            que de se dimensionner sur tout son contenu : sans lui, la liste
+            d'avatars débordait de la feuille sans qu'aucun scroll ne puisse
+            jamais atteindre les dernières lignes. */}
+        <ScrollView
+          style={styles.feuilleScroll}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+        >
         <Eyebrow style={styles.sectionTitreFeuille}>Ta couleur</Eyebrow>
         <Text style={styles.couleurTexte}>
           Remplace le violet pour le halo autour des carrefours, les points déjà validés et le tracé de ta session.
@@ -320,6 +262,21 @@ function PersonnalisationSheet({
   );
 }
 
+// Ligne de navigation vers un autre écran (réglages, sorties & quartiers) :
+// remplace l'ancienne pastille isolée en coin haut-droit par une bande pleine
+// largeur au fil du profil, plus facile à repérer et à toucher.
+function LigneNav({ icone, texte, onPress }: { icone: NomIcone; texte: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.ligneNav} accessibilityRole="button" accessibilityLabel={texte}>
+      <View style={styles.ligneNavIcone}>
+        <Icone nom={icone} size={17} color={COLORS.encre} strokeWidth={1.7} />
+      </View>
+      <Text style={styles.ligneNavTexte}>{texte}</Text>
+      <Icone nom="chevronDroit" size={16} color={COLORS.encre3} strokeWidth={1.9} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.papier },
   scroll: { flex: 1 },
@@ -348,20 +305,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   nom: { fontSize: 24, textAlign: 'center' },
-  rond: {
-    position: 'absolute',
-    top: 18,
-    right: 20,
-    zIndex: 20,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+
+  ligneNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.ligneForte,
+    borderColor: COLORS.ligne,
+    borderRadius: RADIUS.m,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    marginHorizontal: 20,
+    marginTop: 16,
+  },
+  ligneNavIcone: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.papier,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ligneNavTexte: { flex: 1, fontFamily: FONTS.texteSemi, fontSize: 14.5, color: COLORS.encre },
 
   total: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 20, marginTop: 14 },
   totalN: { fontFamily: FONTS.display, fontSize: 60, lineHeight: 60, color: COLORS.trace, letterSpacing: -1.2 },
@@ -384,37 +350,6 @@ const styles = StyleSheet.create({
   caseFin: { borderRightWidth: 0 },
   caseValeur: { fontSize: 19, fontFamily: FONTS.monoSemi, color: COLORS.encre, letterSpacing: -0.4 },
   caseLabel: { fontFamily: FONTS.texte, fontSize: 11, color: COLORS.encre2, marginTop: 2 },
-
-  vide: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, paddingHorizontal: 20, paddingVertical: 10 },
-  sortie: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderColor: COLORS.ligne,
-  },
-  puce: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: COLORS.ligneForte },
-  puceGain: { backgroundColor: COLORS.trace },
-  sortieTexte: { flex: 1 },
-  sortieTitre: { fontFamily: FONTS.texteSemi, fontSize: 13.5, color: COLORS.encre },
-  sortieDetail: { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.encre3, marginTop: 2 },
-  sortiePts: { fontSize: 12, color: COLORS.trace },
-  sortiePtsNul: { color: COLORS.encre3 },
-
-  quartier: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderColor: COLORS.ligne,
-  },
-  quartierNom: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, flexShrink: 1 },
-  quartierPct: { fontFamily: FONTS.monoMedium, fontSize: 12, color: COLORS.encre2 },
-  quartierDebloque: { color: COLORS.trace },
 
   couleurTexte: {
     fontFamily: FONTS.texte,
@@ -462,5 +397,6 @@ const styles = StyleSheet.create({
   },
   poignee: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.ligneForte, alignSelf: 'center', marginBottom: 16 },
   feuilleTitre: { fontSize: 21, textAlign: 'center', marginBottom: 4 },
+  feuilleScroll: { flexShrink: 1 },
   sectionTitreFeuille: { marginTop: 22, marginBottom: 4 },
 });

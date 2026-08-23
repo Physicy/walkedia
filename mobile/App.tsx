@@ -13,6 +13,7 @@ import { StartScreen } from './src/screens/StartScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { ProfileActivityScreen } from './src/screens/ProfileActivityScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { FusionVoile } from './src/components/FusionVoile';
 import { TabBar, TabName } from './src/components/TabBar';
@@ -25,24 +26,18 @@ function AppContent() {
   const policesPretes = useAppFonts();
   const [tab, setTab] = useState<TabName>('adventure');
   const [reglagesOuverts, setReglagesOuverts] = useState(false);
+  const [activiteOuverte, setActiviteOuverte] = useState(false);
 
   // Repère de première ouverture, persisté (prefs.ts) et pas gardé dans un
   // ref : entre la fin de l'onboarding et la première carte il y a la
   // connexion, la permission et le calcul de la zone, soit largement de quoi
   // fermer l'app en chemin.
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
-  const [connexionProposee, setConnexionProposee] = useState(true);
   useEffect(() => {
     loadPrefs().then((p) => {
       setOnboarded(p.onboarded);
-      setConnexionProposee(p.connexionProposee);
     });
   }, []);
-
-  const refuserConnexion = () => {
-    setConnexionProposee(true);
-    savePrefs({ connexionProposee: true });
-  };
 
   // `autoriser` répond au bouton du dernier écran d'onboarding. La demande
   // système n'est pas déclenchée ici : la connexion s'intercale encore avant la
@@ -73,8 +68,7 @@ function AppContent() {
   // Va directement à la carte à l'ouverture : dès que la progression est
   // chargée, on déclenche la géolocalisation sans attendre un appui sur un
   // bouton. L'écran de démarrage garde son bouton de nouvelle tentative en cas
-  // d'échec (refus de permission, position indisponible…). Ne dépend plus
-  // d'une session : la carte se relève très bien sans compte.
+  // d'échec (refus de permission, position indisponible…).
   const autoStarted = useRef(false);
   useEffect(() => {
     if (positionDifferee || onboarded !== true) return;
@@ -98,7 +92,7 @@ function AppContent() {
   // Attente des trois choses sans lesquelles le premier écran serait faux : les
   // préférences (sait-on s'il faut l'onboarding ?), les polices (sinon le titre
   // s'affiche en police système puis saute), et l'état de session (sinon la
-  // connexion est proposée à quelqu'un qui est déjà connecté). Le chargement de
+  // connexion s'affiche à quelqu'un qui est déjà connecté). Le chargement de
   // la progression locale, lui, continue en tâche de fond.
   if (onboarded === null || !policesPretes || auth.loading) {
     return (
@@ -109,14 +103,14 @@ function AppContent() {
     );
   }
 
-  // La connexion est proposée une fois, juste après l'onboarding, et jamais
-  // imposée : la progression vit en local (storage.ts) et le compte ne fait
-  // que la transporter d'un téléphone à l'autre. Elle reste accessible ensuite
-  // depuis le profil.
-  if (!auth.user && !connexionProposee) {
+  // Porte d'authentification : rien d'autre (carte, recherche, profil) ne
+  // s'affiche tant qu'il n'y a pas de session Supabase. La progression vit en
+  // local (storage.ts) une fois connecté — le compte ne fait que la
+  // transporter d'un téléphone à l'autre.
+  if (!auth.user) {
     return (
       <View style={styles.fill}>
-        <LoginScreen auth={auth} onSkip={refuserConnexion} />
+        <LoginScreen auth={auth} />
         <StatusBar style="dark" />
       </View>
     );
@@ -151,8 +145,8 @@ function AppContent() {
           progress={state.progress}
           auth={auth}
           syncing={state.syncing}
-          neighborhoods={neighborhoodStats(state)}
           onOuvrirReglages={() => setReglagesOuverts(true)}
+          onOuvrirActivite={() => setActiviteOuverte(true)}
           traceColor={state.traceColor}
           onChoisirCouleur={actions.setTraceColor}
           avatarId={state.avatarId}
@@ -160,6 +154,14 @@ function AppContent() {
         />
       )}
       <TabBar active={tab} onChange={setTab} />
+
+      {activiteOuverte && (
+        <ProfileActivityScreen
+          progress={state.progress}
+          neighborhoods={neighborhoodStats(state)}
+          onFermer={() => setActiviteOuverte(false)}
+        />
+      )}
 
       {reglagesOuverts && (
         <SettingsScreen

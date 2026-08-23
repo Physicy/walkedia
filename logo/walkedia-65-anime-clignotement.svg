@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Walkedia">
+  <title>Walkedia</title>
+  <rect width="512" height="512" fill="#E8E7ED"/>
+  <g transform="translate(23.88 -10.83) scale(1.1713)">
+    <path d="M 47.55 221.70 Q 122.36 219.64 165.15 207.06 Q 251.47 184.85 387.32 130.16 Q 399.91 118.96 383.40 115.60 Q 238.60 137.09 152.90 161.58 Q 109.49 171.88 43.63 207.15 Q 31.04 218.35 47.55 221.70 Z" fill="#6C5DF4"/>
+    <path d="M 121.76 65.41 Q 123.65 144.43 136.17 190.02 Q 157.36 279.61 210.47 421.15 Q 221.43 433.95 225.09 417.50 Q 205.35 267.64 181.88 178.62 Q 171.64 132.46 136.39 61.77 Q 125.43 48.96 121.76 65.41 Z" fill="#6C5DF4"/>
+    <circle cx="159.03" cy="184.32" r="94.54" fill="none" stroke="#22D3EE" stroke-width="4.07" stroke-opacity="0.85">
+      <animate attributeName="stroke-opacity" values="0.85;0.4;1.0;0.59;1.0;0.4;0.85" keyTimes="0;0.17;0.31;0.48;0.63;0.82;1" dur="2.3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    </circle>
+    <circle cx="159.03" cy="184.32" r="52.62" fill="none" stroke="#22D3EE" stroke-width="2.78" stroke-opacity="0.55">
+      <animate attributeName="stroke-opacity" values="0.55;0.1;0.7;0.39;0.7;0.1;0.55" keyTimes="0;0.17;0.31;0.48;0.63;0.82;1" dur="3.1s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    </circle>
+    <circle cx="159.03" cy="184.32" r="22.12" fill="#9C90FF">
+      <animate attributeName="r" values="22.12;26.98;22.12" dur="3.2s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+    </circle>
+  </g>
+</svg>
