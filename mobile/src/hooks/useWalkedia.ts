@@ -223,6 +223,7 @@ interface WalkediaState {
   arretAutoVitesse: boolean; // réglage opt-out, voir SettingsScreen.tsx
   traceColor: string; // accent choisi par le joueur, voir logic/prefs.ts
   avatarId: string | null; // voir logic/avatars.ts
+  stepGoal: number; // objectif quotidien de pas, voir logic/prefs.ts
   fusionResume: FusionResume | null;
 }
 
@@ -261,6 +262,7 @@ function freshState(): WalkediaState {
     arretAutoVitesse: true,
     traceColor: '#6C5DF4',
     avatarId: null,
+    stepGoal: 7000,
     fusionResume: null,
   };
 }
@@ -429,6 +431,7 @@ export function useWalkedia() {
       state.arretAutoVitesse = p.arretAutoVitesse;
       state.traceColor = p.traceColor;
       state.avatarId = p.avatarId;
+      state.stepGoal = p.stepGoal;
       rerender();
     });
     return () => {
@@ -1366,6 +1369,15 @@ export function useWalkedia() {
     [state, rerender]
   );
 
+  const setStepGoal = useCallback(
+    (steps: number) => {
+      state.stepGoal = steps;
+      savePrefs({ stepGoal: steps });
+      rerender();
+    },
+    [state, rerender]
+  );
+
   // Efface la progression — rues, points, sessions — sur l'appareil et sur le
   // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
   // porte la confirmation) : ne touche ni les préférences ni la session
@@ -1404,6 +1416,7 @@ export function useWalkedia() {
       setArretAutoVitesse,
       setTraceColor,
       setAvatar,
+      setStepGoal,
       wipeProgress,
     },
   };

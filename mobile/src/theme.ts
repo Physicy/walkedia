@@ -24,6 +24,12 @@ export const COLORS = {
   traceClair: '#A79BFF', // le violet lisible sur fond encre
   tracePale: 'rgba(108, 93, 244, 0.13)',
 
+  // l'unique exception à la règle du violet : la série de jours consécutifs,
+  // au profil (voir components/PixelFlame.tsx). Un orange doux, jamais
+  // réutilisé ailleurs pour rester une exception repérable.
+  flamme: '#E2894A',
+  flammePale: 'rgba(226, 137, 74, 0.14)',
+
   ligne: 'rgba(26, 27, 46, 0.13)',
   ligneForte: 'rgba(26, 27, 46, 0.28)',
 

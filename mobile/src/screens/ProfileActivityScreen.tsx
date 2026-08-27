@@ -42,7 +42,12 @@ export function ProfileActivityScreen({
 
   const sorties = useMemo(() => {
     const dateFmt = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-    return { liste: nommerSorties(progress.sessions).reverse(), dateFmt };
+    // Une sortie sans le moindre carrefour débloqué n'apprend rien sur la
+    // progression : seules celles qui en ont au moins un apparaissent ici.
+    const liste = nommerSorties(progress.sessions)
+      .filter((s) => s.junctions > 0)
+      .reverse();
+    return { liste, dateFmt };
   }, [progress.sessions]);
 
   return (
@@ -56,12 +61,13 @@ export function ProfileActivityScreen({
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
         <Eyebrow style={styles.sectionTitre}>Dernières sorties</Eyebrow>
+        <Text style={styles.aide}>Seules les sorties ayant débloqué au moins un carrefour.</Text>
         {sorties.liste.length === 0 ? (
           <Text style={styles.vide}>Aucune sortie pour l'instant.</Text>
         ) : (
           sorties.liste.map((s, i) => (
             <View key={i} style={styles.sortie}>
-              <View style={[styles.puce, s.junctions > 0 && styles.puceGain]} />
+              <View style={[styles.puce, styles.puceGain]} />
               <View style={styles.sortieTexte}>
                 <Text style={styles.sortieTitre}>{s.label}</Text>
                 <Text style={styles.sortieDetail}>
@@ -70,8 +76,8 @@ export function ProfileActivityScreen({
                   {s.imported ? ' · importée' : ''}
                 </Text>
               </View>
-              <Text style={[styles.sortiePts, s.junctions === 0 && styles.sortiePtsNul]}>
-                {s.junctions > 0 ? `+${s.junctions} pt${s.junctions > 1 ? 's' : ''}` : `${s.edges} tronçons`}
+              <Text style={styles.sortiePts}>
+                +{s.junctions} pt{s.junctions > 1 ? 's' : ''}
               </Text>
             </View>
           ))
@@ -87,7 +93,7 @@ export function ProfileActivityScreen({
                 {n.name || 'Quartier sans nom'}
               </Text>
               <Text style={[styles.quartierPct, n.unlocked && styles.quartierDebloque]}>
-                {n.unlocked ? 'Débloqué' : `${Math.round(n.pct * 100)}% (${n.done}/${n.total})`}
+                {n.unlocked ? 'Débloqué' : `${Math.round(n.pct * 100)} %`}
               </Text>
             </View>
           ))
@@ -114,6 +120,7 @@ const styles = StyleSheet.create({
   titre: { fontFamily: FONTS.display, fontSize: 21, letterSpacing: -0.42, color: COLORS.encre, flex: 1 },
 
   sectionTitre: { paddingHorizontal: 20, marginTop: 22, marginBottom: 4 },
+  aide: { fontFamily: FONTS.texte, fontSize: 11.5, color: COLORS.encre3, paddingHorizontal: 20, marginBottom: 4 },
 
   vide: { fontFamily: FONTS.texte, fontSize: 13, color: COLORS.encre2, paddingHorizontal: 20, paddingVertical: 10 },
   sortie: {
@@ -131,7 +138,6 @@ const styles = StyleSheet.create({
   sortieTitre: { fontFamily: FONTS.texteSemi, fontSize: 13.5, color: COLORS.encre },
   sortieDetail: { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.encre3, marginTop: 2 },
   sortiePts: { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.trace },
-  sortiePtsNul: { color: COLORS.encre3 },
 
   quartier: {
     flexDirection: 'row',

@@ -54,7 +54,13 @@
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Walkedia utilise le podomètre du téléphone pour compter tes pas et suivre ton objectif quotidien, réglable dans ton profil."
+        }
+      ]
     ],
     "extra": {
       "eas": {

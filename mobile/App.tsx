@@ -158,6 +158,8 @@ function AppContent() {
           onChoisirCouleur={actions.setTraceColor}
           avatarId={state.avatarId}
           onChoisirAvatar={actions.setAvatar}
+          stepGoal={state.stepGoal}
+          onChoisirObjectif={actions.setStepGoal}
         />
       )}
       <TabBar active={tab} onChange={setTab} />

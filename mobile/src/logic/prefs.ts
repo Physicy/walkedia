@@ -27,6 +27,9 @@ export interface Prefs {
   // avatar choisi (voir logic/avatars.ts) — null tant que rien n'est
   // sélectionné, le profil retombe alors sur les initiales (Jeton, ui.tsx).
   avatarId: string | null;
+  // objectif quotidien de pas (voir hooks/usePedometer.ts, ProfileScreen.tsx) :
+  // réglable par paliers de 500, sert aussi à faire avancer la série de jours.
+  stepGoal: number;
 }
 
 const DEFAULTS: Prefs = {
@@ -35,6 +38,7 @@ const DEFAULTS: Prefs = {
   arretAutoVitesse: true,
   traceColor: '#6C5DF4',
   avatarId: null,
+  stepGoal: 7000,
 };
 
 export async function loadPrefs(): Promise<Prefs> {
