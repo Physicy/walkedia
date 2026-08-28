@@ -19,6 +19,7 @@ import type { Progress } from '../logic/storage';
 import { loadPrefs, savePrefs } from '../logic/prefs';
 import * as discovered from '../logic/discovered';
 import type { Discovered } from '../logic/discovered';
+import { scheduleGoalReminder, notifyJunctionUnlocked, requestNotificationPermission } from '../logic/notifications';
 import { supabase } from '../lib/supabase';
 import {
   consumeBackgroundBuffer,
@@ -223,7 +224,9 @@ interface WalkediaState {
   arretAutoVitesse: boolean; // réglage opt-out, voir SettingsScreen.tsx
   traceColor: string; // accent choisi par le joueur, voir logic/prefs.ts
   avatarId: string | null; // voir logic/avatars.ts
-  stepGoal: number; // objectif quotidien de pas, voir logic/prefs.ts
+  dailyStepGoal: number; // voir logic/streak.ts, computeStreak
+  notificationsEnabled: boolean; // voir logic/notifications.ts
+  hideStats: boolean; // masque le classement public, voir supabase/migrations/0004_profile_visibility.sql
   fusionResume: FusionResume | null;
 }
 
@@ -262,7 +265,9 @@ function freshState(): WalkediaState {
     arretAutoVitesse: true,
     traceColor: '#6C5DF4',
     avatarId: null,
-    stepGoal: 7000,
+    dailyStepGoal: 7000,
+    notificationsEnabled: true,
+    hideStats: false,
     fusionResume: null,
   };
 }
@@ -431,8 +436,14 @@ export function useWalkedia() {
       state.arretAutoVitesse = p.arretAutoVitesse;
       state.traceColor = p.traceColor;
       state.avatarId = p.avatarId;
-      state.stepGoal = p.stepGoal;
+      state.dailyStepGoal = p.dailyStepGoal;
+      state.notificationsEnabled = p.notificationsEnabled;
+      state.hideStats = p.hideStats;
       rerender();
+      scheduleGoalReminder(p.dailyStepGoal, p.notificationsEnabled, {
+        titre: translate('notifications.goalReminderTitle'),
+        corps: (goal) => translate('notifications.goalReminderBody', { goal }),
+      });
     });
     return () => {
       if (watchSub.current) watchSub.current.remove();
@@ -1059,12 +1070,22 @@ export function useWalkedia() {
               state.session.newInter.add(jid);
               let nouvelles = 0;
               for (const id of j.requiredEdgeIds) if (state.session.newEdges.has(id)) nouvelles++;
+              const numero = state.progress.junctions.size;
               state.pointsGagnes.push({
                 junctionId: jid,
-                numero: state.progress.junctions.size,
+                numero,
                 nouvelles,
                 total: j.requiredEdgeIds.size,
               });
+              // Notification à côté du toast (voir plus bas dans ce hook), pas
+              // à sa place : le toast est le retour dans l'app, la
+              // notification est ce qui arrive si l'app est en arrière-plan.
+              if (state.notificationsEnabled) {
+                notifyJunctionUnlocked(
+                  translate('notifications.junctionUnlockedTitle'),
+                  translate('notifications.junctionUnlockedBody', { numero })
+                );
+              }
             }
           }
           persist();
@@ -1369,11 +1390,55 @@ export function useWalkedia() {
     [state, rerender]
   );
 
-  const setStepGoal = useCallback(
-    (steps: number) => {
-      state.stepGoal = steps;
-      savePrefs({ stepGoal: steps });
+  // Objectif de pas quotidien (voir ProfileScreen.tsx, modale "objectif") :
+  // reprogramme aussitôt le rappel, sinon un joueur qui relève son objectif
+  // continuerait de recevoir un rappel calé sur l'ancien.
+  const setDailyGoal = useCallback(
+    (goal: number) => {
+      state.dailyStepGoal = goal;
+      savePrefs({ dailyStepGoal: goal });
       rerender();
+      scheduleGoalReminder(goal, state.notificationsEnabled, {
+        titre: translate('notifications.goalReminderTitle'),
+        corps: (g) => translate('notifications.goalReminderBody', { goal: g }),
+      });
+    },
+    [state, rerender, translate]
+  );
+
+  // La permission n'est demandée qu'ici, au premier passage à `true` — jamais
+  // au démarrage de l'app (même règle que la position).
+  const toggleNotifications = useCallback(
+    async (next: boolean) => {
+      if (next) {
+        const accorde = await requestNotificationPermission();
+        if (!accorde) return false;
+      }
+      state.notificationsEnabled = next;
+      savePrefs({ notificationsEnabled: next });
+      rerender();
+      scheduleGoalReminder(state.dailyStepGoal, next, {
+        titre: translate('notifications.goalReminderTitle'),
+        corps: (g) => translate('notifications.goalReminderBody', { goal: g }),
+      });
+      return true;
+    },
+    [state, rerender, translate]
+  );
+
+  // Persiste comme les autres préférences, et pousse vers
+  // `profiles.hide_stats` s'il y a un compte (même schéma que setAvatar
+  // ci-dessus) : sans compte, ça n'a de toute façon aucun classement à
+  // masquer. Fire-and-forget : un échec réseau ne doit pas bloquer le choix
+  // local, cohérent avec le reste de ce hook.
+  const setHideStats = useCallback(
+    (hide: boolean) => {
+      state.hideStats = hide;
+      savePrefs({ hideStats: hide });
+      rerender();
+      if (state.userId) {
+        supabase.from('profiles').update({ hide_stats: hide }).eq('id', state.userId).then(() => {});
+      }
     },
     [state, rerender]
   );
@@ -1416,7 +1481,9 @@ export function useWalkedia() {
       setArretAutoVitesse,
       setTraceColor,
       setAvatar,
-      setStepGoal,
+      setDailyGoal,
+      toggleNotifications,
+      setHideStats,
       wipeProgress,
     },
   };

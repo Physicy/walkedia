@@ -23,7 +23,9 @@ export type NomIcone =
   | 'chevronDroit'
   | 'reglages'
   | 'ami'
-  | 'crayon';
+  | 'crayon'
+  | 'objectif'
+  | 'cadenas';
 
 export function Icone({
   nom,
@@ -125,6 +127,19 @@ export function Icone({
       )}
       {nom === 'crayon' && (
         <Path d="M4 20l1-4.2L15.5 5.3a1.5 1.5 0 0 1 2.1 0l1.1 1.1a1.5 1.5 0 0 1 0 2.1L8.2 19 4 20z" {...c} />
+      )}
+      {/* cible : objectif de pas, distincte de 'reglages' (pas de crans diagonaux) */}
+      {nom === 'objectif' && (
+        <>
+          <Circle cx={12} cy={12} r={3.2} {...c} />
+          <Path d="M12 3.5v2.6M12 17.9v2.6M20.5 12h-2.6M6.1 12H3.5" {...c} />
+        </>
+      )}
+      {nom === 'cadenas' && (
+        <>
+          <Rect x={4} y={10} width={16} height={11} rx={2.5} {...c} />
+          <Path d="M8 10V7a4 4 0 0 1 8 0v3" {...c} />
+        </>
       )}
     </Svg>
   );

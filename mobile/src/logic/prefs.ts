@@ -27,9 +27,20 @@ export interface Prefs {
   // avatar choisi (voir logic/avatars.ts) — null tant que rien n'est
   // sélectionné, le profil retombe alors sur les initiales (Jeton, ui.tsx).
   avatarId: string | null;
-  // objectif quotidien de pas (voir hooks/usePedometer.ts, ProfileScreen.tsx) :
-  // réglable par paliers de 500, sert aussi à faire avancer la série de jours.
-  stepGoal: number;
+  // objectif de pas quotidien (voir logic/streak.ts, computeStreak) — pas de
+  // 500, borné 1000-30000 comme la maquette.
+  dailyStepGoal: number;
+  // rappel d'objectif + notification de point débloqué (voir logic/notifications.ts).
+  notificationsEnabled: boolean;
+  // miroir local de profiles.hide_stats (Supabase) : affichage immédiat de
+  // l'interrupteur sans attendre l'aller-retour réseau (voir useAuth.ts,
+  // setHideStats). La valeur qui compte reste celle du serveur, relue à la
+  // connexion — ce miroir n'est qu'un cache d'affichage.
+  hideStats: boolean;
+  // apparence de la carte (voir SettingsScreen.tsx, modale "carte") — pas
+  // encore lu par MapScreen.tsx, seulement persisté pour l'instant.
+  mapLayer: 'trace' | 'chaleur' | 'quartiers';
+  mapBackground: 'clair' | 'plan';
 }
 
 const DEFAULTS: Prefs = {
@@ -38,7 +49,11 @@ const DEFAULTS: Prefs = {
   arretAutoVitesse: true,
   traceColor: '#6C5DF4',
   avatarId: null,
-  stepGoal: 7000,
+  dailyStepGoal: 7000,
+  notificationsEnabled: true,
+  hideStats: false,
+  mapLayer: 'trace',
+  mapBackground: 'clair',
 };
 
 export async function loadPrefs(): Promise<Prefs> {

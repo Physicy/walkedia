@@ -24,17 +24,18 @@ export const COLORS = {
   traceClair: '#A79BFF', // le violet lisible sur fond encre
   tracePale: 'rgba(108, 93, 244, 0.13)',
 
-  // l'unique exception à la règle du violet : la série de jours consécutifs,
-  // au profil (voir components/PixelFlame.tsx). Un orange doux, jamais
-  // réutilisé ailleurs pour rester une exception repérable.
-  flamme: '#E2894A',
-  flammePale: 'rgba(226, 137, 74, 0.14)',
-
   ligne: 'rgba(26, 27, 46, 0.13)',
   ligneForte: 'rgba(26, 27, 46, 0.28)',
 
   // réservé à ce qui détruit des données
   alerte: '#BE4B3C',
+
+  // réservé à un seul usage : la série de jours consécutifs (voir
+  // logic/streak.ts, ProfileScreen.tsx). Le violet ne désigne que de la
+  // géométrie parcourue ou un point gagné — la série est un rythme, pas une
+  // possession, elle a donc sa propre couleur plutôt que d'emprunter l'accent.
+  serie: '#D97B29',
+  seriePale: '#FBE6D2',
 
   // couleurs de la carte elle-même, pas de l'interface
   rue: '#F7F6FA',

@@ -58,9 +58,10 @@
       [
         "expo-sensors",
         {
-          "motionPermission": "Walkedia utilise le podomètre du téléphone pour compter tes pas et suivre ton objectif quotidien, réglable dans ton profil."
+          "motionPermission": "Walkedia utilise le capteur de pas de ton téléphone pour ton objectif quotidien et ta série de jours."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

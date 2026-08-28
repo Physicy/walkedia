@@ -19,8 +19,20 @@ import {
 import { COLORS, FONTS, RADIUS } from '../theme';
 import { AVATARS } from '../logic/avatars';
 
-export function Titre({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {
-  return <Text style={[styles.titre, style]}>{children}</Text>;
+export function Titre({
+  children,
+  style,
+  numberOfLines,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
+}) {
+  return (
+    <Text style={[styles.titre, style]} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
 }
 
 export function Eyebrow({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {

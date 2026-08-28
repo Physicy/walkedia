@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { loadSavedLanguage } from './src/i18n';
 import { useWalkedia, neighborhoodStats } from './src/hooks/useWalkedia';
 import { useAuth } from './src/hooks/useAuth';
+import { usePedometer } from './src/hooks/usePedometer';
 import { useAppFonts } from './src/fonts';
 import { loadPrefs, savePrefs } from './src/logic/prefs';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
@@ -26,6 +27,7 @@ function AppContent() {
   const walkedia = useWalkedia();
   const { state, actions } = walkedia;
   const auth = useAuth();
+  const pedometer = usePedometer();
   const policesPretes = useAppFonts();
   const [tab, setTab] = useState<TabName>('adventure');
   const [reglagesOuverts, setReglagesOuverts] = useState(false);
@@ -80,6 +82,19 @@ function AppContent() {
       actions.requestLocationAndInit();
     }
   }, [state.ready, state.mapReady, actions, positionDifferee, onboarded]);
+
+  // Demande la permission de comptage de pas une seule fois, dès que l'app
+  // principale s'affiche (le relevé de pas est un contenu permanent du
+  // Profil, pas une fonctionnalité optionnelle activée à la demande — à la
+  // différence des notifications, qui restent gated derrière leur
+  // interrupteur dans Réglages).
+  const pedometerAsked = useRef(false);
+  useEffect(() => {
+    if (state.mapReady && !pedometerAsked.current) {
+      pedometerAsked.current = true;
+      pedometer.demanderPermission();
+    }
+  }, [state.mapReady, pedometer]);
 
   // L'onboarding passe avant la connexion : demander un compte à quelqu'un qui
   // ne sait pas encore à quoi sert l'app est la meilleure façon de le perdre.
@@ -158,8 +173,12 @@ function AppContent() {
           onChoisirCouleur={actions.setTraceColor}
           avatarId={state.avatarId}
           onChoisirAvatar={actions.setAvatar}
-          stepGoal={state.stepGoal}
-          onChoisirObjectif={actions.setStepGoal}
+          dailyStepGoal={state.dailyStepGoal}
+          onSetDailyGoal={actions.setDailyGoal}
+          stepsToday={pedometer.stepsToday}
+          stepsHistory={pedometer.history}
+          hideStats={state.hideStats}
+          neighborhoodsCount={neighborhoodStats(state).length}
         />
       )}
       <TabBar active={tab} onChange={setTab} />
@@ -181,6 +200,12 @@ function AppContent() {
           }
           arretAutoVitesse={state.arretAutoVitesse}
           onToggleArretAutoVitesse={actions.setArretAutoVitesse}
+          notificationsEnabled={state.notificationsEnabled}
+          onToggleNotifications={actions.toggleNotifications}
+          hideStats={state.hideStats}
+          onToggleHideStats={actions.setHideStats}
+          traceColor={state.traceColor}
+          onChoisirCouleur={actions.setTraceColor}
           onWipeProgress={actions.wipeProgress}
           onFermer={() => setReglagesOuverts(false)}
         />
