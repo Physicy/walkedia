@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Circle, Marker, Polyline, Region, UrlTile } from 'react-native-maps';
+import MapView, { Circle, Marker, Polygon, Polyline, Region, UrlTile } from 'react-native-maps';
 
-import { edgeIsFound, junctionIsDone } from '../hooks/useWalkedia';
+import { edgeIsFound, junctionIsDone, neighborhoodStats } from '../hooks/useWalkedia';
 import { BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
 import { PointGagneVoile } from '../components/PointGagneVoile';
 import { SessionSummary } from '../components/SessionSummary';
@@ -59,6 +59,10 @@ const MAX_JUNCTION_RENDER_LATITUDE_DELTA = 4.5; // ~500 km — échelle "pays"
 // degré (plus significatifs visuellement) et aux tronçons déjà découverts.
 const MAX_RENDERED_JUNCTIONS = 300;
 const MAX_RENDERED_EDGES = 600;
+// Calque "quartiers" : un contour est bien plus lourd à dessiner qu'un
+// tronçon (des centaines de points, et un remplissage), d'où un plafond
+// beaucoup plus bas.
+const MAX_RENDERED_NEIGHBORHOODS = 60;
 
 // Dézoomé au-delà de ce niveau, on affiche un badge "nombre de carrefours"
 // par cellule de grille plutôt que chaque carrefour individuellement — plus
@@ -146,6 +150,20 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const nuances = nuancesTrace(state.traceColor);
   const DISCOVERED_STROKE = state.traceColor;
   const TRACK_STROKE = nuances.clair;
+
+  // Ce que la carte montre (voir logic/prefs.ts, mapLayer ; réglé depuis
+  // components/MapAppearanceSheet.tsx) :
+  //  - 'trace'     : la géométrie parcourue dans la couleur du joueur ;
+  //  - 'chaleur'   : la même géométrie, colorée par nombre de passages ;
+  //  - 'quartiers' : la géométrie passe en retrait au profit des contours de
+  //                  zones, remplis d'autant plus que la zone est complétée.
+  const calque = state.mapLayer;
+  const strokeTroncon = (found: boolean, visits: number) => {
+    if (!found) return UNDISCOVERED_STROKE;
+    if (calque === 'chaleur') return heatColor(visits) ?? DISCOVERED_STROKE;
+    if (calque === 'quartiers') return rgbaTrace(state.traceColor, 0.45);
+    return DISCOVERED_STROKE;
+  };
 
   // `region` reflète la zone réellement affichée par la carte native (mise à
   // jour par onRegionChangeComplete, y compris son premier appel juste après
@@ -303,6 +321,27 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edges, junctions, region]);
 
+  // Contours de quartiers, seulement pour le calque qui les demande : le
+  // calcul de complétion balaie tous les carrefours du graphe, trop cher pour
+  // le refaire à chaque tick GPS alors qu'il ne bouge qu'à un point gagné.
+  // Reste avec les autres hooks, au-dessus des `return` conditionnels.
+  const visibleNeighborhoods = useMemo(() => {
+    if (calque !== 'quartiers' || !region) return [];
+    const viewBBox = regionBBox(region);
+    const pcts = new Map(neighborhoodStats(state).map((s) => [s.id, s.pct]));
+    const out: { id: number; ring: [number, number][]; pct: number }[] = [];
+    for (const [id, q] of state.neighborhoods) {
+      if (!q.ring || q.ring.length < 3) continue;
+      if (!bboxIntersects(coordsBBox(q.ring), viewBBox)) continue;
+      out.push({ id, ring: q.ring, pct: pcts.get(id) ?? 0 });
+      if (out.length >= MAX_RENDERED_NEIGHBORHOODS) break;
+    }
+    return out;
+    // `state` est muté en place (voir useWalkedia) : on se raccroche aux
+    // grandeurs qui changent réellement, comme le reste de ce fichier.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calque, region, state.graph, state.neighborhoods.size, state.progress.junctions.size]);
+
   // Plus de garde sur `state.graph` : la carte s'affiche dès que la position
   // est connue, avec l'historique persisté, pendant que la zone charge.
   if (!state.center) return null;
@@ -423,7 +462,24 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         rotateEnabled={false}
         onRegionChangeComplete={onRegionChangeComplete}
       >
-        <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+        {/* Fond "papier clair" : les tuiles OpenStreetMap par-dessus la carte
+            native. Le fond "plan gris" les retire et laisse le plan natif
+            (Plans sur iOS, Google Maps sur Android) — c'est la seule bascule
+            de fond possible sans dépendre d'un second fournisseur de tuiles. */}
+        {state.mapBackground === 'clair' && (
+          <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+        )}
+
+        {visibleNeighborhoods.map((q) => (
+          <Polygon
+            key={`quartier-${q.id}`}
+            coordinates={q.ring.map(toLatLng)}
+            strokeColor={progressColor(q.pct)}
+            strokeWidth={2}
+            fillColor={rgbaTrace(state.traceColor, 0.05 + q.pct * 0.22)}
+            zIndex={0}
+          />
+        ))}
 
         {visibleEdges.map((e: any) => {
           const found = edgeIsFound(state, e.id);
@@ -431,13 +487,13 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           // encore de edgeVisits enregistré, on suppose au moins 1 passage
           // plutôt que de les faire soudain apparaître "sans couleur".
           const visits = found ? state.progress.edgeVisits[e.id] ?? 1 : 0;
-          const strokeColor = found ? heatColor(visits) ?? DISCOVERED_STROKE : UNDISCOVERED_STROKE;
+          const retrait = calque === 'quartiers';
           return (
             <Polyline
               key={e.id}
               coordinates={e.coords.map(toLatLng)}
-              strokeColor={strokeColor}
-              strokeWidth={found ? 4.5 : 2.5}
+              strokeColor={strokeTroncon(found, visits)}
+              strokeWidth={found ? (retrait ? 3 : 4.5) : retrait ? 1.5 : 2.5}
               zIndex={found ? 2 : 1}
             />
           );

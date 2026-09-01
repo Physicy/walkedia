@@ -2,6 +2,17 @@
 // feuille avec recherche, plutôt que la boîte + Modal générique d'avant —
 // migré au passage du thème bleu nuit vers encre/papier (voir theme.ts),
 // resté en retard lors de la dernière refonte.
+//
+// La ligne et la feuille sont deux composants SÉPARÉS, et c'est l'écran
+// Réglages qui porte l'état d'ouverture (voir SettingsScreen.tsx). Le
+// composant unique d'avant rendait sa feuille là où la ligne était posée,
+// c'est-à-dire à l'intérieur du ScrollView de l'écran : la FlatList des 31
+// langues se retrouvait alors imbriquée dans un ScrollView de même
+// orientation, d'où l'avertissement « VirtualizedLists should never be nested
+// inside plain ScrollViews » à chaque ouverture — et, au-delà de
+// l'avertissement, un recyclage de lignes cassé (la liste ne connaît plus sa
+// fenêtre visible). La feuille est maintenant montée à côté du ScrollView,
+// comme MapAppearanceSheet.
 
 import React, { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,12 +23,27 @@ import { Icone } from './Icones';
 import { Titre } from './ui';
 import { SUPPORTED_LANGUAGES, setLanguage, type LanguageCode } from '../i18n';
 
-export function LanguagePicker() {
+export function LanguageRow({ onPress }: { onPress: () => void }) {
   const { t, i18n } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const current = SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language);
+  return (
+    <Pressable
+      onPress={onPress}
+      style={styles.ligne}
+      accessibilityRole="button"
+      accessibilityLabel={t('profile.chooseLanguage')}
+    >
+      <Text style={styles.ligneNom}>{current?.name ?? i18n.language}</Text>
+      <Text style={styles.ligneCompte}>{t('settings.languageCount', { count: SUPPORTED_LANGUAGES.length })}</Text>
+      <Icone nom="chevronDroit" size={16} color={COLORS.encre3} strokeWidth={1.9} />
+    </Pressable>
+  );
+}
+
+export function LanguageSheet({ onFermer }: { onFermer: () => void }) {
+  const { t, i18n } = useTranslation();
   const [query, setQuery] = useState('');
   const insets = useSafeAreaInsets();
-  const current = SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language);
 
   const filtered = useMemo(
     () => SUPPORTED_LANGUAGES.filter((l) => l.name.toLowerCase().includes(query.trim().toLowerCase())),
@@ -25,8 +51,7 @@ export function LanguagePicker() {
   );
 
   const choose = async (code: LanguageCode) => {
-    setOpen(false);
-    setQuery('');
+    onFermer();
     const { rtlChanged } = await setLanguage(code);
     if (rtlChanged) {
       // eslint-disable-next-line no-alert
@@ -35,51 +60,36 @@ export function LanguagePicker() {
   };
 
   return (
-    <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={styles.ligne}
-        accessibilityRole="button"
-        accessibilityLabel={t('profile.chooseLanguage')}
-      >
-        <Text style={styles.ligneNom}>{current?.name ?? i18n.language}</Text>
-        <Text style={styles.ligneCompte}>{t('settings.languageCount', { count: SUPPORTED_LANGUAGES.length })}</Text>
-        <Icone nom="chevronDroit" size={16} color={COLORS.encre3} strokeWidth={1.9} />
+    <Pressable style={styles.voile} onPress={onFermer}>
+      <Pressable style={styles.feuille} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.poignee} />
+        <Titre style={styles.titre}>{t('profile.chooseLanguage')}</Titre>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('settings.searchLanguagePlaceholder')}
+          placeholderTextColor={COLORS.encre3}
+          style={styles.recherche}
+          autoCorrect={false}
+        />
+        <FlatList
+          data={filtered}
+          keyExtractor={(l) => l.code}
+          style={styles.liste}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => {
+            const actif = item.code === i18n.language;
+            return (
+              <Pressable style={styles.rangee} onPress={() => choose(item.code)}>
+                <Text style={[styles.rangeeTexte, actif && styles.rangeeTexteActif]}>{item.name}</Text>
+                {actif && <Icone nom="coche" size={15} color={COLORS.trace} strokeWidth={2.4} />}
+              </Pressable>
+            );
+          }}
+        />
       </Pressable>
-
-      {open && (
-        <Pressable style={styles.voile} onPress={() => setOpen(false)}>
-          <Pressable style={styles.feuille} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.poignee} />
-            <Titre style={styles.titre}>{t('profile.chooseLanguage')}</Titre>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t('settings.searchLanguagePlaceholder')}
-              placeholderTextColor={COLORS.encre3}
-              style={styles.recherche}
-              autoCorrect={false}
-            />
-            <FlatList
-              data={filtered}
-              keyExtractor={(l) => l.code}
-              style={styles.liste}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const actif = item.code === i18n.language;
-                return (
-                  <Pressable style={styles.rangee} onPress={() => choose(item.code)}>
-                    <Text style={[styles.rangeeTexte, actif && styles.rangeeTexteActif]}>{item.name}</Text>
-                    {actif && <Icone nom="coche" size={15} color={COLORS.trace} strokeWidth={2.4} />}
-                  </Pressable>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
-      )}
-    </>
+    </Pressable>
   );
 }
 

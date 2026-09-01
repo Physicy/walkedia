@@ -206,6 +206,10 @@ function AppContent() {
           onToggleHideStats={actions.setHideStats}
           traceColor={state.traceColor}
           onChoisirCouleur={actions.setTraceColor}
+          mapLayer={state.mapLayer}
+          onChoisirCalque={actions.setMapLayer}
+          mapBackground={state.mapBackground}
+          onChoisirFond={actions.setMapBackground}
           onWipeProgress={actions.wipeProgress}
           onFermer={() => setReglagesOuverts(false)}
         />

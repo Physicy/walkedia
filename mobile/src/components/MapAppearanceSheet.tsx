@@ -1,19 +1,25 @@
 // Apparence de la carte (Réglages > Apparence de la carte) : calque affiché
-// et fond de carte, persistés (logic/prefs.ts) mais PAS ENCORE lus par
-// MapScreen.tsx — décision explicite pour cette passe (voir le plan
-// d'implémentation), pas un oubli. Le branchement viendra dans une passe
-// dédiée à la carte elle-même.
+// et fond de carte. Les deux sont maintenant LUS par MapScreen.tsx (calque =
+// ce que la géométrie raconte, fond = ce qu'il y a dessous) ; ils ne faisaient
+// avant qu'un aller-retour vers AsyncStorage, d'où une feuille de réglage qui
+// enregistrait un choix sans que la carte change quoi que ce soit.
+//
+// La feuille est passée « contrôlée » au passage : elle ne relit plus les
+// préférences pour son propre compte, elle affiche l'état du hook de jeu et
+// remonte les choix (voir useWalkedia.ts, setMapLayer/setMapBackground). Une
+// copie locale rechargée à l'ouverture aurait pu diverger de ce que la carte
+// dessine réellement.
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
 import { Icone } from './Icones';
 import { Eyebrow, Titre } from './ui';
-import { loadPrefs, savePrefs, type Prefs } from '../logic/prefs';
+import type { Prefs } from '../logic/prefs';
 
-const LAYERS: { id: Prefs['mapLayer']; nameKey: string; descKey: string }[] = [
+export const MAP_LAYERS: { id: Prefs['mapLayer']; nameKey: string; descKey: string }[] = [
   { id: 'trace', nameKey: 'settings.mapLayerTraceName', descKey: 'settings.mapLayerTraceDesc' },
   { id: 'chaleur', nameKey: 'settings.mapLayerHeatName', descKey: 'settings.mapLayerHeatDesc' },
   { id: 'quartiers', nameKey: 'settings.mapLayerNeighborhoodsName', descKey: 'settings.mapLayerNeighborhoodsDesc' },
@@ -25,34 +31,24 @@ const BACKGROUNDS: { id: Prefs['mapBackground']; nameKey: string }[] = [
 ];
 
 export function MapAppearanceSheet({
+  mapLayer,
+  onChoisirCalque,
+  mapBackground,
+  onChoisirFond,
   traceColor,
   onChoisirCouleur,
   onFermer,
 }: {
+  mapLayer: Prefs['mapLayer'];
+  onChoisirCalque: (id: Prefs['mapLayer']) => void;
+  mapBackground: Prefs['mapBackground'];
+  onChoisirFond: (id: Prefs['mapBackground']) => void;
   traceColor: string;
   onChoisirCouleur: (hex: string) => void;
   onFermer: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const [layer, setLayer] = useState<Prefs['mapLayer']>('trace');
-  const [background, setBackground] = useState<Prefs['mapBackground']>('clair');
-
-  useEffect(() => {
-    loadPrefs().then((p) => {
-      setLayer(p.mapLayer);
-      setBackground(p.mapBackground);
-    });
-  }, []);
-
-  const chooseLayer = (id: Prefs['mapLayer']) => {
-    setLayer(id);
-    savePrefs({ mapLayer: id });
-  };
-  const chooseBackground = (id: Prefs['mapBackground']) => {
-    setBackground(id);
-    savePrefs({ mapBackground: id });
-  };
 
   return (
     <Pressable style={styles.voile} onPress={onFermer}>
@@ -61,10 +57,10 @@ export function MapAppearanceSheet({
         <Titre style={styles.titre}>{t('settings.mapAppearanceTitle')}</Titre>
 
         <Eyebrow style={styles.section}>{t('settings.mapLayerSectionTitle')}</Eyebrow>
-        {LAYERS.map((l) => {
-          const actif = layer === l.id;
+        {MAP_LAYERS.map((l) => {
+          const actif = mapLayer === l.id;
           return (
-            <Pressable key={l.id} onPress={() => chooseLayer(l.id)} style={[styles.calqueLigne, actif && styles.calqueLigneActive]}>
+            <Pressable key={l.id} onPress={() => onChoisirCalque(l.id)} style={[styles.calqueLigne, actif && styles.calqueLigneActive]}>
               <View style={styles.calqueTexte}>
                 <Text style={styles.calqueNom}>{t(l.nameKey)}</Text>
                 <Text style={styles.calqueDesc}>{t(l.descKey)}</Text>
@@ -77,9 +73,9 @@ export function MapAppearanceSheet({
         <Eyebrow style={styles.section}>{t('settings.mapBackgroundSectionTitle')}</Eyebrow>
         <View style={styles.fondsRangee}>
           {BACKGROUNDS.map((f) => {
-            const actif = background === f.id;
+            const actif = mapBackground === f.id;
             return (
-              <Pressable key={f.id} onPress={() => chooseBackground(f.id)} style={[styles.fondChip, actif && styles.fondChipActive]}>
+              <Pressable key={f.id} onPress={() => onChoisirFond(f.id)} style={[styles.fondChip, actif && styles.fondChipActive]}>
                 <Text style={[styles.fondChipTexte, actif && styles.fondChipTexteActive]}>{t(f.nameKey)}</Text>
               </Pressable>
             );

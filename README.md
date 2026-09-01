@@ -71,6 +71,16 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   calcul se fait **côté serveur** (voir « Backend » ci-dessous), pas sur le
   téléphone : l'app reçoit un graphe déjà construit par zone de 500 m et se
   contente de coller les zones bout à bout.
+- **Tronçon** : un chemin qui relie **deux carrefours**. Les arêtes issues du
+  découpage ci-dessus s'arrêtent à tout nœud partagé par plusieurs ways (une
+  entrée de parking, un trottoir qui rejoint la chaussée) ; elles sont donc
+  recollées en chaînes, poursuivies tant que le nœud traversé n'est pas un
+  carrefour et n'a que deux branches significatives. Une chaîne qui n'a pas
+  un carrefour à ses deux bouts n'est pas un tronçon et disparaît du graphe :
+  les impasses ne comptent pas, et en zone urbaine les chemins piétons non
+  plus (ils ne sont déjà pas des branches significatives d'un nœud urbain,
+  voir « Urbain / rural »). En zone rurale, sentiers et chemins restent des
+  tronçons à part entière.
 - **Extension dynamique** : le suivi de position GPS tourne en continu dès
   l'ouverture de la carte (indépendamment du démarrage d'une session) ; dès
   qu'on s'éloigne à plus de 300 m du centre de la zone connue, une nouvelle
@@ -87,9 +97,12 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   piétonne (`footway=crossing`) ou nœud posé sur des chaussées séparées. Deux
   intersections décalées le long d'un même axe, reliées par un tronçon de rue
   à double sens, restent deux carrefours distincts à 3 branches chacun. Un
-  carrefour est complété quand toutes ses branches externes significatives
-  ont été parcourues ; les micro-arêtes internes (traversées) sont des bonus
-  non exigés.
+  carrefour est complété quand tous les **tronçons** qui en partent ont été
+  parcourus ; ceux qui restent internes au carrefour (traversées, arcs de
+  rond-point) sont des bonus non exigés. Ce qui fait un carrefour se décide
+  toujours sur les arêtes de base, avant recollage : une branche qui mène à
+  une impasse compte pour le détecter, mais n'est plus exigée pour le
+  compléter puisqu'elle n'est plus un tronçon.
 - **Urbain / rural** : chaque zone est classée par densité locale de voirie
   carrossable (grille de 250 m, fenêtre 3×3, seuil `URBAN_MIN_ROAD`). En
   urbain, seuls les carrefours du réseau accessible en voiture (`residential`

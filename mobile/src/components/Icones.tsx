@@ -22,6 +22,7 @@ export type NomIcone =
   | 'retour'
   | 'chevronDroit'
   | 'reglages'
+  | 'curseurs'
   | 'ami'
   | 'crayon'
   | 'objectif'
@@ -116,6 +117,20 @@ export function Icone({
             d="M12 3.5v2.6M12 17.9v2.6M20.5 12h-2.6M6.1 12H3.5M17.66 6.34l-1.84 1.84M8.18 15.82l-1.84 1.84M17.66 17.66l-1.84-1.84M8.18 8.18L6.34 6.34"
             {...c}
           />
+        </>
+      )}
+      {/* curseurs : les réglages vus comme une console de mixage plutôt que
+          comme un engrenage. Le rond de chaque ligne est laissé en réserve
+          (la ligne s'interrompt de part et d'autre) pour rester lisible quelle
+          que soit la couleur de fond, l'icône étant tracée sans remplissage. */}
+      {nom === 'curseurs' && (
+        <>
+          <Path d="M2.5 6h3M10.5 6h11" {...c} />
+          <Circle cx={8} cy={6} r={2.6} {...c} />
+          <Path d="M2.5 12h11M18.5 12h3" {...c} />
+          <Circle cx={16} cy={12} r={2.6} {...c} />
+          <Path d="M2.5 18h6M13.5 18h8" {...c} />
+          <Circle cx={11} cy={18} r={2.6} {...c} />
         </>
       )}
       {nom === 'ami' && (

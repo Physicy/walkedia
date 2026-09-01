@@ -16,7 +16,7 @@ import { Matcher, MAX_ACCURACY } from '../logic/matching';
 import { makeProj, haversine, lineLength } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
-import { loadPrefs, savePrefs } from '../logic/prefs';
+import { loadPrefs, savePrefs, type Prefs } from '../logic/prefs';
 import * as discovered from '../logic/discovered';
 import type { Discovered } from '../logic/discovered';
 import { scheduleGoalReminder, notifyJunctionUnlocked, requestNotificationPermission } from '../logic/notifications';
@@ -227,6 +227,8 @@ interface WalkediaState {
   dailyStepGoal: number; // voir logic/streak.ts, computeStreak
   notificationsEnabled: boolean; // voir logic/notifications.ts
   hideStats: boolean; // masque le classement public, voir supabase/migrations/0004_profile_visibility.sql
+  mapLayer: Prefs['mapLayer']; // ce que la carte montre, voir MapScreen.tsx
+  mapBackground: Prefs['mapBackground']; // fond sous la géométrie, voir MapScreen.tsx
   fusionResume: FusionResume | null;
 }
 
@@ -268,6 +270,8 @@ function freshState(): WalkediaState {
     dailyStepGoal: 7000,
     notificationsEnabled: true,
     hideStats: false,
+    mapLayer: 'trace',
+    mapBackground: 'clair',
     fusionResume: null,
   };
 }
@@ -439,6 +443,8 @@ export function useWalkedia() {
       state.dailyStepGoal = p.dailyStepGoal;
       state.notificationsEnabled = p.notificationsEnabled;
       state.hideStats = p.hideStats;
+      state.mapLayer = p.mapLayer;
+      state.mapBackground = p.mapBackground;
       rerender();
       scheduleGoalReminder(p.dailyStepGoal, p.notificationsEnabled, {
         titre: translate('notifications.goalReminderTitle'),
@@ -1443,6 +1449,29 @@ export function useWalkedia() {
     [state, rerender]
   );
 
+  // Apparence de la carte (voir SettingsScreen.tsx > Apparence de la carte).
+  // Ces deux-là vivent dans l'état du hook plutôt que dans la feuille de
+  // réglage qui les édite : c'est MapScreen qui les consomme, et une
+  // préférence relue seulement à l'ouverture de la feuille laissait la carte
+  // sur son rendu d'avant — le réglage s'enregistrait sans que rien ne bouge.
+  const setMapLayer = useCallback(
+    (layer: Prefs['mapLayer']) => {
+      state.mapLayer = layer;
+      savePrefs({ mapLayer: layer });
+      rerender();
+    },
+    [state, rerender]
+  );
+
+  const setMapBackground = useCallback(
+    (background: Prefs['mapBackground']) => {
+      state.mapBackground = background;
+      savePrefs({ mapBackground: background });
+      rerender();
+    },
+    [state, rerender]
+  );
+
   // Efface la progression — rues, points, sessions — sur l'appareil et sur le
   // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
   // porte la confirmation) : ne touche ni les préférences ni la session
@@ -1484,6 +1513,8 @@ export function useWalkedia() {
       setDailyGoal,
       toggleNotifications,
       setHideStats,
+      setMapLayer,
+      setMapBackground,
       wipeProgress,
     },
   };

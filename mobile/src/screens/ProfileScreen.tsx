@@ -177,12 +177,11 @@ export function ProfileScreen({
   const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
 
+  // Plus de date de première activité : le bandeau « ton relevé depuis le … »
+  // qui la portait a disparu de l'en-tête, et c'était son seul usage.
   const stats = useMemo(() => {
     const today = startOfToday();
     const monday = today - ((new Date().getDay() + 6) % 7) * DAY;
-    const debuts = progress.sessions.map((s) => s.start);
-    const premiereActivite = debuts.length ? Math.min(...debuts) : null;
-    const depuisFmt = new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'long' });
     return {
       total: progress.junctions.size,
       today: pointsBetween(progress, today, Infinity),
@@ -190,9 +189,8 @@ export function ProfileScreen({
       edges: progress.edges.size,
       km: (progress.edgeMeters / 1000).toFixed(1),
       sessions: progress.sessions.length,
-      depuis: premiereActivite != null ? depuisFmt.format(new Date(premiereActivite)) : null,
     };
-  }, [progress, i18n.language]);
+  }, [progress]);
 
   const niveau = useMemo(() => computeLevel(stats.total), [stats.total]);
 
@@ -225,7 +223,6 @@ export function ProfileScreen({
       >
         <View style={styles.entete}>
           <View style={styles.enteteTexte}>
-            <Text style={styles.eyebrow}>{stats.depuis ? t('profile.trackSince', { date: stats.depuis }) : t('profile.track')}</Text>
             <Titre style={styles.nom} numberOfLines={1}>{nom || t('profile.defaultName')}</Titre>
             {hideStats && (
               <View style={styles.badgePrive}>
@@ -240,7 +237,7 @@ export function ProfileScreen({
             accessibilityLabel={t('profile.settingsNav')}
             style={styles.rondReglages}
           >
-            <Icone nom="reglages" size={20} color={COLORS.encre} strokeWidth={1.8} />
+            <Icone nom="curseurs" size={20} color={COLORS.encre} strokeWidth={1.8} />
           </Pressable>
         </View>
 
@@ -248,18 +245,16 @@ export function ProfileScreen({
           onPress={() => setPersonnaliserOuvert(true)}
           accessibilityRole="button"
           accessibilityLabel={t('profile.changeAvatarOrColor')}
-          style={styles.persoLigne}
+          style={styles.persoBloc}
         >
           <View style={styles.avatarBouton}>
-            <Avatar avatarId={avatarId} nom={nom} size={62} />
+            <Avatar avatarId={avatarId} nom={nom} size={116} />
             <View style={[styles.avatarBadge, { backgroundColor: traceColor }]}>
-              <Icone nom="crayon" size={13} color="#fff" strokeWidth={2} />
+              <Icone nom="crayon" size={15} color="#fff" strokeWidth={2} />
             </View>
           </View>
-          <View>
-            <Text style={styles.persoTitre}>{t('profile.customizeTitle')}</Text>
-            <Text style={styles.persoDetail}>{t('profile.avatarDesc')}</Text>
-          </View>
+          <Text style={styles.persoTitre}>{t('profile.customizeTitle')}</Text>
+          <Text style={styles.persoDetail}>{t('profile.avatarDesc')}</Text>
         </Pressable>
 
         <View style={styles.hero}>
@@ -328,13 +323,24 @@ export function ProfileScreen({
           <View style={styles.activiteTete}>
             <Text style={styles.activiteTitre}>{t('profile.activityTitle')}</Text>
           </View>
-          <View style={styles.periodeRangee}>
+          {/* Une seule ligne qui défile plutôt qu'un retour à la ligne : à
+              quatre périodes, `flexWrap` en cassait deux sur la seconde
+              ligne dans la plupart des langues, et la rangée changeait de
+              hauteur d'une traduction à l'autre. Les marges négatives
+              laissent les puces courir jusqu'aux bords de la carte, pour
+              qu'une puce coupée signale qu'il y en a d'autres à droite. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.periodeRangee}
+            contentContainerStyle={styles.periodeContenu}
+          >
             {PERIODS.map((p) => (
               <Pressable key={p.id} onPress={() => setPeriod(p.id)} style={[styles.periodeChip, period === p.id && styles.periodeChipActive]}>
                 <Text style={[styles.periodeChipTexte, period === p.id && styles.periodeChipTexteActive]}>{t(p.labelKey)}</Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
           <View style={styles.metriqueRangee}>
             {METRICS.map((m) => (
               <Pressable key={m.id} onPress={() => setMetric(m.id)} style={[styles.metriqueChip, metric === m.id && styles.metriqueChipActive]}>
@@ -342,6 +348,11 @@ export function ProfileScreen({
               </Pressable>
             ))}
           </View>
+          {/* La barre vit dans une zone de hauteur fixe (`barreZone`) au lieu
+              d'être posée dans une rangée de hauteur fixe : la colonne
+              entière (valeur + barre + jour) dépassait la rangée dès que la
+              barre approchait son maximum, et débordait par le haut sur les
+              filtres juste au-dessus. */}
           <View style={styles.barres}>
             {chart.buckets.map((b, i) => {
               const h = Math.max(3, Math.round((b.value / chart.max) * 74));
@@ -349,7 +360,9 @@ export function ProfileScreen({
               return (
                 <View key={i} style={styles.colonne}>
                   <Mono style={[styles.barreValeur, fort && { color: traceColor }]}>{b.value || ''}</Mono>
-                  <View style={[styles.barre, { height: h }, b.value > 0 && { backgroundColor: fort ? traceColor : `${traceColor}6B` }]} />
+                  <View style={styles.barreZone}>
+                    <View style={[styles.barre, { height: h }, b.value > 0 && { backgroundColor: fort ? traceColor : `${traceColor}6B` }]} />
+                  </View>
                   <Text style={styles.barreLabel} numberOfLines={1}>{b.label}</Text>
                 </View>
               );
@@ -370,7 +383,7 @@ export function ProfileScreen({
             <Mono style={styles.caseValeur}>{stats.km}</Mono>
             <Text style={styles.caseLabel}>{t('profile.kmDiscovered')}</Text>
           </View>
-          <View style={[styles.case, styles.caseFin]}>
+          <View style={styles.case}>
             <Mono style={styles.caseValeur}>{stats.sessions}</Mono>
             <Text style={styles.caseLabel}>{t('profile.sessionsLabel')}</Text>
           </View>
@@ -408,17 +421,41 @@ export function ProfileScreen({
   );
 }
 
-// Schéma décoratif du fond de la carte "Carrefours complétés" : quelques
-// traits/points, pas une reproduction pixel-près de la maquette — juste de
-// quoi évoquer un plan de rues derrière le chiffre, dans la couleur de trace
-// choisie par le joueur.
+// Schéma décoratif du fond de la carte "Carrefours complétés" : un plan de
+// rues entier plutôt que les quatre traits d'avant, parce que le fond doit
+// raconter la même chose que le chiffre qu'il porte — un maillage de
+// carrefours dont une partie seulement est prise. D'où les deux couches
+// distinctes : la grille et ses nœuds en encre pour ce qui reste, le chemin
+// parcouru et ses nœuds dans la couleur du joueur pour ce qui est acquis.
+//
+// Les opacités sont plus basses que la version précédente (0.16 partout) :
+// le plan est plus dense, donc chaque trait doit peser moins pour que le
+// nombre reste le premier élément lu de la carte.
+const PLAN_GRILLE =
+  'M0 22H335M0 62H335M0 102H335M0 142H335M38 0V158M96 0V158M158 0V158M220 0V158M278 0V158M322 0V158';
+const PLAN_PARCOURU = 'M38 22H158M158 22V62M158 62H278M278 62V102M96 102V142M96 142H220';
+const PLAN_NOEUDS: [number, number][] = [];
+for (const y of [22, 62, 102, 142]) {
+  for (const x of [38, 96, 158, 220, 278, 322]) PLAN_NOEUDS.push([x, y]);
+}
+const PLAN_NOEUDS_PRIS: [number, number][] = [
+  [38, 22], [96, 22], [158, 22],
+  [158, 62], [220, 62], [278, 62],
+  [96, 102], [278, 102],
+  [96, 142], [158, 142], [220, 142],
+];
+
 function HeroSchema({ accent }: { accent: string }) {
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 335 150" style={StyleSheet.absoluteFillObject} preserveAspectRatio="xMidYMid slice">
-      <Path d="M52 34H148M148 34V96M148 96H232M232 96V160" stroke={accent} strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.16} />
-      <Circle cx={148} cy={34} r={5} fill={accent} opacity={0.16} />
-      <Circle cx={148} cy={96} r={5} fill={accent} opacity={0.16} />
-      <Circle cx={232} cy={96} r={5} fill={accent} opacity={0.16} />
+    <Svg width="100%" height="100%" viewBox="0 0 335 158" style={StyleSheet.absoluteFillObject} preserveAspectRatio="xMidYMid slice">
+      <Path d={PLAN_GRILLE} stroke={COLORS.encre} strokeWidth={5} strokeLinecap="round" fill="none" opacity={0.06} />
+      <Path d={PLAN_PARCOURU} stroke={accent} strokeWidth={6.5} strokeLinecap="round" fill="none" opacity={0.14} />
+      {PLAN_NOEUDS.map(([x, y]) => (
+        <Circle key={`g${x}-${y}`} cx={x} cy={y} r={4} fill={COLORS.encre} opacity={0.1} />
+      ))}
+      {PLAN_NOEUDS_PRIS.map(([x, y]) => (
+        <Circle key={`a${x}-${y}`} cx={x} cy={y} r={4.6} fill={accent} opacity={0.24} />
+      ))}
     </Svg>
   );
 }
@@ -566,16 +603,8 @@ const styles = StyleSheet.create({
   wrap: { ...StyleSheet.absoluteFillObject, zIndex: 1600, backgroundColor: COLORS.papier },
   scroll: { flex: 1 },
 
-  entete: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, gap: 12 },
+  entete: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 18, gap: 12 },
   enteteTexte: { flex: 1, minWidth: 0 },
-  eyebrow: {
-    fontFamily: FONTS.monoMedium,
-    fontSize: 9.5,
-    letterSpacing: 1.14,
-    textTransform: 'uppercase',
-    color: COLORS.encre3,
-    marginBottom: 6,
-  },
   nom: { fontSize: 24 },
   badgePrive: {
     flexDirection: 'row',
@@ -602,24 +631,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  persoLigne: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, marginTop: 18 },
+  persoBloc: { alignItems: 'center', paddingHorizontal: 20, marginTop: 22 },
   avatarBouton: { position: 'relative' },
   avatarBadge: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    right: 2,
+    bottom: 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2.5,
     borderColor: COLORS.papier,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  persoTitre: { fontFamily: FONTS.texteSemi, fontSize: 13.5, color: COLORS.encre },
-  persoDetail: { fontFamily: FONTS.texte, fontSize: 11.5, color: COLORS.encre2, marginTop: 2 },
+  persoTitre: { fontFamily: FONTS.texteSemi, fontSize: 14, color: COLORS.encre, marginTop: 14, textAlign: 'center' },
+  persoDetail: { fontFamily: FONTS.texte, fontSize: 12, color: COLORS.encre2, marginTop: 3, textAlign: 'center', maxWidth: 270 },
 
-  hero: { marginHorizontal: 20, marginTop: 18, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, overflow: 'hidden' },
+  hero: { marginHorizontal: 20, marginTop: 22, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, overflow: 'hidden' },
   heroContenu: { padding: 18 },
   heroLigne: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 2 },
   heroChiffre: { fontFamily: FONTS.display, fontSize: 54, lineHeight: 54, letterSpacing: -1.5 },
@@ -632,7 +661,7 @@ const styles = StyleSheet.create({
   jaugePleine: { height: '100%', borderRadius: 5 },
   heroNiveauReste: { fontSize: 10.5, color: COLORS.encre2 },
 
-  serieCard: { marginHorizontal: 20, marginTop: 14, borderRadius: 24, padding: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne },
+  serieCard: { marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne },
   serieCardAtteint: { backgroundColor: COLORS.seriePale, borderColor: 'rgba(217,123,41,0.28)' },
   serieHaut: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   serieGauche: { flexDirection: 'row', alignItems: 'center', gap: 14 },
@@ -656,40 +685,49 @@ const styles = StyleSheet.create({
   pasJauge: { height: '100%', borderRadius: 6 },
   pasCaveat: { fontFamily: FONTS.texte, fontSize: 10.5, lineHeight: 15, color: COLORS.encre3, marginTop: 8 },
 
-  activiteCard: { marginHorizontal: 20, marginTop: 14, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, padding: 16 },
+  activiteCard: { marginHorizontal: 20, marginTop: 20, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, padding: 16 },
   activiteTete: { marginBottom: 4 },
   activiteTitre: { fontFamily: FONTS.displaySemi, fontSize: 15, color: COLORS.encre },
-  periodeRangee: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  periodeRangee: { marginTop: 10, marginHorizontal: -16 },
+  periodeContenu: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
   periodeChip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 9, backgroundColor: COLORS.papier, borderWidth: 1, borderColor: 'transparent' },
   periodeChipActive: { backgroundColor: COLORS.encre },
   periodeChipTexte: { fontFamily: FONTS.mono, fontSize: 10.5, color: COLORS.encre2 },
   periodeChipTexteActive: { color: COLORS.surface },
-  metriqueRangee: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  metriqueRangee: { flexDirection: 'row', gap: 6, marginTop: 20 },
   metriqueChip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 11, borderWidth: 1, borderColor: COLORS.ligne, backgroundColor: COLORS.surface },
   metriqueChipActive: { backgroundColor: COLORS.encre, borderColor: 'transparent' },
   metriqueChipTexte: { fontFamily: FONTS.texteSemi, fontSize: 11.5, color: COLORS.encre2 },
   metriqueChipTexteActive: { color: COLORS.surface },
-  barres: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 96, paddingTop: 14, marginTop: 6 },
+  barres: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 24 },
   colonne: { flex: 1, alignItems: 'center', gap: 6 },
+  barreZone: { height: 74, justifyContent: 'flex-end' },
   barre: { width: 14, backgroundColor: COLORS.ligne, borderRadius: 4, minHeight: 3 },
   barreValeur: { fontSize: 9, color: COLORS.encre3, height: 12 },
   barreLabel: { fontFamily: FONTS.mono, fontSize: 8.5, color: COLORS.encre3 },
-  activitePied: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: COLORS.ligne, marginTop: 12, paddingTop: 11 },
+  activitePied: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: COLORS.ligne, marginTop: 14, paddingTop: 11 },
   activitePiedTexte: { fontFamily: FONTS.texte, fontSize: 11.5, color: COLORS.encre2 },
   activitePiedTotal: { fontSize: 11, color: COLORS.encre },
 
-  grille: { flexDirection: 'row', borderTopWidth: 1, borderColor: COLORS.ligne, marginTop: 16, marginHorizontal: 20 },
-  case: { flex: 1, paddingVertical: 15, paddingHorizontal: 4, borderRightWidth: 1, borderColor: COLORS.ligne },
-  caseFin: { borderRightWidth: 0 },
+  grille: { flexDirection: 'row', gap: 10, marginTop: 20, marginHorizontal: 20 },
+  case: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.ligne,
+  },
   caseValeur: { fontSize: 19, fontFamily: FONTS.monoSemi, color: COLORS.encre, letterSpacing: -0.4 },
-  caseLabel: { fontFamily: FONTS.texte, fontSize: 11, color: COLORS.encre2, marginTop: 2 },
+  caseLabel: { fontFamily: FONTS.texte, fontSize: 11, color: COLORS.encre2, marginTop: 3 },
 
   sortiesNav: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginHorizontal: 20,
-    marginTop: 14,
+    marginTop: 20,
     padding: 16,
     borderRadius: RADIUS.l,
     backgroundColor: COLORS.encre,

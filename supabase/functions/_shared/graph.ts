@@ -6,7 +6,7 @@
 //
 //  1. repérage des nœuds de jonction (partagés par plusieurs ways),
 //  2. découpage des ways en segments entre jonctions,
-//  3. fusion des chaînes de degré 2 pour que chaque arête relie deux
+//  3. fusion des chaînes de degré 2 pour que chaque arête de base relie deux
 //     "vrais" nœuds du graphe (intersections ou impasses),
 //  4. attribution d'identifiants d'arêtes stables, dérivés de la géométrie
 //     (indépendants des IDs OSM, qui peuvent changer),
@@ -14,7 +14,35 @@
 //     significatives (les impasses courtes ne comptent pas), puis
 //     consolidation des nœuds trop proches en un seul carrefour — OSM
 //     fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages
-//     piétons, chaussées séparées).
+//     piétons, chaussées séparées),
+//  6. RE-DÉCOUPAGE EN TRONÇONS : un tronçon est un chemin qui relie deux
+//     carrefours (règle de gestion, voir plus bas),
+//  7. réécriture des exigences de chaque carrefour dans ce vocabulaire.
+//
+// Règle du tronçon (étape 6). Les arêtes des étapes 1 à 4 s'arrêtent à tout
+// nœud partagé par plusieurs ways : une entrée de parking, un trottoir qui
+// rejoint la chaussée ou un passage piéton coupaient une rue en cinq bouts,
+// tous comptés comme autant de tronçons. Un tronçon est maintenant une
+// CHAÎNE d'arêtes de base, poursuivie tant que le nœud traversé n'est pas un
+// carrefour ET n'a que deux branches significatives, et retenue seulement si
+// ses DEUX extrémités sont des carrefours. Conséquences assumées :
+//   - les impasses disparaissent du graphe (rien à leur bout), donc du
+//     comptage comme de la carte ;
+//   - les antennes piétonnes en ville aussi (elles ne sont déjà pas des
+//     branches significatives d'un nœud urbain) ;
+//   - une chaîne qui bute sur une fourche qui n'est pas un carrefour est
+//     abandonnée plutôt que prolongée au hasard : il n'y a pas de
+//     continuation évidente à un embranchement.
+// La détection des carrefours (étape 5) est INCHANGÉE : c'est le tronçon qui
+// change de définition, pas le carrefour.
+//
+// Limite connue, héritée de la découpe en zones : le graphe est tronqué au
+// BUILD_RADIUS (voir get-region/index.ts), ce qui fabrique de fausses
+// impasses sur le bord. Une chaîne qui les atteint est abandonnée, alors que
+// la zone voisine la verrait entière. La marge de construction (1000 m
+// construits pour 550 m servis) garde ce cas hors de ce qui est réellement
+// servi tant qu'un tronçon reste sous ~900 m — comme pour la fusion de
+// degré 2, qui a déjà exactement cette propriété.
 //
 // En environnement urbain (densité locale de voirie carrossable élevée),
 // seuls les carrefours du réseau routier accessible en voiture comptent :
@@ -253,16 +281,19 @@ export async function buildGraph(osm: OsmData, greenAreas: [number, number][][] 
     return e.length < STUB_MAX && nodes.get(other).edgeIds.length === 1;
   };
 
+  // `sigEdges` est retenu pour TOUS les nœuds, pas seulement les candidats :
+  // l'étape 6 s'en sert pour décider si une chaîne traverse un nœud (deux
+  // branches significatives) ou s'y arrête (une seule, ou trois et plus).
   const candidates = new Set<string>(); // nœuds avec >= 3 branches significatives
   const urbanNode = new Map<string, boolean>();  // key -> bool (mode retenu pour ce nœud)
+  const sigEdges = new Map<string, string[]>();  // key -> branches significatives
   for (const n of nodes.values()) {
     const urban = isUrban(n.lat, n.lon) && !inGreenArea(n.lat, n.lon);
     const pool = urban ? n.edgeIds.filter((id: string) => edges.get(id).car) : n.edgeIds;
     const sig = pool.filter((id: string) => !isStubFor(edges.get(id), n.key));
-    if (sig.length >= 3) {
-      candidates.add(n.key);
-      urbanNode.set(n.key, urban);
-    }
+    urbanNode.set(n.key, urban);
+    sigEdges.set(n.key, sig);
+    if (sig.length >= 3) candidates.add(n.key);
   }
 
   // 5c. Consolidation : union-find des candidats reliés par une arête courte,
@@ -332,13 +363,14 @@ export async function buildGraph(osm: OsmData, greenAreas: [number, number][][] 
     list.push(key);
   }
 
-  // 5d. Carrefours consolidés : complétés quand toutes les branches EXTERNES
-  //     significatives ont été parcourues. Les micro-arêtes internes au
-  //     carrefour (passages piétons, traversées) ne sont pas exigées.
+  // 5d. Carrefours consolidés. Le test de rétention (>= 3 branches externes
+  //     significatives) porte sur les ARÊTES DE BASE, comme avant l'arrivée
+  //     des tronçons : ce qui fait un carrefour n'a pas changé. Ce que le
+  //     carrefour exige pour être complété, si — c'est l'étape 7.
   //     Un groupe est urbain dès qu'un de ses membres l'est : seules ses
-  //     branches carrossables sont alors exigées.
+  //     branches carrossables comptent alors.
   const junctions = new Map<string, any>();     // id -> { id, lat, lon, members, requiredEdgeIds }
-  const edgeJunctions = new Map<string, string[]>(); // edgeId -> [junctionId]
+  const junctionUrban = new Map<string, boolean>(); // hors du carrefour lui-même : pas dans le payload
   for (const members of clusters.values()) {
     const memberSet = new Set(members);
     const urban = members.some((key) => urbanNode.get(key));
@@ -363,20 +395,143 @@ export async function buildGraph(osm: OsmData, greenAreas: [number, number][][] 
       lat += n.lat;
       lon += n.lon;
     }
-    const j = {
+    junctions.set(id, {
       id,
       lat: lat / members.length,
       lon: lon / members.length,
       members,
-      requiredEdgeIds: required,
-    };
-    junctions.set(id, j);
-    for (const eid of required) {
-      let list = edgeJunctions.get(eid);
-      if (!list) edgeJunctions.set(eid, (list = []));
-      list.push(id);
+      requiredEdgeIds: new Set<string>(), // rempli à l'étape 7, en tronçons
+    });
+    junctionUrban.set(id, urban);
+  }
+
+  // 6. Tronçons : chaînes d'arêtes de base entre deux carrefours (voir la
+  //    règle en tête de fichier). Le parcours part de chaque branche
+  //    significative d'un carrefour et avance tant que le nœud atteint n'est
+  //    pas un carrefour et n'a que deux branches significatives, dont celle
+  //    par laquelle on arrive — sinon il n'y a pas de continuation unique.
+  //    Chaque chaîne est trouvée deux fois (une par extrémité) : `consommees`
+  //    garde la première et jette la seconde. L'identifiant, lui, ne dépend
+  //    pas du sens de parcours (extrémités triées, voir edgeId).
+  const carrefourNodes = new Set<string>();
+  for (const j of junctions.values()) for (const key of j.members) carrefourNodes.add(key);
+
+  const autreBout = (e: any, key: string) => (e.a === key ? e.b : e.a);
+
+  const troncons = new Map<string, any>();
+  const consommees = new Set<string>();
+  for (const depart of carrefourNodes) {
+    for (const premiere of sigEdges.get(depart) || []) {
+      if (consommees.has(premiere)) continue;
+
+      const chaine = [premiere];
+      const vues = new Set(chaine);
+      let courante = premiere;
+      let bout = autreBout(edges.get(premiere), depart);
+      let arrivee: string | null = null;
+      while (true) {
+        // Le test du carrefour passe AVANT celui des branches
+        // significatives : une branche peut être significative d'un côté et
+        // pas de l'autre (impasse courte, filtre carrossable d'un nœud
+        // urbain), et une chaîne qui touche un carrefour est un tronçon quoi
+        // qu'il arrive.
+        if (carrefourNodes.has(bout)) {
+          arrivee = bout;
+          break;
+        }
+        const sig = sigEdges.get(bout) || [];
+        if (sig.length !== 2 || sig.indexOf(courante) < 0) break;
+        const suivante = sig[0] === courante ? sig[1] : sig[0];
+        if (vues.has(suivante)) break; // boucle refermée sur elle-même
+        chaine.push(suivante);
+        vues.add(suivante);
+        bout = autreBout(edges.get(suivante), bout);
+        courante = suivante;
+      }
+      if (arrivee === null) continue; // impasse ou fourche : pas un tronçon
+
+      let coords: [number, number][] = [];
+      let curseur = depart;
+      for (const eid of chaine) {
+        const e = edges.get(eid);
+        const c: [number, number][] = e.a === curseur ? e.coords : e.coords.slice().reverse();
+        curseur = autreBout(e, curseur);
+        coords = coords.length ? coords.concat(c.slice(1)) : c.slice();
+      }
+      const length = lineLength(coords);
+      if (length < 1) continue;
+
+      for (const eid of chaine) consommees.add(eid);
+      const id = edgeId(coords, length);
+      if (troncons.has(id)) continue;
+
+      // Attributs de la chaîne : majorité pondérée par la longueur, même
+      // règle que pour une arête de base (une rue majoritairement carrossable
+      // reste carrossable même si elle traverse un passage piéton).
+      let carLen = 0;
+      let onewayLen = 0;
+      let roundLen = 0;
+      let crossLen = 0;
+      for (const eid of chaine) {
+        const e = edges.get(eid);
+        if (e.car) carLen += e.length;
+        if (e.oneway) onewayLen += e.length;
+        if (e.roundabout) roundLen += e.length;
+        if (e.crossing) crossLen += e.length;
+      }
+      troncons.set(id, {
+        id,
+        coords,
+        length,
+        car: carLen / length >= 0.5,
+        oneway: onewayLen / length >= 0.5,
+        roundabout: roundLen / length >= 0.5,
+        crossing: crossLen / length >= 0.5,
+        a: nodeKey(coords[0]),
+        b: nodeKey(coords[coords.length - 1]),
+      });
     }
   }
 
-  return { nodes, edges, junctions, edgeJunctions };
+  // 7. Ce que chaque carrefour exige, en tronçons. Les micro-arêtes internes
+  //    au carrefour (passages piétons, arcs de rond-point) restent exclues,
+  //    et les impasses n'existent plus pour l'exiger.
+  const tronconsParNoeud = new Map<string, string[]>();
+  for (const t of troncons.values()) {
+    for (const key of new Set<string>([t.a, t.b])) {
+      let list = tronconsParNoeud.get(key);
+      if (!list) tronconsParNoeud.set(key, (list = []));
+      list.push(t.id);
+    }
+  }
+
+  const edgeJunctions = new Map<string, string[]>(); // tronçonId -> [junctionId]
+  for (const [jid, j] of junctions) {
+    const memberSet = new Set<string>(j.members);
+    const urban = junctionUrban.get(jid);
+    const required = new Set<string>();
+    for (const key of j.members) {
+      for (const tid of tronconsParNoeud.get(key) || []) {
+        const t = troncons.get(tid);
+        if (memberSet.has(t.a) && memberSet.has(t.b)) continue; // interne
+        if (urban && !t.car) continue;
+        required.add(tid);
+      }
+    }
+    // Un carrefour dont toutes les branches menaient à des impasses n'a plus
+    // rien à exiger : il serait complété d'office, donc offert. Rare (il
+    // faudrait trois branches sans issue), mais un point gratuit se verrait.
+    if (required.size === 0) {
+      junctions.delete(jid);
+      continue;
+    }
+    j.requiredEdgeIds = required;
+    for (const tid of required) {
+      let list = edgeJunctions.get(tid);
+      if (!list) edgeJunctions.set(tid, (list = []));
+      list.push(jid);
+    }
+  }
+
+  return { nodes, edges: troncons, junctions, edgeJunctions };
 }

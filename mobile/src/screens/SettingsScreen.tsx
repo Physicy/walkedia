@@ -12,11 +12,12 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { COLORS, FONTS, RADIUS } from '../theme';
+import { COLORS, FONTS } from '../theme';
 import { Eyebrow, Jeton, Mono } from '../components/ui';
 import { Icone } from '../components/Icones';
-import { LanguagePicker } from '../components/LanguagePicker';
-import { MapAppearanceSheet } from '../components/MapAppearanceSheet';
+import { LanguageRow, LanguageSheet } from '../components/LanguagePicker';
+import { MapAppearanceSheet, MAP_LAYERS } from '../components/MapAppearanceSheet';
+import type { Prefs } from '../logic/prefs';
 import type { useAuth } from '../hooks/useAuth';
 
 function Section({ titre, children }: { titre: string; children: React.ReactNode }) {
@@ -28,6 +29,11 @@ function Section({ titre, children }: { titre: string; children: React.ReactNode
   );
 }
 
+// Ligne d'ouverture d'une feuille : même gabarit que les lignes de réglage
+// (filet en haut, pas de fond, valeur courante à droite) plutôt que la carte
+// posée sur le papier d'avant. « Apparence de la carte » était la seule
+// entrée de l'écran à ressembler à un bouton, ce qui la faisait lire comme
+// une action alors que c'est un réglage parmi les autres.
 function NavRow({ texte, detail, onPress }: { texte: string; detail?: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.navRow} accessibilityRole="button" accessibilityLabel={texte}>
@@ -78,6 +84,10 @@ export function SettingsScreen({
   onToggleHideStats,
   traceColor,
   onChoisirCouleur,
+  mapLayer,
+  onChoisirCalque,
+  mapBackground,
+  onChoisirFond,
   onWipeProgress,
   onFermer,
 }: {
@@ -92,6 +102,10 @@ export function SettingsScreen({
   onToggleHideStats: (next: boolean) => void;
   traceColor: string;
   onChoisirCouleur: (hex: string) => void;
+  mapLayer: Prefs['mapLayer'];
+  onChoisirCalque: (id: Prefs['mapLayer']) => void;
+  mapBackground: Prefs['mapBackground'];
+  onChoisirFond: (id: Prefs['mapBackground']) => void;
   onWipeProgress: () => Promise<void>;
   onFermer: () => void;
 }) {
@@ -100,6 +114,12 @@ export function SettingsScreen({
   const [confirmeEffacement, setConfirmeEffacement] = useState(false);
   const [effacement, setEffacement] = useState(false);
   const [carteOuverte, setCarteOuverte] = useState(false);
+  // Les deux feuilles sont montées à côté du ScrollView, jamais dedans : celle
+  // des langues contient une FlatList, qu'un ScrollView de même orientation
+  // au-dessus d'elle casserait (voir LanguagePicker.tsx).
+  const [langueOuverte, setLangueOuverte] = useState(false);
+
+  const calqueCourant = MAP_LAYERS.find((l) => l.id === mapLayer);
 
   const nom =
     auth.user?.user_metadata?.full_name || auth.user?.user_metadata?.name || auth.user?.email || null;
@@ -180,12 +200,16 @@ export function SettingsScreen({
         </Section>
 
         <Section titre={t('profile.language')}>
-          <LanguagePicker />
+          <LanguageRow onPress={() => setLangueOuverte(true)} />
         </Section>
 
-        <View style={styles.section}>
-          <NavRow texte={t('settings.mapAppearanceNav')} onPress={() => setCarteOuverte(true)} />
-        </View>
+        <Section titre={t('settings.mapAppearanceTitle')}>
+          <NavRow
+            texte={t('settings.mapLayerSectionTitle')}
+            detail={calqueCourant ? t(calqueCourant.nameKey) : undefined}
+            onPress={() => setCarteOuverte(true)}
+          />
+        </Section>
 
         <Section titre={t('settings.dataSection')}>
           <View style={styles.reglage}>
@@ -206,8 +230,14 @@ export function SettingsScreen({
         <Mono style={styles.version}>Walkedia 1.0.0</Mono>
       </ScrollView>
 
+      {langueOuverte && <LanguageSheet onFermer={() => setLangueOuverte(false)} />}
+
       {carteOuverte && (
         <MapAppearanceSheet
+          mapLayer={mapLayer}
+          onChoisirCalque={onChoisirCalque}
+          mapBackground={mapBackground}
+          onChoisirFond={onChoisirFond}
           traceColor={traceColor}
           onChoisirCouleur={onChoisirCouleur}
           onFermer={() => setCarteOuverte(false)}
@@ -286,13 +316,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 48,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: RADIUS.m,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.ligne,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.ligne,
   },
   navRowTexte: { flex: 1, fontFamily: FONTS.texteSemi, fontSize: 14, color: COLORS.encre },
   navRowDetail: { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.encre3 },

@@ -55,7 +55,13 @@ const SERVE_RADIUS = 550;  // rayon effectivement servi au client (> RADIUS :
 // Pas de bump pour les quartiers différés : les champs ajoutés sont optionnels
 // et les entrées déjà en cache ont leurs quartiers, donc elles restent
 // parfaitement servables telles quelles.
-const VERSION = '2';
+//
+// 2 -> 3 : un tronçon relie désormais deux carrefours (étapes 6 et 7 de
+// _shared/graph.ts). Les arêtes servies sont des chaînes fusionnées, donc de
+// nouveaux identifiants : la progression enregistrée sous la version 2 —
+// tronçons parcourus ET carrefours complétés — ne correspond plus à rien et
+// repart de zéro, pour tout le monde.
+const VERSION = '3';
 
 // Une zone servie sans ses quartiers reste marquée à compléter. Si la tâche de
 // fond n'a pas abouti (instance recyclée, Overpass muet), une requête

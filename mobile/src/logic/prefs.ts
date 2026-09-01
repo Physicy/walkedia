@@ -37,8 +37,11 @@ export interface Prefs {
   // setHideStats). La valeur qui compte reste celle du serveur, relue à la
   // connexion — ce miroir n'est qu'un cache d'affichage.
   hideStats: boolean;
-  // apparence de la carte (voir SettingsScreen.tsx, modale "carte") — pas
-  // encore lu par MapScreen.tsx, seulement persisté pour l'instant.
+  // apparence de la carte (voir components/MapAppearanceSheet.tsx) : `mapLayer`
+  // décide de ce que la géométrie raconte (ma trace / la chaleur des passages /
+  // les quartiers), `mapBackground` de ce qu'il y a dessous. Les deux passent
+  // par l'état du hook de jeu, qui les relit au démarrage et que MapScreen.tsx
+  // consomme — ils n'étaient auparavant qu'enregistrés ici, sans lecteur.
   mapLayer: 'trace' | 'chaleur' | 'quartiers';
   mapBackground: 'clair' | 'plan';
 }
