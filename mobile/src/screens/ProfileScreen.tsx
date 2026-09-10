@@ -13,7 +13,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { COLORS, FONTS, RADIUS, TRACE_PALETTE } from '../theme';
@@ -447,31 +447,71 @@ export function ProfileScreen({
 // Les opacités sont plus basses que la version précédente (0.16 partout) :
 // le plan est plus dense, donc chaque trait doit peser moins pour que le
 // nombre reste le premier élément lu de la carte.
+// Plan de fond de la carte du total. Les tracés viennent de la maquette et
+// débordent volontairement du cadre (-10 à 345) : avec `slice`, le plan est
+// recadré, pas déformé, et aucune ligne ne s'arrête net au bord.
+//
+// Deux lectures superposées : le réseau du quartier en gris, et par-dessus le
+// chemin parcouru dans la couleur du joueur, avec ses carrefours atteints en
+// pastilles pleines et ceux qui restent en pastilles creuses.
+const PLAN_VUE = { largeur: 335, hauteur: 150 };
 const PLAN_GRILLE =
-  'M0 22H335M0 62H335M0 102H335M0 142H335M38 0V158M96 0V158M158 0V158M220 0V158M278 0V158M322 0V158';
-const PLAN_PARCOURU = 'M38 22H158M158 22V62M158 62H278M278 62V102M96 102V142M96 142H220';
-const PLAN_NOEUDS: [number, number][] = [];
-for (const y of [22, 62, 102, 142]) {
-  for (const x of [38, 96, 158, 220, 278, 322]) PLAN_NOEUDS.push([x, y]);
-}
-const PLAN_NOEUDS_PRIS: [number, number][] = [
-  [38, 22], [96, 22], [158, 22],
-  [158, 62], [220, 62], [278, 62],
-  [96, 102], [278, 102],
-  [96, 142], [158, 142], [220, 142],
+  'M-10 34H345M-10 96H345M-10 140H345M52 -10V160M148 -10V160M232 -10V160M300 -10V160M232 96L345 20';
+const PLAN_PARCOURU = 'M52 34H148M148 34V96M148 96H232M232 96V160';
+const PLAN_ATTEINTS: [number, number][] = [
+  [148, 34],
+  [148, 96],
+  [232, 96],
+];
+const PLAN_A_PRENDRE: [number, number][] = [
+  [52, 34],
+  [52, 96],
+  [232, 34],
 ];
 
 function HeroSchema({ accent }: { accent: string }) {
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 335 158" style={StyleSheet.absoluteFillObject} preserveAspectRatio="xMidYMid slice">
-      <Path d={PLAN_GRILLE} stroke={COLORS.encre} strokeWidth={5} strokeLinecap="round" fill="none" opacity={0.06} />
-      <Path d={PLAN_PARCOURU} stroke={accent} strokeWidth={6.5} strokeLinecap="round" fill="none" opacity={0.14} />
-      {PLAN_NOEUDS.map(([x, y]) => (
-        <Circle key={`g${x}-${y}`} cx={x} cy={y} r={4} fill={COLORS.encre} opacity={0.1} />
-      ))}
-      {PLAN_NOEUDS_PRIS.map(([x, y]) => (
-        <Circle key={`a${x}-${y}`} cx={x} cy={y} r={4.6} fill={accent} opacity={0.24} />
-      ))}
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${PLAN_VUE.largeur} ${PLAN_VUE.hauteur}`}
+      style={StyleSheet.absoluteFillObject}
+      preserveAspectRatio="xMidYMid slice"
+    >
+      <Defs>
+        {/* Le voile qui rend le texte lisible : presque opaque à gauche, où
+            vivent le nombre et l'intitulé, il s'efface vers la droite pour
+            laisser voir le plan. Sans lui, les lignes passent au travers des
+            chiffres et la carte devient illisible. */}
+        <LinearGradient id="voileHero" x1="0" y1="0" x2="0.97" y2="0.26">
+          <Stop offset="0" stopColor={COLORS.surface} stopOpacity={0.97} />
+          <Stop offset="0.52" stopColor={COLORS.surface} stopOpacity={0.94} />
+          <Stop offset="1" stopColor={COLORS.surface} stopOpacity={0.55} />
+        </LinearGradient>
+      </Defs>
+
+      {/* Le plan entier à demi-opacité, comme la maquette : c'est ce groupe
+          qui décide de sa présence, pas une opacité par trait. */}
+      <G opacity={0.5}>
+        <Path d={PLAN_GRILLE} stroke={COLORS.plan} strokeWidth={7} strokeLinecap="round" fill="none" />
+        <Path d={PLAN_PARCOURU} stroke={accent} strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.9} />
+        {PLAN_ATTEINTS.map(([x, y]) => (
+          <Circle key={`a${x}-${y}`} cx={x} cy={y} r={6} fill={accent} />
+        ))}
+        {PLAN_A_PRENDRE.map(([x, y]) => (
+          <Circle
+            key={`v${x}-${y}`}
+            cx={x}
+            cy={y}
+            r={5}
+            fill={COLORS.surface}
+            stroke="rgba(26, 27, 46, 0.4)"
+            strokeWidth={2}
+          />
+        ))}
+      </G>
+
+      <Rect x={0} y={0} width={PLAN_VUE.largeur} height={PLAN_VUE.hauteur} fill="url(#voileHero)" />
     </Svg>
   );
 }
@@ -664,18 +704,22 @@ const styles = StyleSheet.create({
   persoTitre: { fontFamily: FONTS.texteSemi, fontSize: 14, color: COLORS.encre, marginTop: 14, textAlign: 'center' },
   persoDetail: { fontFamily: FONTS.texte, fontSize: 12, color: COLORS.encre2, marginTop: 3, textAlign: 'center', maxWidth: 270 },
 
-  hero: { marginHorizontal: 20, marginTop: 22, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, overflow: 'hidden' },
-  heroContenu: { padding: 18 },
+  hero: { marginHorizontal: 20, marginTop: 18, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, overflow: 'hidden' },
+  heroContenu: { padding: 20 },
   heroLigne: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 2 },
-  heroChiffre: { fontFamily: FONTS.display, fontSize: 54, lineHeight: 54, letterSpacing: -1.5 },
-  heroDetail: { flex: 1, fontFamily: FONTS.texte, fontSize: 12.5, lineHeight: 18, color: COLORS.encre2, paddingBottom: 6 },
+  // Interligne plus court que la taille de police (0,85 comme la maquette) :
+  // c'est ce qui serre le bloc autour des chiffres. `includeFontPadding` est
+  // le garde-fou Android, où la police garde sinon une marge propre qui
+  // rognerait le haut des chiffres.
+  heroChiffre: { fontFamily: FONTS.display, fontSize: 62, lineHeight: 53, letterSpacing: -3, includeFontPadding: false },
+  heroDetail: { flex: 1, fontFamily: FONTS.texte, fontSize: 12.5, lineHeight: 18, color: COLORS.encre2, paddingBottom: 12 },
   syncing: { fontFamily: FONTS.texte, fontSize: 11.5, color: COLORS.encre3, marginTop: 6 },
-  heroSepar: { height: 1, backgroundColor: COLORS.ligne, marginVertical: 14 },
+  heroSepar: { height: 1, backgroundColor: COLORS.ligne, marginTop: 14, marginBottom: 12 },
   heroNiveau: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroNiveauTexte: { fontFamily: FONTS.displaySemi, fontSize: 12.5, color: COLORS.encre },
   jaugePiste: { flex: 1, height: 8, borderRadius: 5, backgroundColor: COLORS.ligne, overflow: 'hidden' },
   jaugePleine: { height: '100%', borderRadius: 5 },
-  heroNiveauReste: { fontSize: 10.5, color: COLORS.encre2 },
+  heroNiveauReste: { fontFamily: FONTS.monoMedium, fontSize: 10.5, color: COLORS.encre2 },
 
   serieCard: { marginHorizontal: 20, marginTop: 20, borderRadius: 24, padding: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne },
   serieCardAtteint: { backgroundColor: COLORS.seriePale, borderColor: 'rgba(217,123,41,0.28)' },

@@ -27,6 +27,11 @@ export const COLORS = {
   ligne: 'rgba(26, 27, 46, 0.13)',
   ligneForte: 'rgba(26, 27, 46, 0.28)',
 
+  // Le gris des rues sur les plans décoratifs (fond de la carte du total,
+  // schémas d'accueil) : opaque, pas une encre transparente, pour que la
+  // trace du joueur passe par-dessus sans se mélanger au fond.
+  plan: '#D8D6E2',
+
   // réservé à ce qui détruit des données
   alerte: '#BE4B3C',
 
