@@ -2,7 +2,7 @@
 // pouvoir la dessiner SANS attendre le serveur.
 //
 // `progress` (storage.ts) mémorise déjà l'identité de ce qui est acquis : IDs
-// des tronçons parcourus, des carrefours complétés, compteurs de passages
+// des tronçons validés, des points d'intersection atteints, compteurs de passages
 // pour la heatmap. Mais dessiner demande la géométrie — la polyligne d'un
 // tronçon, la position d'un carrefour — et celle-ci n'existait que dans
 // `state.graph`, c'est-à-dire uniquement pour les zones chargées depuis

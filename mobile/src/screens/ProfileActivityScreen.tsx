@@ -61,7 +61,7 @@ export function ProfileActivityScreen({
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: insets.bottom + 26 }} showsVerticalScrollIndicator={false}>
         <Eyebrow style={styles.sectionTitre}>Dernières sorties</Eyebrow>
-        <Text style={styles.aide}>Seules les sorties ayant débloqué au moins un carrefour.</Text>
+        <Text style={styles.aide}>Seules les sorties ayant atteint au moins un carrefour.</Text>
         {sorties.liste.length === 0 ? (
           <Text style={styles.vide}>Aucune sortie pour l'instant.</Text>
         ) : (

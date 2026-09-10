@@ -144,7 +144,7 @@ export function PanneauSession({
       {fil.slice(0, 3).map((entree, i) => (
         <View key={entree.id} style={styles.filLigne}>
           <View style={[styles.pastille, i > 0 && styles.pastilleVide]} />
-          <Text style={styles.filTexte}>{entree.type === 'carrefour' ? 'Carrefour complété' : 'Nouveau tronçon'}</Text>
+          <Text style={styles.filTexte}>{entree.type === 'carrefour' ? 'Point atteint' : 'Nouveau tronçon'}</Text>
           <Mono style={styles.filTemps}>{formatEcoule(Date.now() - entree.at)}</Mono>
         </View>
       ))}

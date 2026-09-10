@@ -160,7 +160,6 @@
   "toast": {
     "syncSuccess": "Прогрес синхронізовано ✅",
     "syncFailed": "Синхронізація не вдалася: {{message}}",
-    "junctionsCompleted": "+{{count}} перехрестя пройдено!",
     "tooZoomedOut": "Занадто віддалено, щоб завантажувати нові зони.",
     "loadingInProgress": "Завантаження вже триває…",
     "retryIn": "Нова зона: повтор через {{seconds}} с…",

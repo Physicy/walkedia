@@ -3,8 +3,9 @@
 // N'existait pas avant : terminer une marche produisait un toast d'une ligne.
 // Celui-ci dit ce qui a été gagné, et pourquoi le nombre de tronçons crédités
 // ne correspond pas forcément à la distance parcourue — sans quoi l'écart
-// entre les deux resterait inexplicable (une rue déjà connue, un aller-retour,
-// une impasse de moins de 30 m, ne rapportent rien de nouveau).
+// entre les deux resterait inexplicable (une rue déjà relevée, une impasse,
+// ou un trajet entre deux points sans tronçon cartographié entre eux ne
+// rapportent rien de nouveau).
 //
 // Sert aussi d'écran d'arrêt automatique : si `raisonVitesse` est renseigné,
 // la sortie a été coupée parce que le joueur roulait, pas parce qu'il l'a
@@ -52,8 +53,8 @@ export function SessionSummary({ resume, onFermer }: { resume: SortieResume; onF
           </Text>
         ) : (
           <Text style={styles.note}>
-            Ne comptent que les rues jamais marchées avant, et les impasses de moins de 30 m ne comptent pas : c'est
-            pour ça que les tronçons crédités sont souvent moins nombreux que les rues prises.
+            Une rue se relève en allant d'un point d'intersection au suivant, sans en sauter. Les impasses n'en sont
+            pas : c'est pour ça que les tronçons crédités sont souvent moins nombreux que les rues prises.
           </Text>
         )}
 

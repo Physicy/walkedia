@@ -70,14 +70,20 @@ function Progression({ etape }: { etape: number }) {
 }
 
 // Le carrefour qu'on marche au doigt.
+// L'ordre de l'exercice EST la règle : on touche d'abord le carrefour (il
+// s'obtient en y passant, règle C2), puis les rues (elles se relèvent en
+// allant d'un carrefour au suivant, règle D1). Une rue n'est donc pas
+// touchable tant que le carrefour n'est pas atteint — la mécanique refuse
+// l'ordre inverse plutôt que d'expliquer qu'il n'existe pas.
 function Atelier({ reduit }: { reduit: boolean }) {
+  const [atteint, setAtteint] = useState(false);
   const [faites, setFaites] = useState<number[]>([]);
   const complet = faites.length === BRANCHES.length;
   const pop = useRef(new Animated.Value(0)).current;
   const pill = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!complet) return;
+    if (!atteint) return;
     if (reduit) {
       pop.setValue(1);
       pill.setValue(1);
@@ -87,13 +93,14 @@ function Atelier({ reduit }: { reduit: boolean }) {
       Animated.spring(pop, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
       Animated.timing(pill, { toValue: 1, duration: 350, useNativeDriver: true }),
     ]).start();
-  }, [complet, reduit, pop, pill]);
+  }, [atteint, reduit, pop, pill]);
 
   const marcher = useCallback((i: number) => {
     setFaites((prev) => (prev.includes(i) ? prev : [...prev, i]));
   }, []);
 
   const rejouer = () => {
+    setAtteint(false);
     setFaites([]);
     pop.setValue(0);
     pill.setValue(0);
@@ -101,8 +108,10 @@ function Atelier({ reduit }: { reduit: boolean }) {
 
   return (
     <View style={styles.atelier}>
-      {faites.length === 0 ? (
-        <Text style={styles.consigne}>Touche chaque rue pour la marcher</Text>
+      {!atteint ? (
+        <Text style={styles.consigne}>Touche le carrefour pour l'atteindre</Text>
+      ) : faites.length === 0 ? (
+        <Text style={styles.consigne}>Puis chaque rue pour la relever</Text>
       ) : (
         <Text style={styles.rejouer} onPress={rejouer} accessibilityRole="button">
           Recommencer
@@ -157,9 +166,9 @@ function Atelier({ reduit }: { reduit: boolean }) {
                     stroke="transparent"
                     strokeWidth={44}
                     strokeLinecap="round"
-                    onPress={() => marcher(i)}
+                    onPress={() => atteint && marcher(i)}
                     accessible
-                    accessibilityLabel={`Marcher la rue ${i + 1}`}
+                    accessibilityLabel={`Relever la rue ${i + 1}`}
                   />
                 </>
               )}
@@ -167,20 +176,32 @@ function Atelier({ reduit }: { reduit: boolean }) {
           );
         })}
 
-        {!complet && (
-          <Circle
-            cx={CENTRE}
-            cy={CENTRE}
-            r={LARGEUR_RUE * 0.56}
-            fill={COLORS.surface}
-            stroke={COLORS.encre}
-            strokeOpacity={0.45}
-            strokeWidth={3}
-          />
+        {!atteint && (
+          <>
+            <Circle
+              cx={CENTRE}
+              cy={CENTRE}
+              r={LARGEUR_RUE * 0.56}
+              fill={COLORS.surface}
+              stroke={COLORS.encre}
+              strokeOpacity={0.45}
+              strokeWidth={3}
+            />
+            {/* même principe que les rues : cible tactile plus large que le dessin */}
+            <Circle
+              cx={CENTRE}
+              cy={CENTRE}
+              r={26}
+              fill="transparent"
+              onPress={() => setAtteint(true)}
+              accessible
+              accessibilityLabel="Atteindre le carrefour"
+            />
+          </>
         )}
       </Svg>
 
-      {complet && (
+      {atteint && (
         <Animated.View pointerEvents="none" style={[styles.noeudComplet, { transform: [{ scale: pop }] }]} />
       )}
 
@@ -194,7 +215,9 @@ function Atelier({ reduit }: { reduit: boolean }) {
           },
         ]}
       >
-        <Text style={styles.gainTexte}>Carrefour complété · +1 point</Text>
+        <Text style={styles.gainTexte}>
+          {complet ? 'Toutes ses rues relevées' : 'Carrefour atteint · +1 point'}
+        </Text>
       </Animated.View>
     </View>
   );
@@ -244,11 +267,12 @@ export function OnboardingScreen({ onDone }: { onDone: (autoriser: boolean) => v
           <View style={styles.contenu}>
             <Atelier reduit={reduit} />
             <Text style={styles.titre}>
-              Un carrefour complet vaut <Text style={styles.titreAccent}>1 point</Text>.
+              Chaque carrefour atteint vaut <Text style={styles.titreAccent}>1 point</Text>.
             </Text>
             <Corps>
-              Il faut avoir marché toutes les rues qui partent d'un carrefour, pas seulement l'avoir
-              traversé. C'est ce qui pousse à prendre la rue d'à côté plutôt que la même qu'hier.
+              Passe dessus, il est à toi pour toujours. Une rue, elle, ne se relève qu'en allant d'un
+              carrefour au suivant sans en sauter — c'est ce qui pousse à prendre la rue d'à côté
+              plutôt que la même qu'hier.
             </Corps>
           </View>
           <View style={[styles.pied, pied]}>
@@ -269,7 +293,8 @@ export function OnboardingScreen({ onDone }: { onDone: (autoriser: boolean) => v
               <Carte style={styles.permItem}>
                 <Text style={styles.permTitre}>Pendant que tu marches</Text>
                 <Text style={styles.permTexte}>
-                  Ta position est comparée aux rues du quartier pour cocher celles que tu parcours.
+                  Ta position sert à repérer les carrefours que tu franchis, et à en déduire les rues
+                  que tu prends. Le tracé brut est effacé dès la fin de la sortie.
                 </Text>
               </Carte>
               <Carte style={styles.permItem}>

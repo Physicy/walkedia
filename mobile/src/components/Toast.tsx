@@ -1,5 +1,5 @@
 // Ce qu'il reste de ponctuel et sans état dédié : zone pas encore chargée,
-// activation du suivi en arrière-plan… La complétion d'un carrefour et la fin
+// activation du suivi en arrière-plan… Un point atteint et la fin
 // de session sont passées à un état à part entière (voir PointGagneVoile,
 // SessionSummary) — une ligne ne peut ni montrer un glyphe ni distinguer ce
 // qui a compté de ce qui n'a pas compté.

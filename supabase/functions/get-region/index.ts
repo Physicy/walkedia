@@ -61,7 +61,15 @@ const SERVE_RADIUS = 550;  // rayon effectivement servi au client (> RADIUS :
 // nouveaux identifiants : la progression enregistrée sous la version 2 —
 // tronçons parcourus ET carrefours complétés — ne correspond plus à rien et
 // repart de zéro, pour tout le monde.
-const VERSION = '3';
+//
+// 3 -> 4 : bascule sur la spécification « points d'intersection, tronçons et
+// suivi GPS ». Consolidation des nœuds à 5 m au lieu de 25 m (A2), régime de
+// zone décidé aussi par le `landuse` (A3), chaque tronçon porte ses deux
+// points (`ja`/`jb`, pour la validation par consécutivité D1), les carrefours
+// portent `branchEdgeIds` au lieu de `requiredEdgeIds` et `edgeJunctions`
+// disparaît du payload. Identités et forme changent : la progression
+// enregistrée sous la version 3 repart de zéro.
+const VERSION = '4';
 
 // Une zone servie sans ses quartiers reste marquée à compléter. Si la tâche de
 // fond n'a pas abouti (instance recyclée, Overpass muet), une requête
@@ -219,25 +227,31 @@ Deno.serve(async (req: Request) => {
 
   // Cache miss (ou entrée périmée) : calcule la voirie, écrit, répond — et ne
   // récupère les quartiers qu'ensuite (voir l'en-tête de fichier).
-  let osm, greenAreas;
+  let osm, greenAreas, urbanAreas;
   const tFetch = performance.now();
   try {
     const zone = await fetchZone(slat, slon, BUILD_RADIUS);
     osm = zone.osm;
     greenAreas = zone.greenAreas;
+    urbanAreas = zone.urbanAreas;
   } catch (err) {
     return json({ error: 'Overpass indisponible : ' + (err as Error).message }, 502);
   }
   const zoneMs = since(tFetch);
 
   const tBuild = performance.now();
-  const full = await buildGraph(osm, greenAreas.map((a) => a.ring));
+  const full = await buildGraph(
+    osm,
+    greenAreas.map((a) => a.ring),
+    urbanAreas.map((a) => a.ring)
+  );
   const graph = clipGraph(full, [slat, slon], SERVE_RADIUS);
   const buildMs = since(tBuild);
 
-  // Les espaces verts ne servaient qu'à buildGraph (voir graph.ts) : plus
-  // rien côté client n'en a besoin maintenant que le graphe arrive construit,
-  // donc ils ne sont pas dans le payload (~15 % de poids en moins).
+  // Les contours de zones (verts et urbains) ne servent qu'à buildGraph (voir
+  // graph.ts, A3) : plus rien côté client n'en a besoin maintenant que le
+  // graphe arrive construit, donc ils ne sont pas dans le payload (~15 % de
+  // poids en moins).
   //
   // `neighborhoods`/`junctionNeighborhood` partent vides : le client sait les
   // lire tels quels (aucune statistique par quartier pour cette session-là),

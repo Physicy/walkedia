@@ -1,8 +1,9 @@
-// Voile plein écran affiché à la complétion d'un carrefour.
+// Voile plein écran affiché quand un point d'intersection est atteint pour la
+// première fois (règle C2 : passer à moins de 5 m suffit).
 //
-// N'existait pas avant : compléter un carrefour produisait un toast d'une
-// ligne, qui ne peut ni montrer le glyphe ni distinguer les rues inédites de
-// celles déjà connues.
+// N'existait pas avant : gagner un point produisait un toast d'une ligne, qui
+// ne peut ni montrer le glyphe ni dire où en est l'exploration des tronçons
+// qui partent de ce point.
 
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
@@ -36,15 +37,19 @@ export function PointGagneVoile({
     Animated.timing(apparition, { toValue: 1, duration: 220, useNativeDriver: true }).start();
   }, [apparition]);
 
+  // `nouvelles` : tronçons de ce point déjà relevés, sur son nombre total de
+  // branches. Un point s'obtient en y passant ; ses rues, elles, se relèvent
+  // une par une en les marchant d'un point au suivant.
+  const restantes = Math.max(0, total - nouvelles);
   const phrase =
-    nouvelles > 0
-      ? `${total} rue${total > 1 ? 's' : ''} sur ${total}, dont ${nouvelles} que tu n'avais jamais prise${nouvelles > 1 ? 's' : ''}.`
-      : `${total} rue${total > 1 ? 's' : ''} sur ${total}, toutes déjà connues.`;
+    restantes === 0
+      ? `${total} rue${total > 1 ? 's' : ''} sur ${total}, tu les as toutes relevées.`
+      : `${nouvelles} rue${nouvelles > 1 ? 's' : ''} relevée${nouvelles > 1 ? 's' : ''} sur ${total} — il t'en reste ${restantes} à prendre.`;
 
   return (
     <Animated.View style={[styles.voile, { opacity: apparition }]}>
       <Carrefour size={112} branches={branches} couleur={couleur} />
-      <Text style={styles.eyebrow}>Carrefour complété</Text>
+      <Text style={styles.eyebrow}>Point atteint</Text>
       <Text style={styles.titre}>Point n° {numero}</Text>
       <Text style={styles.texte}>{phrase}</Text>
 

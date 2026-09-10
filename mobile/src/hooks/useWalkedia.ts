@@ -12,7 +12,9 @@ import { useTranslation } from 'react-i18next';
 import { fetchRegion } from '../logic/region';
 import { emptyGraph, mergeGraph } from '../logic/regionGraph';
 import type { Graph, Neighborhood, Region } from '../logic/regionGraph';
-import { Matcher, MAX_ACCURACY } from '../logic/matching';
+import { PointTracker, MAX_ACCURACY } from '../logic/tracking';
+import { choisirTroncon, indexerParPaire } from '../logic/troncons';
+import type { Edge } from '../logic/regionGraph';
 import { makeProj, haversine, lineLength } from '../logic/geo';
 import * as storage from '../logic/storage';
 import type { Progress } from '../logic/storage';
@@ -28,9 +30,23 @@ import {
   stopBackgroundTracking,
 } from '../logic/backgroundLocation';
 
-const INTERP_STEP = 5; // m : ré-échantillonnage entre deux fix GPS successifs
+// Ré-échantillonnage entre deux fix GPS successifs. Indispensable à la
+// détection de passage (C2) : le seuil est de 5 m, or deux fixes espacés de
+// 15 m (marche à 5 km/h avec un fix toutes les 10 s, ou `distanceInterval` de
+// la tâche de fond) sauteraient par-dessus un point sans jamais entrer dans
+// son rayon. Ces positions interpolées ne servent QU'À la détection : la
+// sous-trace comparée aux tronçons candidats (D3) ne contient, elle, que des
+// fixes réels — comparer une droite interpolée à une géométrie courbe
+// fabriquerait un écart qui n'a jamais existé.
+const INTERP_STEP = 5; // m
 const MAX_INTERP_GAP = 150; // m : au-delà, on suppose un saut GPS
 const MAX_INTERP_TIME = 20000; // ms : au-delà, le fix précédent est trop vieux
+
+// RGPD, E1/E2 : la trace GPS brute ne vit que le temps du traitement. Une
+// sous-trace ne sert qu'entre deux points d'intersection consécutifs ; passé
+// ce plafond (marche très longue sans croiser le moindre point, ou joueur
+// arrêté), les fixes les plus anciens partent — ils ne serviront plus à rien.
+const MAX_SUBTRACE_POINTS = 600;
 
 const SPEED_LIMIT_KMH = 20;
 const SPEED_STREAK_LIMIT = 2;
@@ -59,6 +75,10 @@ const AUTO_START_MAX_GAP = 60000; // ms
 // position reçue et en faire sa clé de cache (une valeur différente ici
 // ferait manquer le cache à chaque appel).
 const RADIUS = 500;
+// Marge de bord pour l'élagage de la progression (voir elaguerProgression) :
+// à moins de RADIUS - BOUNDARY_MARGIN d'un centre chargé, ce que le serveur
+// sert fait autorité — au-delà, on est trop près du bord de la découpe pour
+// conclure qu'un élément absent n'existe plus.
 const BOUNDARY_MARGIN = 60;
 const EXPAND_MARGIN = 200;
 const EXPAND_COOLDOWN = 8000; // assez court pour explorer la carte à la main ;
@@ -93,24 +113,44 @@ export interface Fix {
 export interface SessionState {
   newEdges: Set<string>;
   newInter: Set<string>;
+  // Trace affichée pendant la marche (le fil pointillé sur la carte). Vit en
+  // mémoire uniquement et disparaît à la clôture de la session : rien de la
+  // trace brute n'est persisté (E2). Ce qui reste dessiné ensuite, c'est la
+  // géométrie OSM des tronçons validés, jamais le GPS (B2).
   track: [number, number][];
+  // Distance parcourue, accumulée fix après fix plutôt que recalculée sur
+  // `track` à la fin : c'est une métadonnée agrégée, elle survit à la purge
+  // de la trace (E2).
+  metres: number;
   startedAt: number;
+  // C4 — journal des points atteints, dans l'ordre chronologique et sans
+  // doublon (un point retraversé n'y apparaît qu'une fois, à son premier
+  // passage). Sert à l'affichage et au récapitulatif de session.
+  journal: { pointId: string; t: number }[];
+  // Dernier passage, tous points confondus (retraversées comprises) : c'est
+  // LUI qui sert la règle de consécutivité D1, pas le journal dédoublonné.
+  // Un aller-retour N → M → N → P doit valider M-N puis N-P, jamais M-P — or
+  // dans le journal dédoublonné, M et P sont voisins.
+  dernierPassage: { pointId: string; t: number } | null;
+  // Sous-trace GPS brute depuis `dernierPassage`, pour départager les
+  // tronçons candidats (D3). Vidée à chaque point atteint : à aucun moment
+  // la session ne détient plus que le segment en cours de résolution (E1).
+  sousTrace: Fix[];
 }
 
-// Un carrefour complété, en attente d'être montré par le voile plein écran
-// (voir MapChrome/SessionSummary — anciennement une simple ligne de toast).
-// File d'attente plutôt qu'un singleton : le map matching peut créditer
-// plusieurs tronçons d'un même lot de fixes GPS interpolés (voir onFix) et
-// donc compléter plusieurs carrefours d'un coup ; ils se montrent alors l'un
-// après l'autre plutôt que d'en perdre.
+// Un point d'intersection atteint pour la première fois (C2), en attente
+// d'être montré par le voile plein écran (voir MapChrome/SessionSummary —
+// anciennement une simple ligne de toast).
+// File d'attente plutôt qu'un singleton : un même fix GPS peut atteindre
+// plusieurs points là où OSM fragmente une jonction (A2 ne consolide qu'à
+// 5 m) ; ils se montrent alors l'un après l'autre plutôt que d'en perdre.
 export interface PointGagne {
   junctionId: string;
   numero: number;
-  // Combien des rues de ce carrefour étaient inédites (jamais marchées avant
-  // cette session), sur son nombre total de branches requises. Capturé au
-  // moment de la complétion plutôt que recalculé à l'affichage : la session
-  // peut se terminer (arrêt automatique) entre les deux, et `newEdges`
-  // disparaît avec elle.
+  // Combien des tronçons de ce point sont déjà relevés, sur son nombre total
+  // de branches. Capturé au moment où le point est atteint plutôt que
+  // recalculé à l'affichage : la session peut se terminer (arrêt automatique)
+  // entre les deux, et le graphe peut avoir changé de zone.
   nouvelles: number;
   total: number;
 }
@@ -195,7 +235,12 @@ interface WalkediaState {
   gridLoading: boolean;
   lastGridLoadTry: number;
   progress: Progress;
-  matcher: any;
+  // Détection de passage par un point d'intersection (C2/C3) et index des
+  // tronçons candidats par paire de points (B1/D3). Tous deux dérivés du
+  // graphe : reconstruits à chaque fusion de zone, en préservant l'état
+  // d'hystérésis de la session en cours.
+  tracker: PointTracker | null;
+  pairIndex: Map<string, Edge[]>;
   session: SessionState | null;
   position: { lat: number; lon: number; accuracy: number | null } | null;
   lastFix: Fix | null;
@@ -246,7 +291,8 @@ function freshState(): WalkediaState {
     gridLoading: false,
     lastGridLoadTry: 0,
     progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] },
-    matcher: null,
+    tracker: null,
+    pairIndex: new Map(),
     session: null,
     position: null,
     lastFix: null,
@@ -306,18 +352,19 @@ function snapToGrid(lat: number, lon: number, cellMeters: number): [number, numb
   return [gy, gx];
 }
 
-function nearBoundary(state: WalkediaState, j: any) {
-  return distToNearestCenter(state, j.lat, j.lon) > RADIUS - BOUNDARY_MARGIN;
-}
-
 // -------------------------------------------------------------- styles dérivés (pour l'UI)
 
+// Un tronçon validé (D1) : sa géométrie OSM est alors ce qui se dessine, pas
+// la trace GPS (B2). Le voile plein écran d'un point gagné révèle les
+// tronçons de la session en même temps que lui, d'où le report d'affichage.
 export function edgeIsFound(state: WalkediaState, id: string) {
   const pendingReveal = state.session && state.session.newEdges.has(id);
   return state.progress.edges.has(id) && !pendingReveal;
 }
 
-export function junctionIsDone(state: WalkediaState, id: string) {
+// Un point d'intersection atteint (C2). Acquis définitivement : contrairement
+// aux tronçons, il ne se reperd jamais (D2, non-perte de progression).
+export function junctionIsReached(state: WalkediaState, id: string) {
   return state.progress.junctions.has(id);
 }
 
@@ -330,11 +377,11 @@ export interface NeighborhoodStat {
   unlocked: boolean;
 }
 
-// Stats de complétion par quartier OSM, dérivées de junctionNeighborhood
-// (assigné côté serveur, voir applyRegion). Les carrefours sans quartier
-// (fréquent : la plupart des villes n'ont pas de contour de quartier dans
-// OSM, voir supabase/functions/_shared/neighborhoods.ts) ne contribuent à
-// aucune ligne.
+// Stats par quartier OSM — points atteints sur points connus —, dérivées de
+// junctionNeighborhood (assigné côté serveur, voir applyRegion). Les points
+// sans quartier (fréquent : la plupart des villes n'ont pas de contour de
+// quartier dans OSM, voir supabase/functions/_shared/neighborhoods.ts) ne
+// contribuent à aucune ligne.
 export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
   if (!state.graph) return [];
   const totals = new Map<number, { total: number; done: number }>();
@@ -344,7 +391,7 @@ export function neighborhoodStats(state: WalkediaState): NeighborhoodStat[] {
     let t = totals.get(nid);
     if (!t) totals.set(nid, (t = { total: 0, done: 0 }));
     t.total++;
-    if (junctionIsDone(state, j.id)) t.done++;
+    if (junctionIsReached(state, j.id)) t.done++;
   }
   const stats: NeighborhoodStat[] = [];
   for (const [nid, t] of totals) {
@@ -669,46 +716,120 @@ export function useWalkedia() {
     [state]
   );
 
-  // Complétion : vérifie un carrefour, retourne true s'il vient d'être complété.
-  const checkJunction = useCallback(
-    (j: any) => {
-      if (state.progress.junctions.has(j.id)) return false;
-      if (nearBoundary(state, j)) return false;
-      for (const id of j.requiredEdgeIds) {
-        if (!state.progress.edges.has(id)) return false;
+  // Élagage de la progression périmée. Un identifiant est géométrique (voir
+  // _shared/graph.ts) : il disparaît quand OSM change le tracé, et surtout
+  // quand les RÈGLES changent (bump de VERSION côté Edge Function — le
+  // passage à la spécification en est un). Sans ça, ces identifiants
+  // resteraient comptés à jamais dans le score et les kilomètres, sans
+  // correspondre à rien sur la carte.
+  //
+  // Ne juge que ce qui est réellement chargé : un élément est supprimé
+  // seulement s'il tombe à l'intérieur d'une zone connue (avec une marge de
+  // bord) et n'y figure pas. Ailleurs, on ne sait pas — donc on ne touche à
+  // rien. Chaque appareil élague ce qu'il visite et pousse le résultat, la
+  // synchronisation converge d'elle-même.
+  //
+  // Les coordonnées se relisent dans l'identifiant : « lat,lon » pour un
+  // point (sa clé de nœud), et le troisième champ d'un identifiant de tronçon
+  // est son point milieu — exactement le critère avec lequel le serveur
+  // décide de le servir ou non (voir clipGraph).
+  const elaguerProgression = useCallback(() => {
+    const graph = state.graph;
+    if (!graph) return;
+    const dansUneZoneConnue = (cle: string) => {
+      const [lat, lon] = cle.split(',').map(Number);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+      return distToNearestCenter(state, lat, lon) <= RADIUS - BOUNDARY_MARGIN;
+    };
+
+    let elagues = 0;
+    for (const id of [...state.progress.junctions]) {
+      if (graph.junctions.has(id) || !dansUneZoneConnue(id)) continue;
+      state.progress.junctions.delete(id);
+      delete state.progress.completedAt[id];
+      state.discovered.junctions.delete(id);
+      elagues++;
+    }
+    for (const id of [...state.progress.edges]) {
+      if (graph.edges.has(id)) continue;
+      const milieu = id.split('|')[2];
+      if (!milieu || !dansUneZoneConnue(milieu)) continue;
+      state.progress.edges.delete(id);
+      delete state.progress.edgeVisits[id];
+      const connu = state.discovered.edges.get(id);
+      if (connu) {
+        state.progress.edgeMeters = Math.max(0, state.progress.edgeMeters - connu.length);
+        state.discovered.edges.delete(id);
       }
+      elagues++;
+    }
+    if (elagues > 0) {
+      persist();
+      discovered.scheduleSave(state.discovered);
+    }
+  }, [state, persist]);
+
+  // Reconstruit ce qui dérive du graphe après une fusion de zone : le tracker
+  // de points (C2/C3) et l'index des tronçons candidats (B1/D3). L'état
+  // d'hystérésis de la session en cours est repris tel quel — les
+  // identifiants de points sont stables, une extension de zone en pleine
+  // marche ne doit pas re-déclencher le point sur lequel on est posé.
+  const rebuildIndexes = useCallback(() => {
+    state.pairIndex = indexerParPaire(state.graph);
+    if (state.tracker) state.tracker = new PointTracker(state.graph, state.proj!, state.tracker);
+    elaguerProgression();
+  }, [state, elaguerProgression]);
+
+  // C2 — un point est atteint dès que la position GPS passe sous le seuil.
+  // Rien d'autre n'est exigé : plus de « toutes les branches parcourues »,
+  // c'est le tronçon qui porte maintenant l'effort de parcours (D1).
+  // Retourne true si c'est la PREMIÈRE fois, tous relevés confondus.
+  const atteindrePoint = useCallback(
+    (j: { id: string; lat: number; lon: number }, t: number) => {
+      if (state.progress.junctions.has(j.id)) return false;
       state.progress.junctions.add(j.id);
-      state.progress.completedAt[j.id] = Date.now();
+      state.progress.completedAt[j.id] = t;
       rememberJunction(j);
       return true;
     },
     [state, rememberJunction]
   );
 
-  const sweepCompletions = useCallback(
-    (announce: boolean) => {
-      if (!state.graph) return 0;
-      let pruned = 0;
-      for (const id of [...state.progress.junctions]) {
-        if (state.graph.junctions.has(id)) continue;
-        const [lat, lon] = id.split(',').map(Number);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        if (distToNearestCenter(state, lat, lon) > RADIUS - BOUNDARY_MARGIN) continue;
-        state.progress.junctions.delete(id);
-        delete state.progress.completedAt[id];
-        pruned++;
+  // D1/D3 — deux points atteints consécutivement dans la même session valident
+  // le tronçon qui les relie, s'il en existe un. `sousTrace` est la trace GPS
+  // brute enregistrée entre les deux passages : elle ne sert qu'ici, à
+  // départager plusieurs candidats (B1), et elle est jetée juste après (E2).
+  // Retourne le tronçon validé, ou null (aucun tronçon ne relie ces deux
+  // points : raccourci hors réseau, ou point intermédiaire non détecté).
+  const validerTroncon = useCallback(
+    (pointA: string, pointB: string, sousTrace: Fix[]): { edge: Edge; inedit: boolean } | null => {
+      if (pointA === pointB) return null;
+      const choix = choisirTroncon(
+        state.pairIndex,
+        pointA,
+        pointB,
+        sousTrace.map((f) => {
+          const xy = state.proj!(f.lat, f.lon);
+          return [xy[0], xy[1]] as [number, number];
+        }),
+        state.proj!
+      );
+      if (!choix) return null;
+
+      const edge = choix.edge;
+      // Compteur de passages (heatmap) : incrémenté à chaque validation, y
+      // compris sur un tronçon déjà connu — c'est justement ce qui distingue
+      // une rue empruntée dix fois d'une rue vue une seule.
+      state.progress.edgeVisits[edge.id] = (state.progress.edgeVisits[edge.id] || 0) + 1;
+      const inedit = !state.progress.edges.has(edge.id);
+      if (inedit) {
+        state.progress.edges.add(edge.id);
+        state.progress.edgeMeters += edge.length;
+        rememberEdge(edge.id);
       }
-      let gained = 0;
-      for (const j of state.graph.junctions.values()) {
-        if (checkJunction(j)) gained++;
-      }
-      if (gained > 0 || pruned > 0) {
-        persist();
-        if (announce && gained > 0) toast(translate('toast.junctionsCompleted', { count: gained }));
-      }
-      return gained;
+      return { edge, inedit };
     },
-    [state, checkJunction, persist, toast, translate]
+    [state, rememberEdge]
   );
 
   // `announceSkip` : quand l'appel vient d'une action explicite de
@@ -756,8 +877,7 @@ export function useWalkedia() {
       const startedAt = Date.now();
       try {
         applyRegion(await fetchRegion(lat, lon));
-        if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
-        sweepCompletions(false);
+        rebuildIndexes();
         rerender();
         toast(translate('toast.newZoneLoaded'));
         logLoad({
@@ -774,7 +894,7 @@ export function useWalkedia() {
         state.expanding = false;
       }
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, logLoad, translate]
+    [state, applyRegion, rebuildIndexes, rerender, toast, logLoad, translate]
   );
 
   // Remplissage en grille de la zone visible en mode cluster (voir
@@ -840,8 +960,7 @@ export function useWalkedia() {
       }
 
       if (loaded > 0) {
-        if (state.matcher) state.matcher = new Matcher(state.graph, state.proj, state.matcher);
-        sweepCompletions(false);
+        rebuildIndexes();
         rerender();
         toast(translate('toast.extraZonesLoaded', { count: loaded }));
       }
@@ -855,7 +974,7 @@ export function useWalkedia() {
       });
       state.gridLoading = false;
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, logLoad, translate]
+    [state, applyRegion, rebuildIndexes, rerender, toast, logLoad, translate]
   );
 
   // ------------------------------------------------------------- suivi GPS
@@ -897,38 +1016,53 @@ export function useWalkedia() {
     return (dist / dt) * 3.6;
   }
 
-  // Rejoue une liste de fixes (marche non trackée) à travers un matcher
-  // temporaire, comme une session normale mais rétroactive. Utilisé par la
-  // détection en arrière-plan (voir backgroundLocation.ts) : la source des
-  // fixes (tampon AsyncStorage rempli par la tâche de fond) est découplée de
-  // cette logique de rejeu, qui ne dépend que de la liste passée en
-  // paramètre.
+  // Rejoue une liste de fixes (marche non trackée) exactement comme une
+  // session normale, mais rétroactivement : tracker de points dédié, journal
+  // de passages, validation par consécutivité. Utilisé par la détection en
+  // arrière-plan (voir backgroundLocation.ts) : la source des fixes (tampon
+  // AsyncStorage rempli par la tâche de fond) est découplée de cette logique
+  // de rejeu, qui ne dépend que de la liste passée en paramètre.
+  //
+  // D2 s'applique à ce rejeu comme au reste : la marche importée est UNE
+  // session, ses tronçons se valident entre points consécutifs de cette
+  // marche-là, et rien ne se reporte sur une autre.
   const importShadowWalk = useCallback(
     async (fixes: Fix[], startedAt: number) => {
       const graph = state.graph;
       if (!graph) return; // appelé une fois la zone initiale chargée (voir init)
-      const matcher = new Matcher(graph, state.proj);
+      const tracker = new PointTracker(graph, state.proj!);
       const newEdges = new Set<string>();
       const newInter = new Set<string>();
+      let dernier: { pointId: string; t: number } | null = null;
+      let sousTrace: Fix[] = [];
       let prevFix: Fix | null = null;
+
       for (const cur of fixes) {
         const prev = cur.accuracy != null && cur.accuracy > MAX_ACCURACY ? null : prevFix;
+        if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) sousTrace.push(cur);
         for (const fix of interpolatedFixes(prev, cur)) {
-          for (const edgeId of matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
-            state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
-            if (state.progress.edges.has(edgeId)) continue;
-            state.progress.edges.add(edgeId);
-            state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
-            rememberEdge(edgeId);
-            newEdges.add(edgeId);
-            for (const jid of graph.edgeJunctions.get(edgeId) || []) {
-              const j = graph.junctions.get(jid);
-              if (j && checkJunction(j)) newInter.add(jid);
+          for (const pointId of tracker.feed(fix.lat, fix.lon, fix.accuracy)) {
+            const j = graph.junctions.get(pointId);
+            if (!j) continue;
+            const t = cur.t ?? Date.now();
+            if (dernier && dernier.pointId !== pointId) {
+              const valide = validerTroncon(dernier.pointId, pointId, sousTrace);
+              if (valide?.inedit) newEdges.add(valide.edge.id);
             }
+            if (atteindrePoint(j, t)) newInter.add(pointId);
+            dernier = { pointId, t };
+            sousTrace = [cur];
           }
         }
         if (cur.accuracy == null || cur.accuracy <= MAX_ACCURACY) prevFix = cur;
+        if (sousTrace.length > MAX_SUBTRACE_POINTS) sousTrace = sousTrace.slice(-MAX_SUBTRACE_POINTS);
       }
+
+      const km = lineLength(fixes.map((f) => [f.lat, f.lon])) / 1000;
+      // E2 : la liste de fixes rejouée ne sert plus à rien une fois les
+      // tronçons résolus. Le tampon d'origine a déjà été vidé à la lecture
+      // (consumeBackgroundBuffer) ; on relâche aussi ce qu'on tenait ici.
+      sousTrace = [];
 
       state.progress.sessions.push({
         start: startedAt,
@@ -936,13 +1070,13 @@ export function useWalkedia() {
         edges: newEdges.size,
         junctions: newInter.size,
         imported: true,
-        km: lineLength(fixes.map((f) => [f.lat, f.lon])) / 1000,
+        km,
       });
       await persist();
       rerender();
       toast(translate('toast.walkImported', { edges: newEdges.size, junctions: newInter.size }), 6000);
     },
-    [state, checkJunction, persist, rememberEdge, rerender, toast, translate]
+    [state, atteindrePoint, validerTroncon, persist, rerender, toast, translate]
   );
 
   // Règle 1 (app fermée) : vérifie au démarrage si la tâche de fond a
@@ -1033,8 +1167,7 @@ export function useWalkedia() {
         rerender();
         return;
       }
-      state.session.track.push([lat, lon]);
-
+      const session = state.session;
       const cur: Fix = { lat, lon, accuracy, t };
       const prev = accuracy != null && accuracy > MAX_ACCURACY ? null : state.lastFix;
 
@@ -1051,58 +1184,91 @@ export function useWalkedia() {
         state.speedStreak = 0;
       }
 
+      // Trace affichée + distance parcourue. La distance s'accumule ici plutôt
+      // que d'être recalculée sur `track` à la fin : `track` est purgée à la
+      // clôture (E2), la distance est une métadonnée agrégée qui reste.
+      if (prev) session.metres += haversine([prev.lat, prev.lon], [lat, lon]);
+      session.track.push([lat, lon]);
+
+      // C1 — sous-trace GPS BRUTE : uniquement des fixes réels, jamais les
+      // positions interpolées ci-dessous, et seulement depuis le dernier point
+      // atteint. C'est tout ce que la session détient de la trace pour le
+      // traitement, et ça ne sert qu'à départager des candidats (D3).
+      if (accuracy == null || accuracy <= MAX_ACCURACY) {
+        session.sousTrace.push(cur);
+        if (session.sousTrace.length > MAX_SUBTRACE_POINTS) session.sousTrace.shift();
+      }
+
       const fixes = interpolatedFixes(prev, cur);
       if (accuracy == null || accuracy <= MAX_ACCURACY) state.lastFix = cur;
 
-      let anyChange = false;
+      // `progresChange` déclenche la sauvegarde : un tronçon déjà connu
+      // re-marché ne change rien à l'affichage, mais incrémente son compteur
+      // de passages (heatmap) — donc il y a bien quelque chose à écrire.
+      let progresChange = false;
       const graph = state.graph!; // une session ne démarre qu'avec un graphe chargé
       for (const fix of fixes) {
-        for (const edgeId of state.matcher.feed(fix.lat, fix.lon, fix.accuracy)) {
-          // Compteur de passages (heatmap) : incrémenté à chaque tronçon validé
-          // par le matcher, y compris les tronçons déjà découverts (revisite).
-          // matcher.feed() ne renvoie un id qu'une fois par arête et par
-          // session (voir Matcher.traversed dans matching.js), donc pas de
-          // risque de sur-comptage par spam de fix GPS.
-          state.progress.edgeVisits[edgeId] = (state.progress.edgeVisits[edgeId] || 0) + 1;
-          if (state.progress.edges.has(edgeId)) continue;
-          state.progress.edges.add(edgeId);
-          state.progress.edgeMeters += graph.edges.get(edgeId)!.length;
-          rememberEdge(edgeId);
-          state.session.newEdges.add(edgeId);
-          anyChange = true;
-          for (const jid of graph.edgeJunctions.get(edgeId) || []) {
-            const j = graph.junctions.get(jid);
-            if (j && checkJunction(j)) {
-              state.session.newInter.add(jid);
-              let nouvelles = 0;
-              for (const id of j.requiredEdgeIds) if (state.session.newEdges.has(id)) nouvelles++;
-              const numero = state.progress.junctions.size;
-              state.pointsGagnes.push({
-                junctionId: jid,
-                numero,
-                nouvelles,
-                total: j.requiredEdgeIds.size,
-              });
-              // Notification à côté du toast (voir plus bas dans ce hook), pas
-              // à sa place : le toast est le retour dans l'app, la
-              // notification est ce qui arrive si l'app est en arrière-plan.
-              if (state.notificationsEnabled) {
-                notifyJunctionUnlocked(
-                  translate('notifications.junctionUnlockedTitle'),
-                  translate('notifications.junctionUnlockedBody', { numero })
-                );
-              }
+        for (const pointId of state.tracker!.feed(fix.lat, fix.lon, fix.accuracy)) {
+          const j = graph.junctions.get(pointId);
+          if (!j) continue;
+
+          // D1 — consécutivité stricte : le tronçon se valide entre CE point
+          // et le passage précédent, quel qu'il soit. Rien d'autre n'est
+          // crédité au passage : si un point intermédiaire a été franchi sans
+          // que le GPS le voie, aucun tronçon ne relie directement les deux
+          // points du journal, et rien n'est validé — c'est voulu.
+          if (session.dernierPassage && session.dernierPassage.pointId !== pointId) {
+            const valide = validerTroncon(session.dernierPassage.pointId, pointId, session.sousTrace);
+            // `newEdges` ne retient que l'INÉDIT : c'est ce que la carte
+            // révèle en fin de session et ce que compte le résumé. Un tronçon
+            // déjà connu, re-marché aujourd'hui, compte son passage (heatmap)
+            // sans repasser par la case découverte.
+            if (valide) progresChange = true;
+            if (valide?.inedit) session.newEdges.add(valide.edge.id);
+          }
+          // L'instant du passage est celui du fix courant, pas celui de la
+          // position interpolée qui a franchi le seuil : à la seconde près
+          // c'est la même chose, et dater un passage sur une position
+          // reconstruite plutôt que mesurée serait faux.
+          session.dernierPassage = { pointId, t };
+          // E1/E2 — la sous-trace a fini son office : elle repart du seul fix
+          // courant, début du segment suivant.
+          session.sousTrace = [cur];
+
+          // C4 — journal chronologique, sans doublon : un point retraversé n'y
+          // entre qu'une fois, à son premier passage.
+          if (!session.journal.some((e) => e.pointId === pointId)) {
+            session.journal.push({ pointId, t });
+          }
+
+          if (atteindrePoint(j, t)) {
+            session.newInter.add(pointId);
+            let nouvelles = 0;
+            for (const id of j.branchEdgeIds) if (state.progress.edges.has(id)) nouvelles++;
+            const numero = state.progress.junctions.size;
+            state.pointsGagnes.push({
+              junctionId: pointId,
+              numero,
+              nouvelles,
+              total: j.branchEdgeIds.size,
+            });
+            progresChange = true;
+            // Notification à côté du toast (voir plus bas dans ce hook), pas
+            // à sa place : le toast est le retour dans l'app, la
+            // notification est ce qui arrive si l'app est en arrière-plan.
+            if (state.notificationsEnabled) {
+              notifyJunctionUnlocked(
+                translate('notifications.junctionUnlockedTitle'),
+                translate('notifications.junctionUnlockedBody', { numero })
+              );
             }
           }
-          persist();
         }
       }
+      if (progresChange) persist();
       rerender();
-      if (!anyChange) {
-        // le déplacement seul (trackLine, position) doit quand même se voir
-      }
     },
-    [state, maybeExpand, rerender, checkJunction, persist, rememberEdge, toast, translate]
+    [state, maybeExpand, rerender, atteindrePoint, validerTroncon, persist, toast, translate]
   );
   onFixRef.current = onFix;
 
@@ -1110,18 +1276,31 @@ export function useWalkedia() {
 
   const startSession = useCallback(() => {
     // La carte s'ouvre désormais avant que la zone soit chargée (voir init) :
-    // sans réseau, le map matching n'a rien sur quoi projeter, et une session
-    // démarrée là ne créditerait aucun tronçon. Vaut aussi pour le démarrage
+    // sans zone, il n'y a aucun point d'intersection à atteindre, et une
+    // session démarrée là ne créditerait rien. Vaut aussi pour le démarrage
     // automatique déclenché par onFix.
     if (!state.graph) {
       toast(translate('toast.zoneNotLoadedYet'));
       return;
     }
-    state.matcher = new Matcher(state.graph, state.proj);
+    // Tracker neuf à chaque session : l'hystérésis (C3) comme le journal (C4)
+    // sont des notions de session, et D2 interdit qu'un passage d'hier compte
+    // dans la consécutivité d'aujourd'hui.
+    state.tracker = new PointTracker(state.graph, state.proj!);
+    state.pairIndex = indexerParPaire(state.graph);
     state.lastFix = null;
     state.speedStreak = 0;
     state.idleMovement = null; // pas de sens hors session, évite un résidu périmé au prochain arrêt
-    state.session = { newEdges: new Set(), newInter: new Set(), track: [], startedAt: Date.now() };
+    state.session = {
+      newEdges: new Set(),
+      newInter: new Set(),
+      track: [],
+      metres: 0,
+      startedAt: Date.now(),
+      journal: [],
+      dernierPassage: null,
+      sousTrace: [],
+    };
     rerender();
     toast(translate('toast.sessionStarted'));
   }, [state, rerender, toast, translate]);
@@ -1134,13 +1313,26 @@ export function useWalkedia() {
   const endSession = useCallback(
     (vitesseKmh?: number) => {
       if (!state.session) return;
-      const { newEdges, newInter, track, startedAt } = state.session;
+      const { newEdges, newInter, metres, startedAt } = state.session;
+
+      // E1/E2 — clôture RGPD. Le traitement de fin de session est déjà fait :
+      // les points ont été détectés au fil de l'eau (C2) et les tronçons
+      // validés dès que deux points se sont suivis (D1), donc il ne reste
+      // rien à calculer sur la trace brute. On la relâche ici, explicitement,
+      // avec tout ce qui pourrait la reconstituer : `track` (le fil affiché),
+      // `sousTrace` (le segment en cours) et `lastFix`. Rien de tout ça n'a
+      // jamais été écrit sur disque ; ce qui survit à la session, ce sont les
+      // données de jeu (points atteints, tronçons validés) et des
+      // métadonnées agrégées (distance, durée).
+      state.session.track = [];
+      state.session.sousTrace = [];
+      state.session.dernierPassage = null;
       state.session = null;
-      state.matcher = null;
+      state.tracker = null;
       state.lastFix = null;
       state.idleMovement = null;
 
-      const km = lineLength(track) / 1000;
+      const km = metres / 1000;
       state.progress.sessions.push({ start: startedAt, end: Date.now(), edges: newEdges.size, junctions: newInter.size, km });
       persist();
       // Fin de session : on n'attend pas le prochain cycle différé pour écrire
@@ -1213,7 +1405,7 @@ export function useWalkedia() {
 
       applyRegion(region);
       state.expanding = false;
-      sweepCompletions(false);
+      rebuildIndexes();
       rerender();
       toast(translate('toast.segmentsInZone', { edges: state.graph!.edges.size, junctions: state.graph!.junctions.size }));
       logLoad({
@@ -1226,7 +1418,7 @@ export function useWalkedia() {
 
       checkBackgroundImport();
     },
-    [state, applyRegion, sweepCompletions, rerender, toast, startWatch, logLoad, checkBackgroundImport, translate]
+    [state, applyRegion, rebuildIndexes, rerender, toast, startWatch, logLoad, checkBackgroundImport, translate]
   );
 
   const requestLocationAndInit = useCallback(async () => {

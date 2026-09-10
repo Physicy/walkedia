@@ -13,15 +13,28 @@ const MIRRORS = [
 // claire ("Please include a meaningful User-Agent string...").
 const USER_AGENT = 'Walkedia/1.0 (+https://github.com/Physicy/walkedia)';
 
+// A5 de la spécification (infrastructures non praticables à pied) est traité
+// ici, et nulle part ailleurs : seules des ways `highway=...` sont demandées.
+// Une voie de tram ou une voie ferrée n'entre donc jamais dans les données,
+// n'apporte aucun nœud, et ne peut pas créer de point d'intersection là où
+// elle croise visuellement une rue.
 const HIGHWAY_TYPES =
   'footway|path|pedestrian|living_street|residential|unclassified|tertiary|secondary|primary|track|steps|cycleway|service';
 
 // Tags "espace vert" : parcs/jardins, forêts, terrains de sport. Un carrefour
-// piéton situé à l'intérieur d'un de ces contours compte toutes ses branches
-// même en zone urbaine (voir graph.ts) — volontairement distinct des
-// places/esplanades, dont l'exclusion des maillages urbains reste voulue.
+// de chemins situé à l'intérieur d'un de ces contours compte toutes ses
+// branches, y compris les bifurcations mineures de sentiers (A3, régime
+// « parc / forêt ») — volontairement distinct des places/esplanades, dont
+// l'exclusion des maillages urbains reste voulue.
 const GREEN_LEISURE = 'park|garden|nature_reserve|recreation_ground|pitch|sports_centre';
 const GREEN_LANDUSE = 'forest|meadow';
+
+// Tags "zone urbaine standard" au sens d'A3 : là où seules les voies
+// carrossables et les rues piétonnes génèrent un point. Récupérés dans la même
+// requête que la voirie (pas de tour réseau supplémentaire). Le `landuse` est
+// la source directe de la règle ; la densité de voirie calculée dans graph.ts
+// reste le repli, indispensable là où personne n'a cartographié de `landuse`.
+const URBAN_LANDUSE = 'residential|commercial|retail';
 
 // Quartiers ("place=suburb/neighbourhood/quarter") : en pratique, ce tag
 // n'a un contour polygonal (way fermé) que dans une minorité de villes bien
@@ -111,20 +124,30 @@ export interface GreenArea {
   ring: [number, number][];
 }
 
+export interface UrbanArea {
+  id: number;
+  ring: [number, number][];
+}
+
 export interface Neighborhood {
   id: number;
   name: string | null;
   ring: [number, number][];
 }
 
-// Récupère en un seul appel le réseau piéton (ways + nœuds) et les contours
-// des espaces verts autour du point donné. Les quartiers (fetchNeighborhoods
-// ci-dessous) sont une requête séparée, jamais fusionnée ici.
+// Récupère en un seul appel le réseau piéton (ways + nœuds) et les contours de
+// zones qui décident du régime de filtrage (A3) : espaces verts et `landuse`
+// urbain. Les quartiers (fetchNeighborhoods ci-dessous) sont une requête
+// séparée, jamais fusionnée ici.
 export async function fetchZone(
   lat: number,
   lon: number,
   radius: number
-): Promise<{ osm: { nodes: Map<number, [number, number]>; ways: OsmWay[] }; greenAreas: GreenArea[] }> {
+): Promise<{
+  osm: { nodes: Map<number, [number, number]>; ways: OsmWay[] };
+  greenAreas: GreenArea[];
+  urbanAreas: UrbanArea[];
+}> {
   const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
   const query = `
 [out:json][timeout:40];
@@ -139,29 +162,46 @@ way(${around})
   way(${around})["landuse"~"^(${GREEN_LANDUSE})$"];
   way(${around})["natural"="wood"];
 )->.green;
+way(${around})["landuse"~"^(${URBAN_LANDUSE})$"]->.urbain;
 .roads out body;
 .roads>;
 out skel qt;
-.green out geom;`;
+.green out geom;
+.urbain out geom;`;
 
   const json = await runQuery(query);
   return parseZone(json);
+}
+
+// Les contours arrivent tous par `out geom` dans le même flot : c'est leur
+// tag qui dit à quel régime ils appartiennent, pas leur position dans la
+// réponse. Le vert l'emporte sur l'urbain quand un contour porte les deux
+// (un parc taggé dans un `landuse` résidentiel), comme dans graph.ts.
+export function isGreenRing(tags: Record<string, string>): boolean {
+  return (
+    new RegExp(`^(${GREEN_LEISURE})$`).test(tags.leisure || '') ||
+    new RegExp(`^(${GREEN_LANDUSE})$`).test(tags.landuse || '') ||
+    tags.natural === 'wood'
+  );
 }
 
 function parseZone(json: any) {
   const nodes = new Map<number, [number, number]>();
   const ways: OsmWay[] = [];
   const greenAreas: GreenArea[] = [];
+  const urbanAreas: UrbanArea[] = [];
   for (const el of json.elements || []) {
     if (el.type === 'node') {
       nodes.set(el.id, [el.lat, el.lon]);
     } else if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
-      greenAreas.push({ id: el.id, ring: el.geometry.map((p: any) => [p.lat, p.lon]) });
+      const ring = { id: el.id, ring: el.geometry.map((p: any) => [p.lat, p.lon]) };
+      if (isGreenRing(el.tags || {})) greenAreas.push(ring);
+      else urbanAreas.push(ring);
     } else if (el.type === 'way' && el.nodes && el.nodes.length >= 2) {
       ways.push({ id: el.id, nodes: el.nodes, tags: el.tags || {} });
     }
   }
-  return { osm: { nodes, ways }, greenAreas };
+  return { osm: { nodes, ways }, greenAreas, urbanAreas };
 }
 
 export async function fetchNeighborhoods(lat: number, lon: number, radius: number): Promise<Neighborhood[]> {

@@ -10,11 +10,19 @@
 // aucun écran React n'est monté. Jamais activé par défaut — uniquement à
 // l'activation explicite d'un réglage opt-in (voir ProfileScreen.tsx),
 // après quoi seulement la permission "Toujours" est demandée.
+//
+// Seul endroit de l'app où une trace GPS brute touche le disque : l'app étant
+// fermée, la tâche n'a aucun état en mémoire à qui parler. La règle E1/E2 de
+// la spécification (la trace ne vit que le temps du traitement) tient quand
+// même, par construction : le tampon ne garde qu'une heure glissante, il est
+// plafonné en nombre de points, et `consumeBackgroundBuffer` l'efface à la
+// lecture — avant même que le rejeu commence, donc y compris si le joueur
+// refuse l'import.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { MAX_ACCURACY } from './matching';
+import { MAX_ACCURACY } from './tracking';
 import { haversine } from './geo';
 import i18n from '../i18n';
 

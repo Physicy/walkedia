@@ -1,13 +1,13 @@
-// Fiche de carrefour, ouverte en touchant un point sur la carte.
+// Fiche d'un point d'intersection, ouverte en touchant un point sur la carte.
 //
-// Le dessin porte toute l'information (branche marchée ou non, sens et
+// Le dessin porte toute l'information (tronçon relevé ou non, sens et
 // nombre) : pas besoin de la répéter en texte à côté, une liste "Rue 1, Rue 2…"
 // ne dit rien que le glyphe ne montre déjà.
 //
-// La règle citée est vérifiée dans le code serveur qui construit les
-// carrefours (supabase/functions/_shared/graph.ts) et pas devinée : une
-// impasse de moins de 30 m (STUB_MAX) ne compte pas comme branche, et en zone
-// urbaine dense seules les rues carrossables comptent.
+// La règle citée est celle du code serveur qui construit les points
+// (supabase/functions/_shared/graph.ts), pas une approximation : une impasse
+// de moins de DEAD_END_MAX_LENGTH_M ne compte pas comme branche (A4), et en
+// zone urbaine seules les rues carrossables et piétonnes comptent (A3).
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,6 +26,9 @@ export function JunctionSheet({
   onFermer: () => void;
   couleur: string;
 }) {
+  // « Exploré » : tous les tronçons qui partent de ce point ont été relevés.
+  // C'est un état de complétion des RUES, distinct du point lui-même — celui-ci
+  // est acquis dès qu'on y passe (C2), et ne se reperd jamais.
   const complet = branches.length > 0 && branches.every((b) => b[1]);
 
   return (
@@ -34,12 +37,12 @@ export function JunctionSheet({
         <View style={styles.poignee} />
         <View style={styles.entete}>
           <Carrefour size={84} branches={branches} couleur={couleur} />
-          <Eyebrow style={styles.eyebrow}>{complet ? 'Carrefour complété' : 'Carrefour incomplet'}</Eyebrow>
+          <Eyebrow style={styles.eyebrow}>{complet ? 'Toutes les rues relevées' : 'Rues à relever'}</Eyebrow>
           <Titre style={styles.titre}>{numero != null ? `Point n° ${numero}` : `${branches.length} branches`}</Titre>
         </View>
 
         <Text style={styles.regle}>
-          Les impasses de moins de 30 m ne comptent pas. En zone dense, seules les rues carrossables comptent.
+          Un point s'obtient en passant à moins de 5 m. Une rue se relève en marchant d'un point au suivant, sans en sauter.
         </Text>
       </Pressable>
     </Pressable>

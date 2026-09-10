@@ -1,8 +1,8 @@
 # Walkedia
 
-Jeu d'exploration du réseau piéton : marche ou cours pour découvrir des chemins
-(map matching GPS → réseau OpenStreetMap) et complète des intersections pour
-marquer des points.
+Jeu d'exploration du réseau piéton : marche pour atteindre des **points
+d'intersection** (les vraies jonctions du réseau OpenStreetMap) et relie-les
+entre eux pour relever des **tronçons**.
 
 App native **Expo / React Native** (voir [`mobile/`](mobile)) — portage de
 l'ancien prototype PWA, avec la même logique métier.
@@ -66,67 +66,110 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
 
 ## Fonctionnement
 
-- **Graphe** : ways piétons OSM découpés aux jonctions puis simplifiés (fusion
-  des nœuds de degré 2) pour que chaque arête relie deux vrais nœuds. Ce
-  calcul se fait **côté serveur** (voir « Backend » ci-dessous), pas sur le
-  téléphone : l'app reçoit un graphe déjà construit par zone de 500 m et se
-  contente de coller les zones bout à bout.
-- **Tronçon** : un chemin qui relie **deux carrefours**. Les arêtes issues du
-  découpage ci-dessus s'arrêtent à tout nœud partagé par plusieurs ways (une
-  entrée de parking, un trottoir qui rejoint la chaussée) ; elles sont donc
-  recollées en chaînes, poursuivies tant que le nœud traversé n'est pas un
-  carrefour et n'a que deux branches significatives. Une chaîne qui n'a pas
-  un carrefour à ses deux bouts n'est pas un tronçon et disparaît du graphe :
-  les impasses ne comptent pas, et en zone urbaine les chemins piétons non
-  plus (ils ne sont déjà pas des branches significatives d'un nœud urbain,
-  voir « Urbain / rural »). En zone rurale, sentiers et chemins restent des
-  tronçons à part entière.
+- **Règles du jeu** : l'app implémente la spécification
+  [points d'intersection, tronçons et suivi GPS](docs/spec-points-troncons-gps.md).
+  Les repères entre parenthèses ci-dessous (A1, C3, D1…) renvoient à ses
+  sections, repris tels quels dans les commentaires du code.
+- **Point d'intersection** : le nœud interactif, celui qui rapporte. Il
+  correspond à une vraie jonction physique entre voies (A1) : un nœud du
+  graphe à au moins trois branches significatives. Un vertex de géométrie
+  pure — celui qui ne fait que dessiner la courbure d'une rue — n'en génère
+  aucun (fusion des chaînes de degré 2).
+- **Tronçon** : le lien entre **deux points d'intersection adjacents**, sans
+  aucun autre point entre les deux (B0). Les arêtes du découpage OSM s'arrêtent
+  à tout nœud partagé par plusieurs ways (une entrée de parking, un trottoir
+  qui rejoint la chaussée) ; elles sont donc recollées en chaînes, poursuivies
+  tant que le nœud traversé n'est pas un point et n'a que deux branches
+  significatives. Une chaîne qui n'a pas un point à ses deux bouts n'est pas un
+  tronçon et disparaît du graphe : les impasses ne comptent pas. **Plusieurs
+  tronçons peuvent relier les deux mêmes points** (B1 : les deux branches
+  d'une boucle de desserte, les deux côtés d'un rond-point) ; chacun est une
+  entité distincte, et c'est le suivi GPS qui les départage (voir plus bas).
+- **Graphe** : tout ce qui précède est calculé **côté serveur** (voir
+  « Backend » ci-dessous), pas sur le téléphone : l'app reçoit un graphe déjà
+  construit par zone de 500 m et se contente de coller les zones bout à bout.
+- **Consolidation des nœuds fragmentés** (A2) : OSM décrit parfois une même
+  jonction physique par plusieurs nœuds légèrement décalés (une voie et un
+  chemin piéton taggés séparément). Tout groupe de nœuds candidats
+  mutuellement distants de moins de **5 m** est fusionné en un seul point de
+  jeu, placé au barycentre du groupe. Conséquence assumée : un grand carrefour
+  cartographié en chaussées séparées, avec îlots et passages piétons, donne
+  plusieurs points — mais un point s'acquiert simplement en y passant, il
+  n'exige plus d'avoir parcouru toutes ses branches.
+- **Impasses** (A4) : une antenne de desserte plus courte que
+  `DEAD_END_MAX_LENGTH_M` (30 m par défaut) n'est pas une branche
+  significative : elle ne fait pas d'un nœud une jonction et n'est jamais un
+  tronçon. **Décision ouverte** dans la spécification : le seuil est à trancher
+  après tests terrain, d'où la constante exposée.
 - **Extension dynamique** : le suivi de position GPS tourne en continu dès
   l'ouverture de la carte (indépendamment du démarrage d'une session) ; dès
   qu'on s'éloigne à plus de 300 m du centre de la zone connue, une nouvelle
   zone est demandée autour de la position et fusionnée au graphe (couverture
-  de session préservée : les IDs d'arêtes sont stables). En cas d'échec,
-  nouvelle tentative au plus tôt 8 s plus tard.
-- **Carrefours** : le degré est calculé sur les branches *significatives* (les
-  impasses de moins de 30 m — entrées de bâtiments, allées — ne comptent pas),
-  puis les nœuds de degré ≥ 3 reliés par des arêtes de moins de 25 m sont
-  consolidés en un seul carrefour (plafond de 60 m de diagonale par groupe).
-  OSM fragmente un carrefour réel en 4 à 8 nœuds (trottoirs, passages piétons,
-  chaussées séparées). La fusion n'a lieu que si le lien est un artefact d'un
-  seul carrefour réel : arc de rond-point, segment à sens unique, traversée
-  piétonne (`footway=crossing`) ou nœud posé sur des chaussées séparées. Deux
-  intersections décalées le long d'un même axe, reliées par un tronçon de rue
-  à double sens, restent deux carrefours distincts à 3 branches chacun. Un
-  carrefour est complété quand tous les **tronçons** qui en partent ont été
-  parcourus ; ceux qui restent internes au carrefour (traversées, arcs de
-  rond-point) sont des bonus non exigés. Ce qui fait un carrefour se décide
-  toujours sur les arêtes de base, avant recollage : une branche qui mène à
-  une impasse compte pour le détecter, mais n'est plus exigée pour le
-  compléter puisqu'elle n'est plus un tronçon.
-- **Urbain / rural** : chaque zone est classée par densité locale de voirie
-  carrossable (grille de 250 m, fenêtre 3×3, seuil `URBAN_MIN_ROAD`). En
-  urbain, seuls les carrefours du réseau accessible en voiture (`residential`
-  et au-dessus + `living_street`) comptent : les maillages de places et
-  trottoirs ne génèrent plus de points. En rural, les sentiers et chemins sont
-  le réseau principal, donc toutes les voies comptent (règle d'origine).
-- **Espaces verts** : exception géométrique à la règle urbaine ci-dessus. Les
-  contours des parcs, jardins, forêts et terrains de sport (`leisure=park
-  |garden|nature_reserve|recreation_ground|pitch|sports_centre`,
-  `landuse=forest|meadow`, `natural=wood`) sont récupérés via Overpass en même
-  temps que la voirie ; un carrefour situé à l'intérieur d'un de ces contours
-  compte toutes ses branches piétonnes, même si la zone environnante est par
-  ailleurs classée urbaine. Les places/esplanades restent volontairement
-  exclues (règle ci-dessus inchangée pour elles). Limitation connue : seuls
+  de session préservée : les IDs de tronçons et de points sont stables). En cas
+  d'échec, nouvelle tentative au plus tôt 8 s plus tard.
+- **Régime de zone** (A3) : en **zone urbaine standard**, seules les voies
+  carrossables (`residential` et au-dessus + `living_street`) et les rues
+  piétonnes (`highway=pedestrian`) génèrent un point — les entrées de
+  commerces, courettes et maillages de trottoirs, non. Une zone est urbaine si
+  elle tombe dans un contour `landuse=residential|commercial|retail`, ou, à
+  défaut de `landuse` cartographié, si la densité locale de voirie carrossable
+  dépasse `URBAN_MIN_ROAD` (grille de 250 m, fenêtre 3×3). En **zone rurale**,
+  sentiers et chemins *sont* le réseau : toutes les voies comptent.
+- **Parcs et forêts** (A3, second régime) : les contours des parcs, jardins,
+  forêts et terrains de sport (`leisure=park|garden|nature_reserve
+  |recreation_ground|pitch|sports_centre`, `landuse=forest|meadow`,
+  `natural=wood`) sont récupérés via Overpass en même temps que la voirie. Un
+  nœud situé à l'intérieur compte **toutes** ses branches piétonnes, y compris
+  les bifurcations mineures de sentiers, même en pleine ville. Les
+  places/esplanades restent volontairement exclues. Limitation connue : seuls
   les contours simples (ways fermés) sont gérés, pas les relations
   multipolygones (rare pour les parcs).
-- **IDs d'arêtes** : dérivés de la géométrie (extrémités + milieu + longueur),
-  stables entre sessions et indépendants des IDs OSM.
-- **Map matching** : chaque position GPS (précision ≤ 40 m) est projetée sur
-  l'arête la plus proche (≤ 30 m) ; l'arête est validée quand les projections
-  couvrent une part suffisante de sa longueur (50 % si courte, ~75 % sinon).
-  Entre deux fix GPS successifs, la position est rééchantillonnée en ligne
-  droite tous les 5 m (sauf saut > 150 m ou écart > 20 s, considérés comme
-  une coupure).
+- **Infrastructures non praticables** (A5) : voies de tram, voies ferrées et
+  compagnie ne sont tout simplement pas demandées à Overpass (seules des ways
+  `highway=…` le sont). Elles n'apportent aucun nœud et ne peuvent donc pas
+  créer de point là où elles croisent visuellement une rue.
+- **IDs de tronçons** : dérivés de la seule géométrie (extrémités + point
+  milieu + longueur), stables entre sessions et indépendants des IDs OSM. Le
+  point milieu en fait partie précisément pour distinguer deux tronçons
+  parallèles reliant les mêmes points (B1).
+- **Atteindre un point** (C2/C3) : un point est atteint dès que la position
+  GPS (précision ≤ 40 m) passe à moins de **5 m** de ses coordonnées. Pour que
+  le signal qui oscille autour du seuil ne fasse pas clignoter l'état, celui-ci
+  ne se relâche qu'au-delà de **8 m** (hystérésis) : entre 5 et 8 m, rien ne
+  change — ni nouveau déclenchement, ni perte de l'acquis. Entre deux fix
+  successifs, la position est rééchantillonnée en ligne droite tous les 5 m
+  (sauf saut > 150 m ou écart > 20 s, considérés comme une coupure) : sans ça,
+  deux fix espacés sauteraient par-dessus un point sans jamais entrer dans son
+  rayon.
+- **Relever un tronçon** (D1) : un tronçon N↔N' est validé **uniquement** si N
+  et N' ont été atteints l'un après l'autre dans la même session, sans aucun
+  autre point franchi entre les deux. Un trajet N → M → N' relève N-M et M-N',
+  jamais N-N' — même si un tronçon direct existe. Rien ne s'accumule d'une
+  session à l'autre (D2) : atteindre N un jour et N' un autre ne relève rien.
+  Les points, eux, restent acquis définitivement.
+- **Départager plusieurs tronçons** (D3) : quand plusieurs candidats relient
+  les deux mêmes points (B1), la sous-trace GPS brute enregistrée entre les
+  deux passages est comparée à la géométrie OSM de chaque candidat par
+  **distance de Fréchet** discrète. Le meilleur score l'emporte s'il devance le
+  deuxième d'au moins **20 %** ; sinon (ou si la sous-trace fait moins de
+  3 points), c'est le **tronçon le plus court** qui est retenu. La marge de
+  20 % est à réajuster après collecte de sessions réelles, en particulier là où
+  la couverture GPS est mauvaise (forêt, rues étroites).
+- **Ce qui s'affiche** (B2) : une fois un tronçon validé, c'est sa **géométrie
+  OSM** qui est dessinée, jamais la trace GPS — rendu homogène, sans bruit. La
+  trace brute n'apparaît que sous forme du fil pointillé de la session en
+  cours.
+- **Cycle de vie de la trace GPS** (E1/E2, RGPD) : la trace brute ne vit que le
+  temps du traitement. Les points sont détectés au fil de l'eau et les tronçons
+  validés dès que deux points se suivent, donc l'app ne détient à aucun moment
+  plus que le segment en cours de résolution ; à la clôture de la session, tout
+  ce qui pourrait reconstituer le trajet est relâché explicitement. Ce qui
+  survit à une sortie, ce sont les données de jeu (points atteints, tronçons
+  validés) et des métadonnées agrégées (distance, durée) — jamais des
+  coordonnées. Seule exception, et elle est bornée : le suivi en arrière-plan
+  (opt-in, voir ci-dessous) doit écrire ses fix dans un tampon puisque l'app
+  est fermée ; ce tampon garde au plus une heure, se purge au fil de l'eau, et
+  est effacé à la lecture — avant même que le rejeu commence.
 - **Arrêt automatique** : si la vitesse dépasse 20 km/h (mesure GPS Doppler
   quand disponible, sinon distance/temps entre deux fix) sur au moins deux fix
   GPS consécutifs, la session est arrêtée automatiquement (vélo, voiture…).
@@ -135,10 +178,14 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   tampon glissant (1 h max, purgé au fil de l'eau). Dès que ce tampon
   représente une marche significative (≥ 80 m) — pas forcément au moment de
   démarrer une session — l'app propose de l'importer.
-- **Progression** : historique d'arêtes et intersections complétées en
-  stockage local (`AsyncStorage`), sauvegarde continue pendant la session.
-- **Garde-fou de bord** : les intersections à moins de 60 m du bord de la zone
-  chargée ne sont pas évaluées (des branches pourraient manquer).
+- **Progression** : points atteints et tronçons relevés en stockage local
+  (`AsyncStorage`), sauvegarde continue pendant la session.
+- **Élagage** : un identifiant qui n'existe plus dans une zone chargée (OSM a
+  changé le tracé, ou les règles de construction ont changé — c'est le cas au
+  passage à cette spécification) est retiré de la progression, avec ses
+  compteurs et sa géométrie. Seulement à l'intérieur des zones connues, à 60 m
+  du bord près : ailleurs, l'absence ne prouve rien. Chaque appareil élague ce
+  qu'il visite et pousse le résultat, la synchronisation converge.
 - **Navigation** : menu footer à trois onglets — *Aventure* (la carte, le
   lancement et l'arrêt des sessions), *Recherche* (classement et amis) et
   *Profil*.
@@ -169,10 +216,15 @@ Point subtil : le client fusionne des graphes construits séparément, sans
 jamais reconstruire. Pour que deux zones voisines décrivent leur recouvrement
 à l'identique, la fonction **construit sur 1000 m et ne sert que 550 m** —
 sans cette marge, les chaînes de degré 2 s'interrompent au bord des données et
-produisent des arêtes différentes de part et d'autre. Mesuré sur 4 zones
-adjacentes (Paris et périurbain) : 3 à 6 % d'arêtes en double sans la marge,
-1 arête sur 4834 avec. `scripts/check-region-contract.mjs` rejoue cette
-comparaison de bout en bout.
+produisent des tronçons différents de part et d'autre. Mesuré sur 4 zones
+adjacentes (Paris et périurbain) : 3 à 6 % de tronçons en double sans la marge,
+1 sur 4834 avec. `scripts/check-region-contract.mjs` rejoue cette comparaison
+de bout en bout.
+
+Une zone sert aussi les points d'intersection situés au bout des tronçons
+qu'elle contient, même hors de son cercle : relever un tronçon demande d'avoir
+atteint ses **deux** points (D1), donc en servir un sans l'autre le rendrait
+invalidable tant que la zone voisine n'est pas chargée.
 
 Déploiement (CLI Supabase, depuis la racine du dépôt) :
 
@@ -187,10 +239,13 @@ npx supabase functions deploy get-region
 - `mobile/src/logic/geo.js` — utilitaires géométriques (projection, distances)
 - `mobile/src/logic/region.ts` — appel de l'Edge Function `get-region`
 - `mobile/src/logic/regionGraph.ts` — forme du graphe côté client, fusion des zones
-- `mobile/src/logic/matching.js` — index spatial en grille + critère de couverture
+- `mobile/src/logic/tracking.ts` — détection de passage par un point,
+  hystérésis (C2/C3)
+- `mobile/src/logic/troncons.ts` — index des candidats par paire de points,
+  choix par distance de Fréchet (B1/D3)
 - `mobile/src/logic/storage.ts` — persistance locale (`AsyncStorage`)
-- `mobile/src/hooks/useWalkedia.ts` — état global, GPS, sessions, complétion,
-  synchronisation de la progression vers Supabase
+- `mobile/src/hooks/useWalkedia.ts` — état global, GPS, sessions, journal des
+  points, validation des tronçons, synchronisation vers Supabase
 - `mobile/src/hooks/useAuth.ts` — connexion Google/Apple (flux OAuth web
   Supabase), état de session
 - `mobile/src/hooks/useFriends.ts` / `useLeaderboard.ts` — amis, classement
@@ -204,8 +259,16 @@ npx supabase functions deploy get-region
 - `supabase/functions/_shared/` — requête Overpass, construction du graphe,
   quartiers, découpe/sérialisation du payload (seuls exemplaires de cette
   logique depuis la bascule côté serveur)
-- `scripts/check-region-contract.mjs` — vérifie que le graphe fusionné côté
-  client reste identique à un graphe construit d'un seul tenant
+- `scripts/check-region-contract.mjs` — vérifie, sur de vraies données, que le
+  graphe fusionné côté client reste identique à un graphe construit d'un seul
+  tenant (dépend d'Overpass)
+- `scripts/check-graph-rules.mjs` — vérifie les règles de construction (A1 à
+  A4, B0, B1) sur des scènes OSM synthétiques, sans réseau
+- `scripts/check-tracking.mjs` — rejoue les règles de jeu côté client (C2, C3,
+  C4, D1, D3) sur un graphe synthétique, sans réseau
+- `scripts/inspect-points.mjs` — montre sur un vrai quartier ce que la
+  consolidation à 5 m recolle, ce qu'elle laisse séparé, et l'effet d'un autre
+  rayon : l'outil des deux décisions restées ouvertes (A2, A4)
 
 ## Limites connues (prototype)
 
@@ -213,10 +276,23 @@ npx supabase functions deploy get-region
   pendant une marche) : ajouter le suivi en arrière-plan est possible via
   `expo-location` + `expo-task-manager`, mais demande un build natif (dev
   client) et des permissions supplémentaires — non fait ici.
-- Map matching géométrique simple, pas de modèle HMM : de rares faux positifs
-  restent possibles sur des chemins parallèles très proches (< 30 m).
-- Si OSM modifie la géométrie d'un chemin, son ID change et il redevient « à
-  découvrir » (les intersections déjà complétées restent acquises).
+- Un point manqué par le GPS coupe la chaîne : les deux points effectivement
+  détectés de part et d'autre ne sont pas adjacents dans le graphe, donc aucun
+  tronçon ne les relie et rien n'est crédité pour ce bout de trajet (D1
+  appliqué à la lettre). C'est le prix de la règle : jamais de faux positif,
+  au risque d'un oubli quand le signal est mauvais.
+- Deux paramètres restent à trancher après tests terrain, comme le note la
+  spécification : `DEAD_END_MAX_LENGTH_M` (A4, 30 m par défaut) et la marge de
+  désambiguïsation de 20 % (D3). `scripts/inspect-points.mjs` balaie le
+  premier, ainsi que le rayon de consolidation, sur un quartier réel.
+- La consolidation à 5 m (A2) laisse séparés des nœuds qu'OSM étale sur 10 à
+  25 m autour d'un même carrefour réel (chaussées séparées, îlots, passages
+  piétons). Mesuré sur une zone de 500 m : 3 points consolidés à Paris/Châtelet
+  et 8 en périurbain rennais, contre 133 paires de points distincts espacés de
+  5 à 25 m dans chacune des deux. C'est le paramètre à remonter si le comptage
+  paraît dilué.
+- Si OSM modifie la géométrie d'un chemin, son ID change et le tronçon
+  redevient « à relever » (les points déjà atteints, eux, restent acquis).
 - Connexion Google/Apple : nécessite un dev client (EAS Build), incompatible
   avec Expo Go (scheme d'URL personnalisé pour la redirection OAuth).
 - `edgeMeters` (km découverts affichés au profil) n'est qu'approximé lors

@@ -1,6 +1,6 @@
 // Découpe et sérialise le graphe produit par buildGraph() pour le cache
 // jsonb et la réponse HTTP (des Map/Set, non JSON-natives).
-// Contrat partagé avec le client (mobile/src/logic/region.ts) : toute
+// Contrat partagé avec le client (mobile/src/logic/regionGraph.ts) : toute
 // évolution de forme doit être reportée des deux côtés ET s'accompagner
 // d'un bump de VERSION dans get-region/index.ts.
 
@@ -9,24 +9,31 @@ import { haversine, pointAtFraction } from './geo.ts';
 export interface SerializedGraph {
   nodes: [string, { key: string; lat: number; lon: number; edgeIds: string[] }][];
   edges: [string, any][];
-  junctions: [string, { id: string; lat: number; lon: number; members: string[]; requiredEdgeIds: string[] }][];
-  edgeJunctions: [string, string[]][];
+  junctions: [string, { id: string; lat: number; lon: number; members: string[]; branchEdgeIds: string[] }][];
 }
 
 interface Graph {
   nodes: Map<string, any>;
   edges: Map<string, any>;
   junctions: Map<string, any>;
-  edgeJunctions: Map<string, string[]>;
 }
 
 // Ne garde du graphe construit sur BUILD_RADIUS que ce qui est à moins de
 // `radius` du centre (voir la marge de construction dans get-region/index.ts).
-// Une arête est retenue si son MILIEU est dans le cercle — pas ses extrémités :
-// une longue arête qui traverse le bord appartient à la zone dans laquelle
-// elle est majoritairement, et la zone voisine la servira à l'identique.
-// Les arêtes exigées par un carrefour retenu sont toujours embarquées, même
-// hors cercle, sinon ce carrefour serait incomplétable côté client.
+// Un tronçon est retenu si son MILIEU est dans le cercle — pas ses extrémités :
+// un long tronçon qui traverse le bord appartient à la zone dans laquelle
+// il est majoritairement, et la zone voisine le servira à l'identique.
+// Les tronçons qui partent d'un point retenu sont toujours embarqués, même
+// hors cercle : sans eux, ce point n'aurait pas ses branches.
+//
+// Les POINTS servis, eux, sont ceux du cercle PLUS les extrémités des
+// tronçons retenus. C'est ce qui rend chaque zone jouable jusqu'à son bord :
+// la validation d'un tronçon demande d'avoir atteint ses DEUX points (règle
+// D1), donc servir un tronçon sans l'un de ses bouts le rendrait invalidable
+// tant que la zone voisine n'est pas chargée. Les listes de branches d'un
+// point ainsi rapatrié sont restreintes à ce qui est réellement servi ; la
+// fusion côté client les réunit (mergeGraph unit les branches, il ne garde
+// pas la première version rencontrée).
 export function clipGraph(graph: Graph, center: [number, number], radius: number): Graph {
   const near = (lat: number, lon: number) => haversine([lat, lon], center) <= radius;
 
@@ -36,19 +43,34 @@ export function clipGraph(graph: Graph, center: [number, number], radius: number
     if (near(mlat, mlon)) edges.set(id, e);
   }
 
-  const junctions = new Map<string, any>();
+  const dansLeCercle = new Set<string>();
   for (const [id, j] of graph.junctions) {
     if (!near(j.lat, j.lon)) continue;
-    junctions.set(id, j);
-    for (const eid of j.requiredEdgeIds) {
+    dansLeCercle.add(id);
+    for (const eid of j.branchEdgeIds) {
       if (!edges.has(eid)) edges.set(eid, graph.edges.get(eid));
     }
   }
 
-  // Nœuds : uniquement les extrémités des arêtes retenues, et leur liste
-  // d'arêtes est restreinte à celles-ci (sinon le client référencerait des
-  // arêtes qu'il n'a pas — cette liste sert à la simulation de marche et au
-  // parcours du graphe). `new Set([e.a, e.b])` : une arête qui boucle sur son
+  const junctions = new Map<string, any>();
+  const retenir = (id: string) => {
+    if (junctions.has(id)) return;
+    const j = graph.junctions.get(id);
+    if (!j) return;
+    const branches = new Set<string>();
+    for (const eid of j.branchEdgeIds) if (edges.has(eid)) branches.add(eid);
+    junctions.set(id, { ...j, branchEdgeIds: branches });
+  };
+  for (const id of dansLeCercle) retenir(id);
+  for (const e of edges.values()) {
+    retenir(e.ja);
+    retenir(e.jb);
+  }
+
+  // Nœuds : uniquement les extrémités des tronçons retenus, et leur liste
+  // de tronçons est restreinte à ceux-ci (sinon le client référencerait des
+  // tronçons qu'il n'a pas — cette liste sert à la simulation de marche et au
+  // parcours du graphe). `new Set([e.a, e.b])` : un tronçon qui boucle sur son
   // nœud ne doit y figurer qu'une fois, sinon la fusion côté client n'est
   // plus idempotente (elle dédoublonne, la première zone reçue non).
   const nodes = new Map<string, any>();
@@ -62,14 +84,7 @@ export function clipGraph(graph: Graph, center: [number, number], radius: number
     }
   }
 
-  const edgeJunctions = new Map<string, string[]>();
-  for (const [eid, list] of graph.edgeJunctions) {
-    if (!edges.has(eid)) continue;
-    const kept = list.filter((jid) => junctions.has(jid));
-    if (kept.length) edgeJunctions.set(eid, kept);
-  }
-
-  return { nodes, edges, junctions, edgeJunctions };
+  return { nodes, edges, junctions };
 }
 
 export function serializeGraph(graph: Graph): SerializedGraph {
@@ -78,8 +93,7 @@ export function serializeGraph(graph: Graph): SerializedGraph {
     edges: [...graph.edges.entries()],
     junctions: [...graph.junctions.entries()].map(([id, j]) => [
       id,
-      { ...j, requiredEdgeIds: [...j.requiredEdgeIds] },
+      { ...j, branchEdgeIds: [...j.branchEdgeIds] },
     ]),
-    edgeJunctions: [...graph.edgeJunctions.entries()],
   };
 }

@@ -9,20 +9,23 @@
 // il colle bout à bout des graphes déjà construits. C'est possible parce que
 // le serveur construit avec une marge autour de ce qu'il sert (voir
 // BUILD_RADIUS/SERVE_RADIUS dans get-region/index.ts) : deux zones voisines
-// produisent alors exactement les mêmes arêtes là où elles se recouvrent, aux
-// mêmes IDs. Mesuré sur 4 zones adjacentes : 1 arête d'écart sur 4834 à
-// Paris, 0 en périurbain — contre 3 à 6 % d'arêtes en double sans la marge.
+// produisent alors exactement les mêmes tronçons là où elles se recouvrent, aux
+// mêmes IDs.
+//
+// Vocabulaire (spécification, section 0) : un `Junction` est un POINT
+// D'INTERSECTION — le nœud interactif que le joueur atteint —, un `Edge` est
+// un TRONÇON reliant deux points adjacents. Les noms de types restent ceux
+// d'origine pour ne pas renommer la moitié de l'app ; les champs, eux, disent
+// la spécification.
 
 export interface Edge {
   id: string;
-  coords: [number, number][];
+  coords: [number, number][]; // géométrie OSM : ce qui se dessine (B2)
   length: number;
-  car: boolean;
-  oneway: boolean;
-  roundabout: boolean;
-  crossing: boolean;
-  a: string;
-  b: string;
+  a: string; // clé du nœud OSM de départ (coords[0])
+  b: string; // clé du nœud OSM d'arrivée (dernier point)
+  ja: string; // point d'intersection à l'extrémité `a`
+  jb: string; // point d'intersection à l'extrémité `b`
 }
 
 export interface GraphNode {
@@ -36,15 +39,14 @@ export interface Junction {
   id: string;
   lat: number;
   lon: number;
-  members: string[];
-  requiredEdgeIds: Set<string>;
+  members: string[]; // nœuds OSM consolidés en ce point (A2)
+  branchEdgeIds: Set<string>; // tronçons qui partent de ce point
 }
 
 export interface Graph {
   nodes: Map<string, GraphNode>;
   edges: Map<string, Edge>;
   junctions: Map<string, Junction>;
-  edgeJunctions: Map<string, string[]>;
 }
 
 export interface Neighborhood {
@@ -62,14 +64,16 @@ export interface Region {
 }
 
 export function emptyGraph(): Graph {
-  return { nodes: new Map(), edges: new Map(), junctions: new Map(), edgeJunctions: new Map() };
+  return { nodes: new Map(), edges: new Map(), junctions: new Map() };
 }
 
 // Fusion d'une zone dans le graphe cumulé. Les IDs étant géométriques et
 // stables (voir _shared/graph.ts), un élément déjà connu est identique à
 // celui qui arrive : premier arrivé, premier servi. Seules les listes
-// (branches d'un nœud, carrefours d'une arête) s'unissent, parce qu'une zone
-// n'en voit que la part qui tombe chez elle.
+// (tronçons d'un nœud, branches d'un point) s'unissent, parce qu'une zone
+// n'en voit que la part qui tombe chez elle — un point servi au bord d'une
+// zone n'y a qu'une partie de ses branches, l'autre arrive avec la zone
+// voisine.
 export function mergeGraph(target: Graph, incoming: Graph) {
   for (const [id, e] of incoming.edges) {
     if (!target.edges.has(id)) target.edges.set(id, e);
@@ -85,17 +89,12 @@ export function mergeGraph(target: Graph, incoming: Graph) {
     }
   }
   for (const [id, j] of incoming.junctions) {
-    if (!target.junctions.has(id)) target.junctions.set(id, j);
-  }
-  for (const [eid, list] of incoming.edgeJunctions) {
-    const existing = target.edgeJunctions.get(eid);
+    const existing = target.junctions.get(id);
     if (!existing) {
-      target.edgeJunctions.set(eid, [...list]);
+      target.junctions.set(id, { ...j, branchEdgeIds: new Set(j.branchEdgeIds) });
       continue;
     }
-    for (const jid of list) {
-      if (!existing.includes(jid)) existing.push(jid);
-    }
+    for (const eid of j.branchEdgeIds) existing.branchEdgeIds.add(eid);
   }
 }
 
@@ -108,10 +107,9 @@ export function deserializeGraph(raw: any): Graph {
     junctions: new Map(
       (raw.junctions as [string, any][]).map(([id, j]) => [
         id,
-        { ...j, requiredEdgeIds: new Set<string>(j.requiredEdgeIds) },
+        { ...j, branchEdgeIds: new Set<string>(j.branchEdgeIds) },
       ])
     ),
-    edgeJunctions: new Map(raw.edgeJunctions),
   };
 }
 

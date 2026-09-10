@@ -16,9 +16,12 @@ const YELLOW: [number, number, number] = [250, 204, 21];
 const RED: [number, number, number] = [220, 38, 38];
 
 // Nombre de passages à partir duquel un tronçon est "au maximum". L'ancien
-// plafond de 100 était hors d'échelle : `edgeVisits` n'augmente qu'une fois
-// par arête et par session (voir Matcher.traversed), donc un trajet quotidien
-// met des mois à s'en approcher — tout restait collé au bas de l'échelle.
+// plafond de 100 était hors d'échelle : `edgeVisits` compte les validations
+// (une par trajet effectif d'un point d'intersection au suivant, voir
+// validerTroncon dans useWalkedia), donc un trajet quotidien met des mois à
+// s'en approcher — tout restait collé au bas de l'échelle. Un aller-retour
+// dans la même sortie compte bien deux passages : ce sont deux vrais
+// parcours, séparés par l'hystérésis de 8 m sur chaque point.
 const HOT_AT = 20;
 
 function mix(a: [number, number, number], b: [number, number, number], f: number): [number, number, number] {
@@ -35,7 +38,7 @@ export function heatColor(count: number): string | null {
   return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
 }
 
-// Gris (rien de complété) -> violet (tout complété) : couleur des ondes de
+// Gris (aucun point atteint) -> violet (tous atteints) : couleur des ondes de
 // capture individuelles ET des badges de cluster (LOD par zoom). Le violet ne
 // désigne que de la géométrie parcourue ou un point gagné (règle du système
 // encre et papier) — un ratio de complétion en fait partie, contrairement à

@@ -65,7 +65,11 @@ async function run(label, lat0, lon0) {
   for (const center of centers) {
     const z = await fetchZone(center[0], center[1], BUILD_RADIUS);
     snapshots.add(z.snapshot);
-    const full = await buildGraph(z.osm, z.greenAreas.map((a) => a.ring));
+    const full = await buildGraph(
+      z.osm,
+      z.greenAreas.map((a) => a.ring),
+      z.urbanAreas.map((a) => a.ring)
+    );
     payloads.push(
       JSON.stringify({
         graph: serializeGraph(clipGraph(full, center, SERVE_RADIUS)),
@@ -85,27 +89,35 @@ async function run(label, lat0, lon0) {
   const nodes = new Map();
   const waysById = new Map();
   const greenById = new Map();
+  const urbanById = new Map();
   for (const center of centers) {
     const z = await fetchZone(center[0], center[1], RADIUS);
     snapshots.add(z.snapshot);
     for (const [id, c] of z.osm.nodes) nodes.set(id, c);
     for (const w of z.osm.ways) waysById.set(w.id, w);
     for (const a of z.greenAreas) greenById.set(a.id, a);
+    for (const a of z.urbanAreas) urbanById.set(a.id, a);
   }
-  const ref = await buildGraph({ nodes, ways: [...waysById.values()] }, [...greenById.values()].map((a) => a.ring));
+  const ref = await buildGraph(
+    { nodes, ways: [...waysById.values()] },
+    [...greenById.values()].map((a) => a.ring),
+    [...urbanById.values()].map((a) => a.ring)
+  );
 
   // --- cohérence interne : aucune référence pendante dans le graphe fusionné
-  let danglingRequired = 0;
+  let danglingBranch = 0;
   for (const j of merged.junctions.values()) {
-    for (const eid of j.requiredEdgeIds) if (!merged.edges.has(eid)) danglingRequired++;
+    for (const eid of j.branchEdgeIds) if (!merged.edges.has(eid)) danglingBranch++;
   }
   let danglingNodeEdge = 0;
   for (const n of merged.nodes.values()) {
     for (const eid of n.edgeIds) if (!merged.edges.has(eid)) danglingNodeEdge++;
   }
-  let danglingEdgeJunction = 0;
-  for (const list of merged.edgeJunctions.values()) {
-    for (const jid of list) if (!merged.junctions.has(jid)) danglingEdgeJunction++;
+  // Invariant B0 : un tronçon relie DEUX points d'intersection, et la
+  // validation par consécutivité (D1) a besoin des deux pour fonctionner.
+  let danglingEdgePoint = 0;
+  for (const e of merged.edges.values()) {
+    if (!merged.junctions.has(e.ja) || !merged.junctions.has(e.jb)) danglingEdgePoint++;
   }
   let missingEndpoints = 0;
   for (const e of merged.edges.values()) {
@@ -116,11 +128,11 @@ async function run(label, lat0, lon0) {
   // idempotente (elle, elle dédoublonne).
   const dupNodes = [...merged.nodes.values()].filter((n) => new Set(n.edgeIds).size !== n.edgeIds.length).length;
 
-  check(danglingRequired === 0, `aucune branche exigée absente du graphe (${danglingRequired})`);
-  check(danglingNodeEdge === 0, `aucune arête inconnue listée sur un nœud (${danglingNodeEdge})`);
-  check(danglingEdgeJunction === 0, `aucun carrefour inconnu listé sur une arête (${danglingEdgeJunction})`);
-  check(missingEndpoints === 0, `toutes les arêtes ont leurs deux extrémités (${missingEndpoints} sans)`);
-  check(dupNodes === 0, `nœuds listant deux fois une arête après fusion : ${dupNodes}`);
+  check(danglingBranch === 0, `aucune branche absente du graphe (${danglingBranch})`);
+  check(danglingNodeEdge === 0, `aucun tronçon inconnu listé sur un nœud (${danglingNodeEdge})`);
+  check(danglingEdgePoint === 0, `tous les tronçons ont leurs deux points (${danglingEdgePoint} sans)`);
+  check(missingEndpoints === 0, `tous les tronçons ont leurs deux extrémités (${missingEndpoints} sans)`);
+  check(dupNodes === 0, `nœuds listant deux fois un tronçon après fusion : ${dupNodes}`);
 
   // --- égalité avec la référence, dans la partie jouable (hors garde-fou de bord)
   const interior = (lat, lon) => Math.min(...centers.map((c) => haversine([lat, lon], c))) <= RADIUS - BOUNDARY_MARGIN;
@@ -133,12 +145,12 @@ async function run(label, lat0, lon0) {
   const refJunctions = new Set([...ref.junctions.values()].filter((j) => interior(j.lat, j.lon)).map((j) => j.id));
   const mergedJunctions = new Set([...merged.junctions.values()].filter((j) => interior(j.lat, j.lon)).map((j) => j.id));
 
-  let diffRequired = 0;
+  let diffBranches = 0;
   for (const id of refJunctions) {
     if (!mergedJunctions.has(id)) continue;
-    const a = [...ref.junctions.get(id).requiredEdgeIds].sort().join('~');
-    const b = [...merged.junctions.get(id).requiredEdgeIds].sort().join('~');
-    if (a !== b) diffRequired++;
+    const a = [...ref.junctions.get(id).branchEdgeIds].sort().join('~');
+    const b = [...merged.junctions.get(id).branchEdgeIds].sort().join('~');
+    if (a !== b) diffBranches++;
   }
 
   const missingE = [...refEdges].filter((id) => !mergedEdges.has(id)).length;
@@ -161,17 +173,17 @@ async function run(label, lat0, lon0) {
         `          Purge scripts/.osm-cache et relance quand les miroirs Overpass sont sains.`
     );
   } else {
-    check(tolerable(missingE, refEdges.size), `arêtes manquantes vs référence : ${missingE}/${refEdges.size}`);
-    check(tolerable(extraE, refEdges.size), `arêtes en trop vs référence : ${extraE}/${refEdges.size}`);
-    check(tolerable(missingJ, refJunctions.size), `carrefours manquants vs référence : ${missingJ}/${refJunctions.size}`);
-    check(tolerable(extraJ, refJunctions.size), `carrefours en trop vs référence : ${extraJ}/${refJunctions.size}`);
-    check(tolerable(diffRequired, refJunctions.size), `carrefours aux branches exigées différentes : ${diffRequired}/${refJunctions.size}`);
+    check(tolerable(missingE, refEdges.size), `tronçons manquants vs référence : ${missingE}/${refEdges.size}`);
+    check(tolerable(extraE, refEdges.size), `tronçons en trop vs référence : ${extraE}/${refEdges.size}`);
+    check(tolerable(missingJ, refJunctions.size), `points manquants vs référence : ${missingJ}/${refJunctions.size}`);
+    check(tolerable(extraJ, refJunctions.size), `points en trop vs référence : ${extraJ}/${refJunctions.size}`);
+    check(tolerable(diffBranches, refJunctions.size), `points aux branches différentes : ${diffBranches}/${refJunctions.size}`);
   }
 
   const bytes = payloads.reduce((sum, p) => sum + p.length, 0);
   console.log(
     `  (payload 4 zones : ${(bytes / 1024 / 1024).toFixed(2)} Mo brut — ` +
-      `${merged.edges.size} arêtes / ${merged.junctions.size} carrefours fusionnés)`
+      `${merged.edges.size} tronçons / ${merged.junctions.size} points fusionnés)`
   );
 }
 

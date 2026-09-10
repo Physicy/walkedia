@@ -11,10 +11,10 @@ import type { Progress } from './storage';
 import { haversine, makeProj } from './geo';
 import type { Branche } from '../components/Carrefour';
 
-// Un carrefour complété prend le numéro suivant dans le relevé du joueur : pas
-// une propriété du carrefour lui-même, mais son rang parmi ceux que CE joueur
-// a complétés. `progress.junctions` est un Set, dont l'ordre d'itération suit
-// l'ordre d'insertion en JS — donc l'ordre de complétion réel.
+// Un point atteint prend le numéro suivant dans le relevé du joueur : pas une
+// propriété du point lui-même, mais son rang parmi ceux que CE joueur a
+// atteints. `progress.junctions` est un Set, dont l'ordre d'itération suit
+// l'ordre d'insertion en JS — donc l'ordre réel des passages.
 export function pointNumber(progress: Progress, junctionId: string): number | null {
   let i = 0;
   for (const id of progress.junctions) {
@@ -60,7 +60,7 @@ function directionFromJunction(graph: Graph, junction: Junction, edgeId: string)
 // (géométrie incomplète) est simplement omise plutôt que dessinée au hasard.
 export function branchesForGlyph(graph: Graph, junction: Junction, progressEdges: Set<string>): Branche[] {
   const branches: Branche[] = [];
-  for (const edgeId of junction.requiredEdgeIds) {
+  for (const edgeId of junction.branchEdgeIds) {
     const angle = directionFromJunction(graph, junction, edgeId);
     if (angle == null) continue;
     branches.push([angle, progressEdges.has(edgeId)]);
@@ -68,12 +68,14 @@ export function branchesForGlyph(graph: Graph, junction: Junction, progressEdges
   return branches;
 }
 
-// Orientations des branches qui manquent encore, pour le texte de la carte
+// Orientations des tronçons qui restent à relever, pour le texte de la carte
 // d'objectif ( « il te manque la rue ouest » ). Peut renvoyer plusieurs
-// orientations, ou aucune si la géométrie manque.
+// orientations, ou aucune si la géométrie manque. Sur un point jamais atteint,
+// c'est en général TOUTES ses branches : l'appelant décide à partir de quand
+// la phrase devient du bruit (voir MapScreen).
 export function orientationsManquantes(graph: Graph, junction: Junction, progressEdges: Set<string>): string[] {
   const dirs: string[] = [];
-  for (const edgeId of junction.requiredEdgeIds) {
+  for (const edgeId of junction.branchEdgeIds) {
     if (progressEdges.has(edgeId)) continue;
     const angle = directionFromJunction(graph, junction, edgeId);
     if (angle != null) dirs.push(orientation(angle));
@@ -86,8 +88,9 @@ export interface Objectif {
   distance: number;
 }
 
-// Le carrefour incomplet le plus proche d'une position, parmi ceux déjà
-// chargés en mémoire. `null` si le graphe est vide ou si tout est complété.
+// Le point d'intersection PAS ENCORE ATTEINT le plus proche d'une position,
+// parmi ceux déjà chargés en mémoire. `null` si le graphe est vide ou si tout
+// est atteint alentour.
 export function objectifLePlusProche(
   graph: Graph,
   progressJunctions: Set<string>,

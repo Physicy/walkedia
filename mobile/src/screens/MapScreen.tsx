@@ -3,7 +3,7 @@ import { Image, LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Circle, Marker, Polygon, Polyline, Region, UrlTile } from 'react-native-maps';
 
-import { edgeIsFound, junctionIsDone, neighborhoodStats } from '../hooks/useWalkedia';
+import { edgeIsFound, junctionIsReached, neighborhoodStats } from '../hooks/useWalkedia';
 import { BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
 import { PointGagneVoile } from '../components/PointGagneVoile';
 import { SessionSummary } from '../components/SessionSummary';
@@ -99,7 +99,7 @@ interface JunctionCluster {
 }
 
 // Sous-ensemble animé des ondes de capture (voir CaptureWave) : seuls les N
-// carrefours non complétés les plus proches pulsent réellement — animer un
+// points pas encore atteints les plus proches pulsent réellement — animer un
 // Marker force tracksViewChanges={true}, coûteux à grande échelle sur
 // react-native-maps (voir le reste de ce fichier). Rayon d'entrée/de sortie
 // asymétrique + recalcul seulement au-delà d'une distance parcourue : évite
@@ -183,7 +183,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   // Fiche de carrefour, ouverte en touchant un point sur la carte. Seulement
   // pour un carrefour dont la géométrie complète est en mémoire (state.graph) :
   // un point venu de `discovered` seul (zone repliée depuis) n'a pas de
-  // requiredEdgeIds à afficher, la fiche n'aurait rien à montrer.
+  // branches à afficher, la fiche n'aurait rien à montrer.
   const [junctionOuvert, setJunctionOuvert] = useState<string | null>(null);
 
   // Fait vivre le compteur de durée du panneau de session (voir
@@ -224,7 +224,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
     const j: any[] = state.graph ? [...state.graph.junctions.values()] : [];
     const vusJ = new Set(j.map((x) => x.id));
     for (const [id, [lat, lon]] of state.discovered.junctions) {
-      if (!vusJ.has(id)) j.push({ id, lat, lon, requiredEdgeIds: new Set<string>() });
+      if (!vusJ.has(id)) j.push({ id, lat, lon, branchEdgeIds: new Set<string>() });
     }
     return { edges: e, junctions: j };
     // `discovered` est muté en place (comme tout l'état de useWalkedia) : on
@@ -233,7 +233,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   }, [state.graph, state.discovered.edges.size, state.discovered.junctions.size]);
 
   // Le graphe complet reste toujours en mémoire (nécessaire pour que le
-  // matching GPS et la progression fonctionnent même hors écran), mais on
+  // suivi GPS et la progression fonctionnent même hors écran), mais on
   // n'affiche que ce qui est proche de la zone actuellement visible : moins
   // de traits/points natifs à dessiner sur la carte à mesure que la zone
   // connue grandit (pan vers de nouvelles zones). Mémoïsé sur le graphe et
@@ -293,7 +293,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         c.latSum += j.lat;
         c.lonSum += j.lon;
         c.total++;
-        if (junctionIsDone(state, j.id)) c.done++;
+        if (junctionIsReached(state, j.id)) c.done++;
       }
       const clusters: JunctionCluster[] = [...cells.entries()].map(([key, c]) => ({
         key,
@@ -313,7 +313,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
     let pointJunctions = junctionsInView;
     if (pointJunctions.length > MAX_RENDERED_JUNCTIONS) {
       pointJunctions = [...pointJunctions]
-        .sort((a: any, b: any) => b.requiredEdgeIds.size - a.requiredEdgeIds.size)
+        .sort((a: any, b: any) => b.branchEdgeIds.size - a.branchEdgeIds.size)
         .slice(0, MAX_RENDERED_JUNCTIONS);
     }
 
@@ -322,7 +322,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   }, [edges, junctions, region]);
 
   // Contours de quartiers, seulement pour le calque qui les demande : le
-  // calcul de complétion balaie tous les carrefours du graphe, trop cher pour
+  // calcul de complétion balaie tous les points du graphe, trop cher pour
   // le refaire à chaque tick GPS alors qu'il ne bouge qu'à un point gagné.
   // Reste avec les autres hooks, au-dessus des `return` conditionnels.
   const visibleNeighborhoods = useMemo(() => {
@@ -360,7 +360,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       lastAnimatedCalcPos.current = { lat: pos.lat, lon: pos.lon };
       const prev = animatedSet.current;
       const withDist = (visibleJunctions as any[])
-        .filter((j) => !junctionIsDone(state, j.id))
+        .filter((j) => !junctionIsReached(state, j.id))
         .map((j) => ({ j, dist: haversine([pos.lat, pos.lon], [j.lat, j.lon]) }));
       const kept = withDist.filter(({ j, dist }) => prev.has(j.id) && dist <= ANIMATED_RADIUS + ANIMATED_EXIT_MARGIN);
       const candidates = withDist.filter(({ dist }) => dist <= ANIMATED_RADIUS).sort((a, b) => a.dist - b.dist);
@@ -428,7 +428,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const objectifPos: [number, number] = pos ? [pos.lat, pos.lon] : [centerLat, centerLon];
   const objectif = state.graph ? objectifLePlusProche(state.graph, state.progress.junctions, objectifPos) : null;
   const objectifBranches = objectif ? branchesForGlyph(state.graph!, objectif.junction, state.progress.edges) : [];
-  const objectifManque = objectif ? orientationsManquantes(state.graph!, objectif.junction, state.progress.edges) : [];
+  // « Il te manque la rue ouest » n'aide que s'il reste une ou deux rues :
+  // sur un point jamais approché, la liste vaut toutes ses branches et la
+  // phrase devient une énumération illisible. Au-delà de deux, la carte se
+  // contente de dire où aller.
+  const manquantes = objectif ? orientationsManquantes(state.graph!, objectif.junction, state.progress.edges) : [];
+  const objectifManque = manquantes.length <= 2 ? manquantes : [];
 
   // File d'attente des points gagnés (voir PointGagne) : montré un par un,
   // plein écran, par-dessus tout le reste — y compris pendant une session
@@ -527,7 +532,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         })}
 
         {visibleJunctions.map((j: any) => {
-          const done = junctionIsDone(state, j.id);
+          const done = junctionIsReached(state, j.id);
           const animated = !done && animatedSet.current.has(j.id);
           return (
             <Marker
@@ -589,7 +594,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         {state.session ? (
           <PanneauSession
             duree={formatDuree(Date.now() - state.session.startedAt)}
-            km={sessionKm(state.session.track)}
+            // Distance réellement marchée depuis le départ (accumulée fix
+            // après fix par le hook, voir SessionState.metres) : distincte
+            // des mètres crédités à la progression, qui ne comptent qu'une
+            // fois par tronçon, jamais une revisite. L'écart entre les deux
+            // est ce que SessionSummary explique en fin de sortie.
+            km={state.session.metres / 1000}
             gain={state.session.newEdges.size}
             fil={fil}
             onTerminer={() => actions.endSession()}
@@ -645,17 +655,6 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
       )}
     </View>
   );
-}
-
-// Distance parcourue pendant la session (compteur live du panneau, voir
-// PanneauSession) : longueur de la trace GPS brute, distincte des mètres
-// crédités dans la progression (qui ne comptent qu'une fois par tronçon,
-// jamais une revisite). L'écart entre les deux est justement ce que
-// SessionSummary explique en fin de sortie.
-function sessionKm(track: [number, number][]): number {
-  let total = 0;
-  for (let i = 1; i < track.length; i++) total += haversine(track[i - 1], track[i]);
-  return total / 1000;
 }
 
 const styles = StyleSheet.create({

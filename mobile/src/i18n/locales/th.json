@@ -70,7 +70,7 @@
     "track": "บันทึกของคุณ",
     "defaultName": "นักเดินไม่ระบุชื่อ",
     "settingsNav": "การตั้งค่า",
-    "junctionsCompletedLabel": "ทางแยกที่เสร็จสมบูรณ์",
+    "junctionsCompletedLabel": "ทางแยกที่ไปถึงแล้ว",
     "weekTodayDetail": "สัปดาห์นี้ {{week}} วันนี้ {{today}}",
     "activityNav": "การออกไปเดินและย่านต่าง ๆ",
     "customizeTitle": "ปรับแต่ง",
@@ -160,7 +160,6 @@
   "toast": {
     "syncSuccess": "ซิงค์ความคืบหน้าแล้ว ✅",
     "syncFailed": "ซิงค์ไม่สำเร็จ: {{message}}",
-    "junctionsCompleted": "ผ่านทางแยกแล้ว {{count}} แห่ง!",
     "tooZoomedOut": "ซูมออกมากเกินไปที่จะโหลดพื้นที่ใหม่",
     "loadingInProgress": "กำลังโหลดอยู่แล้ว…",
     "retryIn": "พื้นที่ใหม่: ลองอีกครั้งใน {{seconds}} วินาที…",

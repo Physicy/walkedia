@@ -1,9 +1,11 @@
 // Persistance locale de la progression (AsyncStorage).
-// L'historique d'arêtes et les carrefours complétés sont globaux : ils
-// survivent aux changements de zone chargée.
-// `completedAt` date chaque complétion (ms epoch) pour les statistiques du
-// profil ; les carrefours complétés avant l'ajout du suivi temporel restent
-// dans `junctions` sans date (comptés dans le total uniquement).
+// Les tronçons validés et les points d'intersection atteints sont globaux :
+// ils survivent aux changements de zone chargée.
+// `completedAt` date chaque point atteint (ms epoch) pour les statistiques du
+// profil — le nom vient de l'ancienne règle (« carrefour complété ») et reste
+// tel quel, colonne Supabase comprise, pour ne pas casser la synchronisation ;
+// les points acquis avant l'ajout du suivi temporel restent dans `junctions`
+// sans date (comptés dans le total uniquement).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

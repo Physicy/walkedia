@@ -1,5 +1,5 @@
-// Marqueur de carrefour "onde de capture" : gris tant que non complété,
-// accent du joueur une fois complété. `animated` déclenche une pulsation en
+// Marqueur de point d'intersection "onde de capture" : gris tant qu'il n'est
+// pas atteint, accent du joueur une fois atteint (règle C2 : y passer suffit). `animated` déclenche une pulsation en
 // boucle de l'anneau extérieur — réservé à un petit sous-ensemble de
 // carrefours proches (voir MapScreen.tsx) car ça force
 // tracksViewChanges={true} sur le Marker parent, coûteux à grande échelle sur

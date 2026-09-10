@@ -22,11 +22,13 @@ const MIRRORS = [
 ];
 
 const CACHE_DIR = path.join(import.meta.dirname, '.osm-cache');
+const QUERY_VERSION = 2;
 
 const HIGHWAY_TYPES =
   'footway|path|pedestrian|living_street|residential|unclassified|tertiary|secondary|primary|track|steps|cycleway|service';
 const GREEN_LEISURE = 'park|garden|nature_reserve|recreation_ground|pitch|sports_centre';
 const GREEN_LANDUSE = 'forest|meadow';
+const URBAN_LANDUSE = 'residential|commercial|retail';
 
 function query(lat, lon, radius) {
   const around = `around:${radius},${lat.toFixed(6)},${lon.toFixed(6)}`;
@@ -43,10 +45,12 @@ way(${around})
   way(${around})["landuse"~"^(${GREEN_LANDUSE})$"];
   way(${around})["natural"="wood"];
 )->.green;
+way(${around})["landuse"~"^(${URBAN_LANDUSE})$"]->.urbain;
 .roads out body;
 .roads>;
 out skel qt;
-.green out geom;`;
+.green out geom;
+.urbain out geom;`;
 }
 
 // Miroir privilégié pour toute la durée du processus : les miroirs publics
@@ -60,7 +64,10 @@ let preferredMirror = null;
 
 export async function fetchZone(lat, lon, radius) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
-  const file = path.join(CACHE_DIR, `${lat.toFixed(6)}_${lon.toFixed(6)}_${radius}.json`);
+  // `QUERY_VERSION` dans le nom : la requête a gagné les contours `landuse`
+  // urbains (A3), une entrée écrite avant ne les contient pas et ferait
+  // classer toute la zone en rural sans que rien ne le signale.
+  const file = path.join(CACHE_DIR, `${lat.toFixed(6)}_${lon.toFixed(6)}_${radius}_v${QUERY_VERSION}.json`);
   let json;
 
   if (fs.existsSync(file)) {
@@ -91,19 +98,29 @@ export async function fetchZone(lat, lon, radius) {
     fs.writeFileSync(file, JSON.stringify(json));
   }
 
+  // Même classement des contours que _shared/overpass.ts : le vert l'emporte
+  // sur l'urbain quand un contour porte les deux tags.
+  const estVert = (tags) =>
+    new RegExp(`^(${GREEN_LEISURE})$`).test(tags.leisure || '') ||
+    new RegExp(`^(${GREEN_LANDUSE})$`).test(tags.landuse || '') ||
+    tags.natural === 'wood';
+
   const nodes = new Map();
   const ways = [];
   const greenAreas = [];
+  const urbanAreas = [];
   for (const el of json.elements || []) {
     if (el.type === 'node') nodes.set(el.id, [el.lat, el.lon]);
-    else if (el.type === 'way' && el.geometry && el.geometry.length >= 3)
-      greenAreas.push({ id: el.id, ring: el.geometry.map((p) => [p.lat, p.lon]) });
-    else if (el.type === 'way' && el.nodes && el.nodes.length >= 2)
+    else if (el.type === 'way' && el.geometry && el.geometry.length >= 3) {
+      const contour = { id: el.id, ring: el.geometry.map((p) => [p.lat, p.lon]) };
+      if (estVert(el.tags || {})) greenAreas.push(contour);
+      else urbanAreas.push(contour);
+    } else if (el.type === 'way' && el.nodes && el.nodes.length >= 2)
       ways.push({ id: el.id, nodes: el.nodes, tags: el.tags || {} });
   }
   // Horodatage de l'instantané OSM servi : deux zones issues d'instantanés
   // différents ne sont pas comparables (voir check-region-contract.mjs).
-  return { osm: { nodes, ways }, greenAreas, snapshot: json.osm3s?.timestamp_osm_base ?? 'inconnu' };
+  return { osm: { nodes, ways }, greenAreas, urbanAreas, snapshot: json.osm3s?.timestamp_osm_base ?? 'inconnu' };
 }
 
 // Même arrondi que snapToGrid côté client et côté Edge Function : `kx` dérive
