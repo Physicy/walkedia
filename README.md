@@ -107,6 +107,14 @@ s'y connecter depuis cette app (au lieu de scanner le QR code avec Expo Go).
   zone est demandée autour de la position et fusionnée au graphe (couverture
   de session préservée : les IDs de tronçons et de points sont stables). En cas
   d'échec, nouvelle tentative au plus tôt 8 s plus tard.
+- **Remplissage au dézoom** : quand la carte passe en mode cluster, la vue
+  visible est complétée avec les zones **déjà calculées**, lues en cache,
+  quatre en parallèle, avec une échéance de 10 s et annulation dès que la vue
+  bouge. Une zone absente du cache n'est pas calculée pour ce seul confort
+  d'affichage : elle le sera quand le joueur ira marcher dedans ou centrera la
+  carte dessus. C'est la leçon d'une mesure sur appareil : un unique dézoom
+  avait enchaîné 26 zones à calculer, dont 8 timeouts Overpass de 60 s, pour
+  un chargement affiché à 691 s et 6 zones rapportées.
 - **Régime de zone** (A3) : en **zone urbaine standard**, seules les voies
   carrossables (`residential` et au-dessus + `living_street`) et les rues
   piétonnes (`highway=pedestrian`) génèrent un point — les entrées de

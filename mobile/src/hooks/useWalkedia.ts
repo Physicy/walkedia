@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
-import { fetchRegion } from '../logic/region';
+import { fetchCachedRegion, fetchRegion } from '../logic/region';
 import { emptyGraph, mergeGraph } from '../logic/regionGraph';
 import type { Graph, Neighborhood, Region } from '../logic/regionGraph';
 import { PointTracker, MAX_ACCURACY } from '../logic/tracking';
@@ -102,6 +102,14 @@ const MAX_EXPAND_LATITUDE_DELTA = 0.03; // ~3.3 km de hauteur visible
 const MAX_GRID_LOAD_LATITUDE_DELTA = 0.06; // ~6.6 km — au-delà, trop de zones pour rester raisonnable
 const GRID_BATCH_MAX_ZONES = 16;
 const GRID_LOAD_COOLDOWN = 5000; // ms
+// Le lot ne lit que le cache (voir loadVisibleGrid), donc plusieurs requêtes
+// en parallèle ne sont que plusieurs lectures en base : aucune rafale vers
+// Overpass n'est possible depuis ici.
+const GRID_BATCH_CONCURRENCY = 4;
+// Plafond de durée du lot. Un affichage de confort ne doit jamais donner
+// l'impression que l'app charge : ce qui n'est pas arrivé dans ce délai
+// repart au déclenchement suivant.
+const GRID_BATCH_DEADLINE = 10000; // ms
 
 export interface Fix {
   lat: number;
@@ -232,7 +240,6 @@ interface WalkediaState {
   discovered: Discovered;
   expanding: boolean;
   lastExpandTry: number;
-  gridLoading: boolean;
   lastGridLoadTry: number;
   progress: Progress;
   // Détection de passage par un point d'intersection (C2/C3) et index des
@@ -288,7 +295,6 @@ function freshState(): WalkediaState {
     discovered: discovered.fresh(),
     expanding: false,
     lastExpandTry: 0,
-    gridLoading: false,
     lastGridLoadTry: 0,
     progress: { edges: new Set(), junctions: new Set(), completedAt: {}, edgeMeters: 0, edgeVisits: {}, sessions: [] },
     tracker: null,
@@ -414,6 +420,9 @@ export function useWalkedia() {
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((t) => t + 1), []);
   const watchSub = useRef<Location.LocationSubscription | null>(null);
+  // Lot de remplissage de la vue en cours (voir loadVisibleGrid) : annulé dès
+  // que la vue bouge.
+  const gridAbort = useRef<AbortController | null>(null);
   const requestingLocation = useRef(false);
 
   const state = stateRef.current;
@@ -899,20 +908,24 @@ export function useWalkedia() {
 
   // Remplissage en grille de la zone visible en mode cluster (voir
   // MAX_GRID_LOAD_LATITUDE_DELTA ci-dessus) : calcule les centres de zone
-  // (même grille que snapToGrid) manquants dans le viewport, en charge un
-  // lot plafonné séquentiellement (jamais en parallèle : autant de calculs
-  // complets déclenchés d'un coup côté serveur sur des zones inconnues
-  // seraient autant de rafales vers les miroirs Overpass), triés du plus
-  // proche du centre visible au plus loin. Un déclenchement qui dépasse le
-  // plafond laisse le reste pour un prochain déclenchement (pan/zoom suivant).
+  // (même grille que snapToGrid) manquants dans le viewport, et charge ceux
+  // qui sont DÉJÀ CALCULÉS, du plus proche du centre visible au plus loin.
+  //
+  // Lecture de cache uniquement (fetchCachedRegion). C'est la différence qui
+  // compte : ce remplissage est un confort d'affichage, pas un besoin du
+  // joueur. Mesuré sur appareil avant ce changement, un seul dézoom a
+  // enchaîné 26 zones à calculer, dont 8 timeouts Overpass de 60 s, pour un
+  // chargement affiché à 691 s. Les zones absentes du cache sont désormais
+  // laissées de côté : elles seront calculées quand le joueur ira marcher
+  // dedans, ou quand il centrera la carte dessus (maybeExpand, qui lui
+  // calcule toujours et reste plafonné à une zone par déclenchement).
+  //
+  // Un nouveau déplacement de la vue annule le lot en cours : ses zones ne
+  // sont plus celles qu'on regarde.
   const loadVisibleGrid = useCallback(
     async (lat: number, lon: number, latitudeDelta: number, longitudeDelta: number) => {
       if (latitudeDelta > MAX_GRID_LOAD_LATITUDE_DELTA) {
         logLoad({ trigger: 'batch', outcome: 'skip-too-zoomed-out', detail: `${(latitudeDelta * 110.54).toFixed(1)} km de hauteur visible` });
-        return;
-      }
-      if (state.gridLoading) {
-        logLoad({ trigger: 'batch', outcome: 'skip-in-progress' });
         return;
       }
       const now = Date.now();
@@ -940,39 +953,69 @@ export function useWalkedia() {
         return;
       }
       missing.sort((a, b) => haversine([lat, lon], a) - haversine([lat, lon], b));
-      const batch = missing.slice(0, GRID_BATCH_MAX_ZONES);
+      const file = missing.slice(0, GRID_BATCH_MAX_ZONES);
+      const prisEnCharge = file.length;
 
-      state.gridLoading = true;
+      // Le lot précédent, s'il tourne encore, regardait une autre vue.
+      gridAbort.current?.abort();
+      const abort = new AbortController();
+      gridAbort.current = abort;
+
       state.lastGridLoadTry = now;
       const startedAt = Date.now();
-      let loaded = 0;
-      let failed = 0;
-      for (const [clat, clon] of batch) {
-        // Un centre proche peut avoir déjà été couvert par un fetch
-        // précédent DE CE MÊME lot (zones voisines qui se chevauchent).
-        if (distToNearestCenter(state, clat, clon) <= RADIUS - EXPAND_MARGIN) continue;
-        try {
-          applyRegion(await fetchRegion(clat, clon));
-          loaded++;
-        } catch {
-          failed++;
-        }
-      }
+      const echeance = startedAt + GRID_BATCH_DEADLINE;
+      let chargees = 0;
+      let absentes = 0;
+      let abandonnees = 0;
 
-      if (loaded > 0) {
+      const tirer = async () => {
+        for (;;) {
+          if (abort.signal.aborted || Date.now() > echeance) return;
+          const centre = file.shift();
+          if (!centre) return;
+          const [clat, clon] = centre;
+          // Un centre proche peut avoir déjà été couvert par une zone reçue
+          // entre-temps DANS CE MÊME lot (zones voisines qui se chevauchent).
+          if (distToNearestCenter(state, clat, clon) <= RADIUS - EXPAND_MARGIN) continue;
+          try {
+            const region = await fetchCachedRegion(clat, clon, { signal: abort.signal });
+            if (abort.signal.aborted) return;
+            if (region) {
+              applyRegion(region);
+              chargees++;
+            } else {
+              absentes++;
+            }
+          } catch {
+            abandonnees++;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: GRID_BATCH_CONCURRENCY }, tirer));
+
+      // Un lot annulé n'a plus rien à dire : ni toast, ni ligne de journal.
+      // C'est le lot qui l'a remplacé qui rendra compte de la vue actuelle.
+      if (gridAbort.current !== abort) return;
+
+      if (chargees > 0) {
         rebuildIndexes();
         rerender();
-        toast(translate('toast.extraZonesLoaded', { count: loaded }));
+        toast(translate('toast.extraZonesLoaded', { count: chargees }));
       }
+      // Ce qui n'a pas été tenté : ce qui dépassait le plafond du lot, plus ce
+      // que l'échéance a laissé dans la file.
+      const restantes = missing.length - prisEnCharge + file.length;
       logLoad({
         trigger: 'batch',
-        outcome: loaded > 0 ? 'success' : 'error',
-        detail: `${loaded} chargée(s), ${failed} échouée(s), ${Math.max(0, missing.length - batch.length)} en attente`,
+        outcome: 'success',
+        detail:
+          `${chargees} depuis le cache, ${absentes} pas encore calculée(s), ` +
+          `${restantes} en attente` +
+          (abandonnees ? `, ${abandonnees} abandonnée(s)` : ''),
         durationMs: Date.now() - startedAt,
         edges: state.graph?.edges.size,
         junctions: state.graph?.junctions.size,
       });
-      state.gridLoading = false;
     },
     [state, applyRegion, rebuildIndexes, rerender, toast, logLoad, translate]
   );

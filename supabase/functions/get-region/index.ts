@@ -176,11 +176,20 @@ async function completeNeighborhoods(
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'POST uniquement' }, 405);
 
-  let lat: number, lon: number;
+  let lat: number, lon: number, cacheOnly = false;
   try {
     const body = await req.json();
     lat = Number(body.lat);
     lon = Number(body.lon);
+    // `cacheOnly` : « sers-la si elle existe déjà, sinon ne calcule rien ».
+    // Sépare les deux besoins que le client mélangeait. Une zone dont le
+    // joueur a besoin (il marche dedans, il l'a demandée à la main) vaut
+    // qu'on la calcule, même si ça prend dix secondes. Une zone de confort
+    // (remplir la vue au dézoom pour poser des pastilles) ne vaut PAS
+    // d'attendre Overpass : mesuré sur un appareil, un remplissage de 16
+    // zones a passé 8 timeouts de 60 s pour ne rien rapporter, soit 11
+    // minutes de chargement affiché.
+    cacheOnly = body.cacheOnly === true;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('lat/lon invalides');
   } catch (err) {
     return json({ error: 'Requête invalide : ' + (err as Error).message }, 400);
@@ -224,6 +233,11 @@ Deno.serve(async (req: Request) => {
     }
     return json(cached, 200, { lecture: readMs, total: since(t0) });
   }
+
+  // Rien en cache et l'appelant ne veut pas payer un calcul : on le dit, en
+  // 200 (ce n'est pas une erreur, c'est une réponse) et en quelques
+  // centaines de millisecondes.
+  if (cacheOnly) return json({ miss: true }, 200, { lecture: readMs, total: since(t0) });
 
   // Cache miss (ou entrée périmée) : calcule la voirie, écrit, répond — et ne
   // récupère les quartiers qu'ensuite (voir l'en-tête de fichier).
