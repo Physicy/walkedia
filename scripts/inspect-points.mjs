@@ -59,7 +59,16 @@ const nommer = (membres) => {
   return noms.size ? [...noms].join(' × ') : 'sans nom dans OSM';
 };
 
+// Les points comme les tronçons sont comptés sur le cercle réellement joué,
+// pas sur tout ce qui a été construit : la construction déborde volontairement
+// (BUILD_RADIUS vaut le double), et compter ce débordement gonflerait les
+// chiffres sans que rien de tout ça ne soit servi.
 const dansLeCercle = (p) => haversine([p.lat, p.lon], [lat, lon]) <= RADIUS;
+const tronconsDansLeCercle = (graphe) =>
+  [...graphe.edges.values()].filter((e) => {
+    const m = e.coords[Math.floor(e.coords.length / 2)];
+    return haversine(m, [lat, lon]) <= RADIUS;
+  }).length;
 const etendue = (membres) => {
   let max = 0;
   for (let i = 0; i < membres.length; i++) {
@@ -78,7 +87,7 @@ const points = [...g.junctions.values()].filter(dansLeCercle);
 const fusionnes = points.filter((p) => p.members.length > 1);
 
 console.log(`\n=== Ce que la zone donne aux valeurs de production (A2 = ${NODE_MERGE_RADIUS_M} m, A4 = ${DEAD_END_MAX_LENGTH_M} m) ===`);
-console.log(`${points.length} points d'intersection, ${g.edges.size} tronçons (zone de ${RADIUS} m).`);
+console.log(`${points.length} points d'intersection, ${tronconsDansLeCercle(g)} tronçons (zone de ${RADIUS} m).`);
 console.log(
   `${fusionnes.length} point(s) issus d'une consolidation, ` +
     `soit ${((100 * fusionnes.length) / Math.max(1, points.length)).toFixed(1)} % des points.`
@@ -131,7 +140,7 @@ for (const r of [3, 5, 8, 12, 20, 25]) {
   const grp = pts.filter((p) => p.members.length > 1).length;
   console.log(
     `  ${String(r).padStart(2)} m : ${String(pts.length).padStart(4)} points ` +
-      `(${String(grp).padStart(3)} consolidés), ${String(gr.edges.size).padStart(4)} tronçons` +
+      `(${String(grp).padStart(3)} consolidés), ${String(tronconsDansLeCercle(gr)).padStart(4)} tronçons` +
       (r === NODE_MERGE_RADIUS_M ? '   <- valeur en production' : '')
   );
 }
@@ -141,7 +150,7 @@ for (const l of [0, 15, 30, 50, 80]) {
   const gl = await buildGraph(zone.osm, vert, urbain, { deadEndMaxLengthM: l });
   const pts = [...gl.junctions.values()].filter(dansLeCercle);
   console.log(
-    `  ${String(l).padStart(2)} m : ${String(pts.length).padStart(4)} points, ${String(gl.edges.size).padStart(4)} tronçons` +
+    `  ${String(l).padStart(2)} m : ${String(pts.length).padStart(4)} points, ${String(tronconsDansLeCercle(gl)).padStart(4)} tronçons` +
       (l === DEAD_END_MAX_LENGTH_M ? '   <- valeur en production' : '')
   );
 }
