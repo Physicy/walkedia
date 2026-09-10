@@ -21,6 +21,7 @@ import { Avatar, Eyebrow, Mono, Titre } from '../components/ui';
 import { Icone } from '../components/Icones';
 import { FeuSerie } from '../components/FeuSerie';
 import { tabBarHeight } from '../components/TabBar';
+import { ListeDeroulante } from '../components/ListeDeroulante';
 import { AVATARS, AVATAR_IDS } from '../logic/avatars';
 import { computeLevel, computeStreak, fireStage, localDateKey } from '../logic/streak';
 import type { Progress } from '../logic/storage';
@@ -203,6 +204,9 @@ export function ProfileScreen({
 
   const [metric, setMetric] = useState<MetricId>('junctions');
   const [period, setPeriod] = useState<PeriodId>('last7');
+  // Ouverture de la liste des périodes : portée par l'écran, pas par le
+  // composant, pour qu'un défilement puisse la refermer (voir le ScrollView).
+  const [periodeOuverte, setPeriodeOuverte] = useState(false);
   const chart = useMemo(() => {
     const buckets = buildBuckets(metric, period, progress, stepsHistory, i18n.language);
     const max = Math.max(1, ...buckets.map((b) => b.value));
@@ -220,6 +224,10 @@ export function ProfileScreen({
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: tabBarHeight(insets.bottom) + 26 }}
         showsVerticalScrollIndicator={false}
+        // Un menu déroulant ouvert n'a pas de voile plein écran (voir
+        // ListeDeroulante) : c'est le défilement qui le referme, comme le
+        // ferait un tap à côté.
+        onScrollBeginDrag={() => setPeriodeOuverte(false)}
       >
         <View style={styles.entete}>
           <View style={styles.enteteTexte}>
@@ -260,7 +268,7 @@ export function ProfileScreen({
         <View style={styles.hero}>
           <HeroSchema accent={traceColor} />
           <View style={styles.heroContenu}>
-            <Eyebrow>{t('profile.junctionsCompletedLabel')}</Eyebrow>
+            <Eyebrow numberOfLines={1}>{t('profile.junctionsCompletedLabel')}</Eyebrow>
             <View style={styles.heroLigne}>
               <Text style={[styles.heroChiffre, { color: traceColor }]}>{stats.total}</Text>
               <Text style={styles.heroDetail}>{t('profile.weekTodayDetail', { week: stats.week, today: stats.today })}</Text>
@@ -272,7 +280,9 @@ export function ProfileScreen({
               <View style={styles.jaugePiste}>
                 <View style={[styles.jaugePleine, { width: `${niveau.pct}%`, backgroundColor: traceColor }]} />
               </View>
-              <Mono style={styles.heroNiveauReste}>{niveau.haut}</Mono>
+              <Mono style={styles.heroNiveauReste}>
+                {stats.total} / {niveau.haut}
+              </Mono>
             </View>
           </View>
         </View>
@@ -320,27 +330,23 @@ export function ProfileScreen({
         </View>
 
         <View style={styles.activiteCard}>
+          {/* La période passe d'une rangée de puces défilante à une liste
+              déroulante : à quatre périodes, les puces occupaient une ligne
+              entière pour un choix qu'on fait rarement, et la dernière était
+              coupée hors écran dans la plupart des langues. Repliée dans
+              l'en-tête, elle rend sa place au graphique et affiche la
+              période courante en toutes lettres. */}
           <View style={styles.activiteTete}>
             <Text style={styles.activiteTitre}>{t('profile.activityTitle')}</Text>
+            <ListeDeroulante
+              valeur={period}
+              options={PERIODS.map((p) => ({ id: p.id, label: t(p.labelKey) }))}
+              ouvert={periodeOuverte}
+              onBascule={setPeriodeOuverte}
+              onChoisir={(id) => setPeriod(id as PeriodId)}
+              accessibilityLabel={t('profile.activityTitle')}
+            />
           </View>
-          {/* Une seule ligne qui défile plutôt qu'un retour à la ligne : à
-              quatre périodes, `flexWrap` en cassait deux sur la seconde
-              ligne dans la plupart des langues, et la rangée changeait de
-              hauteur d'une traduction à l'autre. Les marges négatives
-              laissent les puces courir jusqu'aux bords de la carte, pour
-              qu'une puce coupée signale qu'il y en a d'autres à droite. */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.periodeRangee}
-            contentContainerStyle={styles.periodeContenu}
-          >
-            {PERIODS.map((p) => (
-              <Pressable key={p.id} onPress={() => setPeriod(p.id)} style={[styles.periodeChip, period === p.id && styles.periodeChipActive]}>
-                <Text style={[styles.periodeChipTexte, period === p.id && styles.periodeChipTexteActive]}>{t(p.labelKey)}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
           <View style={styles.metriqueRangee}>
             {METRICS.map((m) => (
               <Pressable key={m.id} onPress={() => setMetric(m.id)} style={[styles.metriqueChip, metric === m.id && styles.metriqueChipActive]}>
@@ -356,12 +362,22 @@ export function ProfileScreen({
           <View style={styles.barres}>
             {chart.buckets.map((b, i) => {
               const h = Math.max(3, Math.round((b.value / chart.max) * 74));
-              const fort = b.value === chart.max && b.value > 0;
+              // Dernière tranche d'une période qui inclut aujourd'hui : elle
+              // n'est pas finie, elle se dessine plus pâle. Toutes les autres
+              // sont pleines — teinter la seule plus haute laissait croire à
+              // un classement là où il n'y en a pas.
+              const enCours = i === chart.buckets.length - 1 && period !== 'lastMonth';
               return (
                 <View key={i} style={styles.colonne}>
-                  <Mono style={[styles.barreValeur, fort && { color: traceColor }]}>{b.value || ''}</Mono>
+                  <Mono style={[styles.barreValeur, b.value > 0 && { color: traceColor }]}>{b.value || ''}</Mono>
                   <View style={styles.barreZone}>
-                    <View style={[styles.barre, { height: h }, b.value > 0 && { backgroundColor: fort ? traceColor : `${traceColor}6B` }]} />
+                    <View
+                      style={[
+                        styles.barre,
+                        { height: h },
+                        b.value > 0 && { backgroundColor: enCours ? `${traceColor}6B` : traceColor },
+                      ]}
+                    />
                   </View>
                   <Text style={styles.barreLabel} numberOfLines={1}>{b.label}</Text>
                 </View>
@@ -686,16 +702,15 @@ const styles = StyleSheet.create({
   pasCaveat: { fontFamily: FONTS.texte, fontSize: 10.5, lineHeight: 15, color: COLORS.encre3, marginTop: 8 },
 
   activiteCard: { marginHorizontal: 20, marginTop: 20, borderRadius: 24, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.ligne, padding: 16 },
-  activiteTete: { marginBottom: 4 },
+  // `zIndex` : le menu de la liste déroulante est un enfant de cette rangée
+  // et doit passer par-dessus le graphique, qui est un frère plus bas.
+  activiteTete: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, zIndex: 30 },
   activiteTitre: { fontFamily: FONTS.displaySemi, fontSize: 15, color: COLORS.encre },
-  periodeRangee: { marginTop: 10, marginHorizontal: -16 },
-  periodeContenu: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
-  periodeChip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 9, backgroundColor: COLORS.papier, borderWidth: 1, borderColor: 'transparent' },
-  periodeChipActive: { backgroundColor: COLORS.encre },
-  periodeChipTexte: { fontFamily: FONTS.mono, fontSize: 10.5, color: COLORS.encre2 },
-  periodeChipTexteActive: { color: COLORS.surface },
-  metriqueRangee: { flexDirection: 'row', gap: 6, marginTop: 20 },
-  metriqueChip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 11, borderWidth: 1, borderColor: COLORS.ligne, backgroundColor: COLORS.surface },
+  // Puces à la taille de leur texte, alignées à gauche comme la maquette.
+  // `flexWrap` est le garde-fou des langues longues : mieux vaut une seconde
+  // ligne qu'une puce qui sort de la carte.
+  metriqueRangee: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 16 },
+  metriqueChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1, borderColor: COLORS.ligne, backgroundColor: COLORS.surface },
   metriqueChipActive: { backgroundColor: COLORS.encre, borderColor: 'transparent' },
   metriqueChipTexte: { fontFamily: FONTS.texteSemi, fontSize: 11.5, color: COLORS.encre2 },
   metriqueChipTexteActive: { color: COLORS.surface },

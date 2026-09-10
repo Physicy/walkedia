@@ -35,8 +35,20 @@ export function Titre({
   );
 }
 
-export function Eyebrow({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {
-  return <Text style={[styles.eyebrow, style]}>{children}</Text>;
+export function Eyebrow({
+  children,
+  style,
+  numberOfLines,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
+}) {
+  return (
+    <Text style={[styles.eyebrow, style]} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
 }
 
 export function Mono({ children, style }: { children: React.ReactNode; style?: StyleProp<TextStyle> }) {
