@@ -62,6 +62,12 @@ function rgbToHex([r, g, b]: [number, number, number]): string {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
+// Mélange deux couleurs hex (f = 0 : a, f = 1 : b). Sert à dériver la version
+// nocturne d'une palette de carte (voir mapModes.ts).
+export function melangerHex(a: string, b: string, f: number): string {
+  return rgbToHex(mix(hexToRgb(a), hexToRgb(b), f));
+}
+
 const NOIR: [number, number, number] = [26, 27, 46]; // COLORS.encre, pour foncer
 const BLANC: [number, number, number] = [251, 250, 253]; // COLORS.surface, pour éclaircir
 

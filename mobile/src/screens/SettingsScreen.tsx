@@ -88,6 +88,10 @@ export function SettingsScreen({
   onChoisirCalque,
   mapBackground,
   onChoisirFond,
+  mapSeason,
+  onChoisirSaison,
+  mapTime,
+  onChoisirMoment,
   onWipeProgress,
   onFermer,
 }: {
@@ -106,6 +110,10 @@ export function SettingsScreen({
   onChoisirCalque: (id: Prefs['mapLayer']) => void;
   mapBackground: Prefs['mapBackground'];
   onChoisirFond: (id: Prefs['mapBackground']) => void;
+  mapSeason: Prefs['mapSeason'];
+  onChoisirSaison: (id: Prefs['mapSeason']) => void;
+  mapTime: Prefs['mapTime'];
+  onChoisirMoment: (id: Prefs['mapTime']) => void;
   onWipeProgress: () => Promise<void>;
   onFermer: () => void;
 }) {
@@ -238,6 +246,10 @@ export function SettingsScreen({
           onChoisirCalque={onChoisirCalque}
           mapBackground={mapBackground}
           onChoisirFond={onChoisirFond}
+          mapSeason={mapSeason}
+          onChoisirSaison={onChoisirSaison}
+          mapTime={mapTime}
+          onChoisirMoment={onChoisirMoment}
           traceColor={traceColor}
           onChoisirCouleur={onChoisirCouleur}
           onFermer={() => setCarteOuverte(false)}

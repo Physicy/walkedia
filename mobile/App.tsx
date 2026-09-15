@@ -210,6 +210,10 @@ function AppContent() {
           onChoisirCalque={actions.setMapLayer}
           mapBackground={state.mapBackground}
           onChoisirFond={actions.setMapBackground}
+          mapSeason={state.mapSeason}
+          onChoisirSaison={actions.setMapSeason}
+          mapTime={state.mapTime}
+          onChoisirMoment={actions.setMapTime}
           onWipeProgress={actions.wipeProgress}
           onFermer={() => setReglagesOuverts(false)}
         />

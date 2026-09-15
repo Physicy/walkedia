@@ -43,7 +43,14 @@ export interface Prefs {
   // par l'état du hook de jeu, qui les relit au démarrage et que MapScreen.tsx
   // consomme — ils n'étaient auparavant qu'enregistrés ici, sans lecteur.
   mapLayer: 'trace' | 'chaleur' | 'quartiers';
-  mapBackground: 'clair' | 'plan';
+  // `mapBackground` est devenu le mode de carte (voir logic/mapModes.ts). Le
+  // nom est gardé : 'clair' et 'plan', déjà enregistrés chez les joueurs,
+  // restent deux modes valides sans migration.
+  mapBackground: 'clair' | 'plan' | 'parchemin' | 'neon' | 'pixel' | 'aventure' | 'isometrique' | 'retro';
+  // ambiance des modes qui en ont une (voir logic/mapModes.ts) : 'auto' suit
+  // la date et la position (saison), le soleil (moment, voir logic/sun.ts).
+  mapSeason: 'auto' | 'ete' | 'automne' | 'hiver';
+  mapTime: 'auto' | 'jour' | 'nuit';
 }
 
 const DEFAULTS: Prefs = {
@@ -57,6 +64,8 @@ const DEFAULTS: Prefs = {
   hideStats: false,
   mapLayer: 'trace',
   mapBackground: 'clair',
+  mapSeason: 'auto',
+  mapTime: 'auto',
 };
 
 export async function loadPrefs(): Promise<Prefs> {

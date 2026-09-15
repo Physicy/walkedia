@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, LayoutChangeEvent, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import MapView, { Circle, Marker, Polygon, Polyline, Region, UrlTile } from 'react-native-maps';
 
 import { edgeIsFound, junctionIsReached, neighborhoodStats } from '../hooks/useWalkedia';
-import { BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
+import { BoutonModeCarte, BoutonRecentrer, ObjectifCard, PanneauPret, PanneauSession, FilEntree } from '../components/MapChrome';
 import { PointGagneVoile } from '../components/PointGagneVoile';
 import { SessionSummary } from '../components/SessionSummary';
 import { JunctionSheet } from '../components/JunctionSheet';
@@ -12,12 +13,15 @@ import { Toast } from '../components/Toast';
 import { DebugPanel } from '../components/DebugPanel';
 import { LoadMonitorPanel } from '../components/LoadMonitorPanel';
 import { CaptureWave } from '../components/CaptureWave';
+import { MapAmbiance } from '../components/MapAmbiance';
+import { MapModeSheet } from '../components/MapModeSheet';
 import { tabBarHeight } from '../components/TabBar';
-import { COLORS } from '../theme';
+import { COLORS, FONTS } from '../theme';
 import { heatColor, progressColor, nuancesTrace, rgbaTrace } from '../logic/color';
 import { haversine } from '../logic/geo';
 import { branchesForGlyph, orientationsManquantes, objectifLePlusProche, pointNumber } from '../logic/junctionInfo';
 import { AVATARS } from '../logic/avatars';
+import { modeCarte, resoudreApparence, SOL_MONDE } from '../logic/mapModes';
 
 const UNDISCOVERED_STROKE = 'rgba(26, 27, 46, 0.22)';
 
@@ -110,6 +114,9 @@ const ANIMATED_RADIUS = 300; // m
 const ANIMATED_EXIT_MARGIN = 80; // m
 const ANIMATED_RECOMPUTE_DISTANCE = 15; // m
 
+// Rayon du halo de lanterne autour du joueur, la nuit (voir logic/mapModes.ts).
+const LANTERNE_RAYON = 60; // m
+
 function regionBBox(region: Region) {
   const latPad = region.latitudeDelta * VIEWPORT_PAD;
   const lonPad = region.longitudeDelta * VIEWPORT_PAD;
@@ -140,16 +147,58 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const { state, actions } = walkedia;
   const mapRef = useRef<MapView>(null);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+
+  // Mode de carte (voir logic/mapModes.ts ; réglé depuis MapModeSheet.tsx, sur
+  // la carte ou dans les réglages). Saison et moment « auto » dépendent de la
+  // date : une horloge à la minute suffit à basculer du jour à la nuit, et ne
+  // tourne que si le mode courant a une ambiance qui la suit.
+  const [horloge, setHorloge] = useState(() => new Date());
+  const suitHorloge = modeCarte(state.mapBackground).ambiance && (state.mapTime === 'auto' || state.mapSeason === 'auto');
+  useEffect(() => {
+    if (!suitHorloge) return;
+    setHorloge(new Date());
+    const id = setInterval(() => setHorloge(new Date()), 60000);
+    return () => clearInterval(id);
+  }, [suitHorloge]);
+
+  const apparence = resoudreApparence(
+    state.mapBackground,
+    state.mapSeason,
+    state.mapTime,
+    state.position?.lat ?? state.center?.[0] ?? 0,
+    state.position?.lon ?? state.center?.[1] ?? 0,
+    horloge
+  );
+  // `palette` n'est défini que pour les modes dessinés : l'app peint alors le
+  // sol et les rues elle-même, sans tuiles ni plan natif visibles dessous.
+  const palette = apparence.palette;
+  // Préfixe des clés de toute la géométrie de la carte. Sur iOS, l'ordre
+  // d'affichage des tracés est leur ordre d'ajout (zIndex n'y est pas pris en
+  // charge) : quand le sol change, tout ce qui se dessine par-dessus doit être
+  // remonté après lui, pas simplement mis à jour.
+  const k = apparence.cle;
+  const [modeOuvert, setModeOuvert] = useState(false);
+
+  // Caméra inclinée du mode isométrique, réappliquée à chaque changement de
+  // mode. Au tout premier rendu la MapView n'existe pas encore (voir le
+  // `return null` plus bas) : onMapReady prend alors le relais.
+  const inclinaison = apparence.mode.inclinaison;
+  useEffect(() => {
+    mapRef.current?.animateCamera({ pitch: inclinaison }, { duration: 400 });
+  }, [inclinaison]);
 
   // Accent choisi par le joueur (voir logic/prefs.ts, traceColor) : remplace
   // le violet fixe pour tout ce qui est "géométrie parcourue ou point gagné"
   // sur la carte elle-même — le halo autour d'un carrefour, un tronçon déjà
   // découvert, le tracé de la session en cours. La géométrie pas encore
   // marchée (gris) et le chrome (boutons, onglets) restent en encre, hors
-  // scope de cette personnalisation.
+  // scope de cette personnalisation. Un mode dessiné à palette contrainte
+  // (parchemin, rétro) impose sa propre couleur de trace.
   const nuances = nuancesTrace(state.traceColor);
-  const DISCOVERED_STROKE = state.traceColor;
-  const TRACK_STROKE = nuances.clair;
+  const DISCOVERED_STROKE = palette?.trace ?? state.traceColor;
+  const TRACK_STROKE = palette ? DISCOVERED_STROKE : nuances.clair;
+  const stylePixel = palette ? { vide: palette.pointVide, videBord: palette.pointVideBord, bord: palette.traceBord } : null;
 
   // Ce que la carte montre (voir logic/prefs.ts, mapLayer ; réglé depuis
   // components/MapAppearanceSheet.tsx) :
@@ -161,7 +210,7 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
   const strokeTroncon = (found: boolean, visits: number) => {
     if (!found) return UNDISCOVERED_STROKE;
     if (calque === 'chaleur') return heatColor(visits) ?? DISCOVERED_STROKE;
-    if (calque === 'quartiers') return rgbaTrace(state.traceColor, 0.45);
+    if (calque === 'quartiers') return rgbaTrace(DISCOVERED_STROKE, 0.45);
     return DISCOVERED_STROKE;
   };
 
@@ -377,12 +426,21 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
   const recenter = () => {
     const target = actions.recenter();
-    if (target && mapRef.current) {
-      mapRef.current.animateToRegion(
-        { latitude: target[0], longitude: target[1], latitudeDelta: 0.01, longitudeDelta: 0.01 },
-        300
+    if (!target || !mapRef.current) return;
+    if (inclinaison > 0) {
+      // Une région ne porte pas d'inclinaison : en mode incliné on passe par
+      // la caméra pour la conserver (zoom pour Google Maps, altitude pour
+      // Plans, chacun ignorant la clé de l'autre).
+      mapRef.current.animateCamera(
+        { center: { latitude: target[0], longitude: target[1] }, pitch: inclinaison, zoom: 16, altitude: 1500 },
+        { duration: 300 }
       );
+      return;
     }
+    mapRef.current.animateToRegion(
+      { latitude: target[0], longitude: target[1], latitudeDelta: 0.01, longitudeDelta: 0.01 },
+      300
+    );
   };
 
   // Charge le réseau piéton (et les espaces verts) autour de la zone
@@ -465,23 +523,42 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
         initialRegion={{ latitude: centerLat, longitude: centerLon, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
         showsUserLocation={false}
         rotateEnabled={false}
+        // Mode dessiné : le sol peint recouvre tout, inutile que Google Maps
+        // télécharge et dessine son propre fond dessous. 'none' est réservé à
+        // Android (voir MapView.d.ts, mapType).
+        mapType={palette && Platform.OS === 'android' ? 'none' : 'standard'}
+        onMapReady={() => {
+          if (inclinaison > 0) mapRef.current?.setCamera({ pitch: inclinaison });
+        }}
         onRegionChangeComplete={onRegionChangeComplete}
       >
-        {/* Fond "papier clair" : les tuiles OpenStreetMap par-dessus la carte
-            native. Le fond "plan gris" les retire et laisse le plan natif
-            (Plans sur iOS, Google Maps sur Android) — c'est la seule bascule
-            de fond possible sans dépendre d'un second fournisseur de tuiles. */}
-        {state.mapBackground === 'clair' && (
+        {/* Fond, selon le mode (voir logic/mapModes.ts) :
+            - 'osm'    : les tuiles OpenStreetMap par-dessus la carte native ;
+            - 'natif'  : rien, le plan natif (Plans sur iOS, Google Maps sur
+                         Android) reste visible ;
+            - 'dessin' : un sol opaque aux couleurs du mode, monté AVANT toute
+                         autre géométrie (voir `k` plus haut). */}
+        {apparence.mode.fond === 'osm' && (
           <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} flipY={false} />
+        )}
+        {palette && (
+          <Polygon
+            key={`sol-${k}`}
+            coordinates={SOL_MONDE}
+            fillColor={palette.sol}
+            strokeColor={palette.sol}
+            strokeWidth={0}
+            zIndex={-1}
+          />
         )}
 
         {visibleNeighborhoods.map((q) => (
           <Polygon
-            key={`quartier-${q.id}`}
+            key={`quartier-${k}-${q.id}`}
             coordinates={q.ring.map(toLatLng)}
             strokeColor={progressColor(q.pct)}
             strokeWidth={2}
-            fillColor={rgbaTrace(state.traceColor, 0.05 + q.pct * 0.22)}
+            fillColor={rgbaTrace(DISCOVERED_STROKE, 0.05 + q.pct * 0.22)}
             zIndex={0}
           />
         ))}
@@ -493,10 +570,48 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           // plutôt que de les faire soudain apparaître "sans couleur".
           const visits = found ? state.progress.edgeVisits[e.id] ?? 1 : 0;
           const retrait = calque === 'quartiers';
+          const coordinates = e.coords.map(toLatLng);
+
+          if (palette) {
+            // Mode dessiné : un tronçon pas encore relevé EST la rue du plan
+            // (pleine si carrossable, en pointillés si piétonne ; un tronçon
+            // venu de `discovered` seul n'a pas l'attribut et compte comme
+            // rue). Relevé, il gagne un liseré sombre. La clé porte `found` :
+            // sur iOS, le liseré n'est sous le trait que s'il a été ajouté
+            // avant lui, ce qu'un montage commun garantit.
+            const cle = `${k}-${e.id}-${found ? 'releve' : 'rue'}`;
+            if (!found) {
+              const pieton = e.car === false;
+              return (
+                <Polyline
+                  key={cle}
+                  coordinates={coordinates}
+                  strokeColor={pieton ? palette.chemin : palette.rue}
+                  strokeWidth={pieton ? 3 : 6}
+                  lineCap="square"
+                  {...(pieton ? { lineDashPattern: [6, 5] } : {})}
+                  zIndex={1}
+                />
+              );
+            }
+            return (
+              <React.Fragment key={cle}>
+                <Polyline coordinates={coordinates} strokeColor={palette.traceBord} strokeWidth={retrait ? 6 : 9} lineCap="square" zIndex={2} />
+                <Polyline
+                  coordinates={coordinates}
+                  strokeColor={strokeTroncon(found, visits)}
+                  strokeWidth={retrait ? 3 : 5}
+                  lineCap="square"
+                  zIndex={3}
+                />
+              </React.Fragment>
+            );
+          }
+
           return (
             <Polyline
-              key={e.id}
-              coordinates={e.coords.map(toLatLng)}
+              key={`${k}-${e.id}`}
+              coordinates={coordinates}
               strokeColor={strokeTroncon(found, visits)}
               strokeWidth={found ? (retrait ? 3 : 4.5) : retrait ? 1.5 : 2.5}
               zIndex={found ? 2 : 1}
@@ -506,11 +621,12 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
 
         {state.session && state.session.track.length > 1 && (
           <Polyline
+            key={`session-${k}`}
             coordinates={state.session.track.map(toLatLng)}
             strokeColor={TRACK_STROKE}
             strokeWidth={3}
             lineDashPattern={[4, 6]}
-            zIndex={3}
+            zIndex={4}
           />
         )}
 
@@ -518,15 +634,29 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           const ratio = c.total > 0 ? c.done / c.total : 0;
           return (
             <Marker
-              key={`cluster-${c.key}`}
+              key={`cluster-${k}-${c.key}`}
               coordinate={{ latitude: c.lat, longitude: c.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={false}
               zIndex={4}
             >
-              <View style={[styles.clusterBadge, { backgroundColor: progressColor(ratio) }]}>
-                <Text style={styles.clusterBadgeText}>{c.total}</Text>
-              </View>
+              {palette ? (
+                // Badge carré aux couleurs du mode ; la complétion passe dans
+                // une jauge au pied du badge plutôt que dans sa couleur de
+                // fond, que la palette fixe déjà.
+                <View style={[styles.badgePixel, { backgroundColor: palette.badge, borderColor: palette.badgeBord }]}>
+                  <Text style={[styles.badgePixelTexte, { color: palette.badgeTexte }]}>{c.total}</Text>
+                  {ratio > 0 && (
+                    <View
+                      style={[styles.badgePixelJauge, { width: `${Math.round(ratio * 100)}%` as const, backgroundColor: DISCOVERED_STROKE }]}
+                    />
+                  )}
+                </View>
+              ) : (
+                <View style={[styles.clusterBadge, { backgroundColor: progressColor(ratio) }]}>
+                  <Text style={styles.clusterBadgeText}>{c.total}</Text>
+                </View>
+              )}
             </Marker>
           );
         })}
@@ -536,45 +666,60 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           const animated = !done && animatedSet.current.has(j.id);
           return (
             <Marker
-              key={j.id}
+              key={`${k}-${j.id}`}
               coordinate={{ latitude: j.lat, longitude: j.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={animated}
               zIndex={done ? 5 : 4}
               onPress={() => setJunctionOuvert(j.id)}
             >
-              <CaptureWave done={done} animated={animated} couleur={state.traceColor} />
+              <CaptureWave done={done} animated={animated} couleur={DISCOVERED_STROKE} pixel={stylePixel} />
             </Marker>
           );
         })}
 
         {state.position && (
           <>
+            {palette?.lumiere && (
+              <Circle
+                key={`lanterne-${k}`}
+                center={{ latitude: state.position.lat, longitude: state.position.lon }}
+                radius={LANTERNE_RAYON}
+                strokeWidth={0}
+                strokeColor="rgba(0, 0, 0, 0)"
+                fillColor={palette.lumiere}
+              />
+            )}
             <Circle
+              key={`precision-${k}`}
               center={{ latitude: state.position.lat, longitude: state.position.lon }}
               radius={state.position.accuracy || 0}
-              strokeColor={rgbaTrace(state.traceColor, 0.28)}
-              fillColor={rgbaTrace(state.traceColor, 0.08)}
+              strokeColor={rgbaTrace(DISCOVERED_STROKE, 0.28)}
+              fillColor={rgbaTrace(DISCOVERED_STROKE, 0.08)}
             />
             <Marker
+              key={`joueur-${k}`}
               coordinate={{ latitude: state.position.lat, longitude: state.position.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={false}
             >
               {state.avatarId && AVATARS[state.avatarId] ? (
-                <View style={[styles.positionAvatarWrap, { borderColor: state.traceColor }]}>
+                <View style={[styles.positionAvatarWrap, palette && styles.positionCarre, { borderColor: DISCOVERED_STROKE }]}>
                   <Image source={AVATARS[state.avatarId]} style={styles.positionAvatar} resizeMode="cover" />
                 </View>
               ) : (
-                <View style={[styles.positionDot, { backgroundColor: state.traceColor }]} />
+                <View style={[styles.positionDot, palette && styles.positionCarre, { backgroundColor: DISCOVERED_STROKE }]} />
               )}
             </Marker>
           </>
         )}
       </MapView>
 
+      <MapAmbiance apparence={apparence} />
+
       <View style={[styles.haut, { top: insets.top + 10 }]}>
         <BoutonRecentrer onPress={recenter} />
+        <BoutonModeCarte onPress={() => setModeOuvert(true)} label={t('settings.mapModeButton')} />
       </View>
 
       {objectif && state.progress.junctions.size < SEUIL_DEBUTANT && (
@@ -653,6 +798,19 @@ export function MapScreen({ walkedia }: { walkedia: ReturnType<typeof import('..
           couleur={state.traceColor}
         />
       )}
+
+      {modeOuvert && (
+        <MapModeSheet
+          mode={state.mapBackground}
+          onChoisirMode={actions.setMapBackground}
+          saison={state.mapSeason}
+          onChoisirSaison={actions.setMapSeason}
+          moment={state.mapTime}
+          onChoisirMoment={actions.setMapTime}
+          traceColor={state.traceColor}
+          onFermer={() => setModeOuvert(false)}
+        />
+      )}
     </View>
   );
 }
@@ -662,6 +820,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 14,
     zIndex: 10,
+    gap: 8,
   },
   objectifWrap: { position: 'absolute', left: 14, right: 14, zIndex: 9 },
   bas: { position: 'absolute', left: 14, right: 14, zIndex: 10 },
@@ -691,6 +850,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251, 250, 253, 0.7)',
   },
   clusterBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  badgePixel: {
+    minWidth: 30,
+    height: 28,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  badgePixelTexte: { fontFamily: FONTS.monoSemi, fontSize: 11 },
+  badgePixelJauge: { position: 'absolute', left: 0, bottom: 0, height: 3 },
   positionDot: {
     width: 16,
     height: 16,
@@ -707,4 +877,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   positionAvatar: { width: '100%', height: '100%' },
+  // Modes dessinés : le joueur passe en carré, comme les points.
+  positionCarre: { borderRadius: 3 },
 });

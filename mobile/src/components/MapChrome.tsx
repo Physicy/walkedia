@@ -38,6 +38,15 @@ export function BoutonRecentrer({ onPress }: { onPress: () => void }) {
   );
 }
 
+// Ouvre le choix du mode de carte (voir MapModeSheet.tsx), sous « Recentrer ».
+export function BoutonModeCarte({ onPress, label }: { onPress: () => void; label: string }) {
+  return (
+    <Pressable style={styles.outil} onPress={onPress} accessibilityLabel={label}>
+      <Icone nom="calques" size={19} color={COLORS.encre} />
+    </Pressable>
+  );
+}
+
 export function ObjectifCard({
   branches,
   eyebrow,

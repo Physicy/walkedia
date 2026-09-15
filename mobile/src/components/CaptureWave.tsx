@@ -4,6 +4,10 @@
 // carrefours proches (voir MapScreen.tsx) car ça force
 // tracksViewChanges={true} sur le Marker parent, coûteux à grande échelle sur
 // react-native-maps.
+//
+// Dans un mode de carte dessiné (voir logic/mapModes.ts), `pixel` passe le
+// marqueur en carré aux couleurs de la palette : un rond lisse jurait sur un
+// sol en aplats et des rues à bouts carrés.
 
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
@@ -11,7 +15,23 @@ import { nuancesTrace } from '../logic/color';
 
 const SIZE = 24;
 
-export function CaptureWave({ done, animated, couleur }: { done: boolean; animated: boolean; couleur: string }) {
+export interface StylePixel {
+  vide: string; // fond d'un point pas encore atteint
+  videBord: string;
+  bord: string; // bord d'un point atteint
+}
+
+export function CaptureWave({
+  done,
+  animated,
+  couleur,
+  pixel,
+}: {
+  done: boolean;
+  animated: boolean;
+  couleur: string;
+  pixel?: StylePixel | null;
+}) {
   const pulse = useRef(new Animated.Value(0)).current;
   const nuances = nuancesTrace(couleur);
 
@@ -25,8 +45,22 @@ export function CaptureWave({ done, animated, couleur }: { done: boolean; animat
     return () => loop.stop();
   }, [animated, pulse]);
 
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, pixel ? 2.2 : 2.8] });
   const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.65, 0] });
+
+  if (pixel) {
+    return (
+      <View style={styles.wrap}>
+        {animated && <Animated.View style={[styles.ringCarre, { borderColor: couleur, opacity, transform: [{ scale }] }]} />}
+        <View
+          style={[
+            styles.carre,
+            done ? { backgroundColor: couleur, borderColor: pixel.bord } : { backgroundColor: pixel.vide, borderColor: pixel.videBord },
+          ]}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -43,6 +77,7 @@ export function CaptureWave({ done, animated, couleur }: { done: boolean; animat
 const styles = StyleSheet.create({
   wrap: { width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' },
   ring: { position: 'absolute', width: SIZE, height: SIZE, borderRadius: SIZE / 2, borderWidth: 2 },
+  ringCarre: { position: 'absolute', width: 16, height: 16, borderWidth: 2 },
   dotComplet: {
     width: 11,
     height: 11,
@@ -57,4 +92,5 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(26, 27, 46, 0.45)',
   },
+  carre: { width: 12, height: 12, borderWidth: 2 },
 });

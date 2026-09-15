@@ -280,7 +280,9 @@ interface WalkediaState {
   notificationsEnabled: boolean; // voir logic/notifications.ts
   hideStats: boolean; // masque le classement public, voir supabase/migrations/0004_profile_visibility.sql
   mapLayer: Prefs['mapLayer']; // ce que la carte montre, voir MapScreen.tsx
-  mapBackground: Prefs['mapBackground']; // fond sous la géométrie, voir MapScreen.tsx
+  mapBackground: Prefs['mapBackground']; // mode de carte, voir logic/mapModes.ts
+  mapSeason: Prefs['mapSeason']; // ambiance des modes de carte, voir logic/mapModes.ts
+  mapTime: Prefs['mapTime'];
   fusionResume: FusionResume | null;
 }
 
@@ -324,6 +326,8 @@ function freshState(): WalkediaState {
     hideStats: false,
     mapLayer: 'trace',
     mapBackground: 'clair',
+    mapSeason: 'auto',
+    mapTime: 'auto',
     fusionResume: null,
   };
 }
@@ -501,6 +505,8 @@ export function useWalkedia() {
       state.hideStats = p.hideStats;
       state.mapLayer = p.mapLayer;
       state.mapBackground = p.mapBackground;
+      state.mapSeason = p.mapSeason;
+      state.mapTime = p.mapTime;
       rerender();
       scheduleGoalReminder(p.dailyStepGoal, p.notificationsEnabled, {
         titre: translate('notifications.goalReminderTitle'),
@@ -1707,6 +1713,26 @@ export function useWalkedia() {
     [state, rerender]
   );
 
+  // Ambiance des modes de carte (voir logic/mapModes.ts), réglée depuis la
+  // feuille de mode, sur la carte ou dans les réglages.
+  const setMapSeason = useCallback(
+    (season: Prefs['mapSeason']) => {
+      state.mapSeason = season;
+      savePrefs({ mapSeason: season });
+      rerender();
+    },
+    [state, rerender]
+  );
+
+  const setMapTime = useCallback(
+    (time: Prefs['mapTime']) => {
+      state.mapTime = time;
+      savePrefs({ mapTime: time });
+      rerender();
+    },
+    [state, rerender]
+  );
+
   // Efface la progression — rues, points, sessions — sur l'appareil et sur le
   // compte s'il y en a un. Sans retour possible (voir SettingsScreen.tsx, qui
   // porte la confirmation) : ne touche ni les préférences ni la session
@@ -1750,6 +1776,8 @@ export function useWalkedia() {
       setHideStats,
       setMapLayer,
       setMapBackground,
+      setMapSeason,
+      setMapTime,
       wipeProgress,
     },
   };
